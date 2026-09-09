@@ -89,7 +89,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
       }
       dispatch(setShowAuthModal(false));
     } catch (err: any) {
-      alert(err.message || 'Login failed. Please check credentials.');
+      onToast(err.message || 'Login failed. Please check credentials.', 'info');
     }
   };
 
@@ -160,7 +160,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
       }
       dispatch(setShowAuthModal(false));
     } catch (err: any) {
-      alert(err.message || 'Registration failed');
+      onToast(err.message || 'Registration failed', 'info');
     }
   };
 

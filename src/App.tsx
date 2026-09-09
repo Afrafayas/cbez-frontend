@@ -607,7 +607,7 @@ export default function App() {
       const enteredPhone = customerEmailInput.replace(/\D/g, '').trim();
       
       if (!enteredPhone) {
-        alert("Please enter a valid phone number to sign in.");
+        triggerToast("Please enter a valid phone number to sign in.", "info");
         return;
       }
 
@@ -628,7 +628,7 @@ export default function App() {
         setCustomerEmailInput('');
         setLoginPasswordInput('');
       } else {
-        alert(`No registered store partner found with phone number matching "${customerEmailInput}". Please check the phone number or register a new shop account.`);
+        triggerToast(`No registered store partner found with phone number matching "${customerEmailInput}". Please check the phone number or register a new shop account.`, 'warning');
       }
     } else {
       // Customer login logic
@@ -678,7 +678,7 @@ export default function App() {
     e.preventDefault();
     if (authRole === 'seller') {
       if (!registerForm.name || !registerForm.ownerName || !registerForm.phone || !registerForm.whatsapp || !registerForm.email || !registerForm.password) {
-        alert("Please fill in all mandatory fields including Email and Password.");
+        triggerToast("Please fill in all mandatory fields including Email and Password.", "info");
         return;
       }
       try {
@@ -734,12 +734,12 @@ export default function App() {
           category: 'Mobiles & Tablets'
         });
       } catch (err: any) {
-        alert(err.message || "Failed to register shop account in database.");
+        triggerToast(err.message || "Failed to register shop account in database.", "warning");
       }
     } else {
       // Customer registration logic
       if (!customerRegisterForm.name || !customerRegisterForm.email || !customerRegisterForm.phone || !customerRegisterForm.password) {
-        alert("Please fill in all mandatory fields including Password.");
+        triggerToast("Please fill in all mandatory fields including Password.", "info");
         return;
       }
       const newCust: CustomerUser = {
@@ -818,7 +818,7 @@ export default function App() {
     // Validate min 4 photos
     const validImages = productForm.images.filter(img => img.trim() !== '');
     if (validImages.length < 4) {
-      alert("Please provide photos from at least 4 angles (Front side, Back side, and Side angles)!");
+      triggerToast("Please provide photos from at least 4 angles (Front side, Back side, and Side angles)!", "info");
       return;
     }
 
@@ -901,7 +901,7 @@ export default function App() {
           dispatch(addProduct(newProduct));
           triggerToast("New used gadget listed in database successfully!", "success");
         } catch (err: any) {
-          alert(err.message || 'Failed to list product in database');
+          triggerToast(err.message || 'Failed to list product in database', 'warning');
           return;
         }
       } else {
@@ -1946,7 +1946,7 @@ export default function App() {
                   onSubmit={(e) => {
                     e.preventDefault();
                     if (!custProfileForm.name || !custProfileForm.email || !custProfileForm.phone) {
-                      alert("Please fill in all required fields.");
+                      triggerToast("Please fill in all required fields.", "info");
                       return;
                     }
                     if (activeUser) {
@@ -2430,6 +2430,12 @@ export default function App() {
         isOpen={isNetworkModalOpen}
         onClose={() => setIsNetworkModalOpen(false)}
         onSuccessToast={(msg) => triggerToast(msg, 'success')}
+        onToast={triggerToast}
+        onOpenAuthModal={() => {
+          dispatch(setAuthRole('customer'));
+          dispatch(setAuthTab('login'));
+          dispatch(setShowAuthModal(true));
+        }}
         defaultCustomerName={activeUser?.name || ''}
         defaultCustomerPhone={activeUser?.phone || ''}
       />

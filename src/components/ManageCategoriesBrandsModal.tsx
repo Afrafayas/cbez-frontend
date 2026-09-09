@@ -13,7 +13,7 @@ import {
 interface ManageCategoriesBrandsModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onToast: (msg: string, type?: 'success' | 'info') => void;
+  onToast: (msg: string, type?: 'success' | 'info' | 'warning') => void;
 }
 
 export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalProps> = ({
@@ -80,7 +80,7 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
       setCatImage('');
       fetchData();
     } catch (err: any) {
-      alert(err.message || 'Failed to create category');
+      onToast(err.message || 'Failed to create category', 'warning');
     }
   };
 
@@ -91,7 +91,7 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
       onToast(`Category "${name}" deleted`, 'info');
       fetchData();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete category');
+      onToast(err.message || 'Failed to delete category', 'warning');
     }
   };
 
@@ -115,7 +115,7 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
       setBrandLogo('');
       fetchData();
     } catch (err: any) {
-      alert(err.message || 'Failed to create brand');
+      onToast(err.message || 'Failed to create brand', 'warning');
     }
   };
 
@@ -126,7 +126,7 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
       onToast(`Brand "${name}" deleted`, 'info');
       fetchData();
     } catch (err: any) {
-      alert(err.message || 'Failed to delete brand');
+      onToast(err.message || 'Failed to delete brand', 'warning');
     }
   };
 

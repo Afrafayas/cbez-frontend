@@ -7,6 +7,8 @@ interface NetworkCreateModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSuccessToast: (msg: string) => void;
+  onToast?: (msg: string, type?: 'success' | 'info' | 'warning') => void;
+  onOpenAuthModal?: () => void;
   defaultCustomerName?: string;
   defaultCustomerPhone?: string;
 }
@@ -15,6 +17,8 @@ export const NetworkCreateModal: React.FC<NetworkCreateModalProps> = ({
   isOpen,
   onClose,
   onSuccessToast,
+  onToast,
+  onOpenAuthModal,
   defaultCustomerName = '',
   defaultCustomerPhone = '',
 }) => {
@@ -36,12 +40,20 @@ export const NetworkCreateModal: React.FC<NetworkCreateModalProps> = ({
     e.preventDefault();
     const token = localStorage.getItem('mlx_token');
     if (!token) {
-      alert('Please sign in to broadcast local network requests.');
+      if (onToast) {
+        onToast('Please sign in as consumer to broadcast local network requests.', 'info');
+      }
+      if (onOpenAuthModal) {
+        onOpenAuthModal();
+      }
+      onClose();
       return;
     }
 
     if (!form.customerName || !form.customerPhone || !form.gadgetNeeded || !form.city) {
-      alert('Please fill in your Name, Phone Number, City, and Gadget details.');
+      if (onToast) {
+        onToast('Please fill in your Name, Phone Number, City, and Gadget details.', 'info');
+      }
       return;
     }
 
@@ -69,7 +81,9 @@ export const NetworkCreateModal: React.FC<NetworkCreateModalProps> = ({
         notes: '',
       });
     } catch (err: any) {
-      alert(err.message || 'Failed to broadcast network request');
+      if (onToast) {
+        onToast(err.message || 'Failed to broadcast network request', 'warning');
+      }
     } finally {
       setIsSubmitting(false);
     }
