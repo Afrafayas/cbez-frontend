@@ -1862,7 +1862,17 @@ export default function App() {
                   </div>
                   <button
                     className="btn-primary"
-                    onClick={() => setIsNetworkModalOpen(true)}
+                    onClick={() => {
+                      const token = localStorage.getItem('mlx_token');
+                      if (!token && !activeUser && !activeShop) {
+                        triggerToast("Please sign in to broadcast local network inquiries!", "info");
+                        dispatch(setAuthRole('customer'));
+                        dispatch(setAuthTab('login'));
+                        dispatch(setShowAuthModal(true));
+                        return;
+                      }
+                      setIsNetworkModalOpen(true);
+                    }}
                     style={{
                       background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
                       border: 'none',

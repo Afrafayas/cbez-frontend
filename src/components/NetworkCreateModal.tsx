@@ -34,6 +34,12 @@ export const NetworkCreateModal: React.FC<NetworkCreateModalProps> = ({
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    const token = localStorage.getItem('mlx_token');
+    if (!token) {
+      alert('Please sign in to broadcast local network requests.');
+      return;
+    }
+
     if (!form.customerName || !form.customerPhone || !form.gadgetNeeded || !form.city) {
       alert('Please fill in your Name, Phone Number, City, and Gadget details.');
       return;
@@ -115,7 +121,7 @@ export const NetworkCreateModal: React.FC<NetworkCreateModalProps> = ({
                 type="text"
                 className="form-input-text"
                 required
-                placeholder="e.g. Mohammed Fayas"
+                placeholder="e.g. John"
                 value={form.customerName}
                 onChange={(e) => setForm({ ...form, customerName: e.target.value })}
               />
@@ -126,7 +132,7 @@ export const NetworkCreateModal: React.FC<NetworkCreateModalProps> = ({
                 type="text"
                 className="form-input-text"
                 required
-                placeholder="+91 9744123456"
+                placeholder="e.g. +91 98765 43210"
                 value={form.customerPhone}
                 onChange={(e) => setForm({ ...form, customerPhone: e.target.value })}
               />

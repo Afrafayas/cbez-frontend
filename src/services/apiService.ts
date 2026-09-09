@@ -312,9 +312,14 @@ export async function createNetworkInquiry(inquiryData: {
   targetBudget?: number;
   notes?: string;
 }) {
+  const token = localStorage.getItem('mlx_token');
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
   const res = await fetch(`${API_BASE_URL}/network/inquiries`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify(inquiryData),
   });
   const data = await res.json();
