@@ -226,6 +226,7 @@ export default function App() {
   const [customerEmailInput, setCustomerEmailInput] = React.useState('');
   const [loginPasswordInput, setLoginPasswordInput] = React.useState('');
   const [isSearchFocused, setIsSearchFocused] = React.useState(false);
+  const [isMobileFilterOpen, setIsMobileFilterOpen] = React.useState(false);
   const [currentSlide, setCurrentSlide] = React.useState(0);
   const [isCatBrandModalOpen, setIsCatBrandModalOpen] = React.useState(false);
   const [shopFollowers, setShopFollowers] = React.useState<Array<{ id: string; name: string; email?: string; phone?: string; followedAt: string }>>([]);
@@ -1321,9 +1322,25 @@ export default function App() {
       <Routes>
         <Route path="/" element={
           <main className="main-content" id="marketplace-grid">
-          {/* Sidebar Filters */}
-          <aside className="sidebar-filters">
-            <div className="filter-title-bar">
+            {/* Mobile Filter Toggle Bar (Visible on screens < 992px) */}
+            <div className="mobile-filter-bar">
+              <button 
+                className="mobile-filter-toggle-btn"
+                onClick={() => setIsMobileFilterOpen(!isMobileFilterOpen)}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                  <Layers size={16} />
+                  <span>Filter Gadgets {filters.selectedCategory ? `• ${filters.selectedCategory}` : ''}</span>
+                </div>
+                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary)' }}>
+                  {isMobileFilterOpen ? 'Hide Filters ▲' : 'Show Filters ▼'}
+                </span>
+              </button>
+            </div>
+
+            {/* Sidebar Filters */}
+            <aside className={`sidebar-filters ${isMobileFilterOpen ? 'mobile-open' : ''}`}>
+              <div className="filter-title-bar">
               <span className="filter-title">Filter Gadgets</span>
               <button className="clear-filter-btn" onClick={() => dispatch(clearFilters())}>Clear All</button>
             </div>
