@@ -1051,15 +1051,17 @@ export default function App() {
   return (
     <div className="app-container">
       {/* Toast Alert Popups */}
-      <div className="toast-container">
-        {toasts.map(toast => (
-          <ToastItem 
-            key={toast.id} 
-            toast={toast} 
-            onClose={() => dispatch(removeToast(toast.id))} 
-          />
-        ))}
-      </div>
+      {toasts.length > 0 && (
+        <div className="toast-container">
+          {toasts.map(toast => (
+            <ToastItem 
+              key={toast.id} 
+              toast={toast} 
+              onClose={() => dispatch(removeToast(toast.id))} 
+            />
+          ))}
+        </div>
+      )}
 
       {/* --- SITE HEADER --- */}
       <header className="site-header">
