@@ -92,16 +92,16 @@ export const NetworkCreateModal: React.FC<NetworkCreateModalProps> = ({
   return (
     <div className="modal-overlay" onClick={onClose} style={{ zIndex: 1100 }}>
       <div
-        className="modal-content glass-panel"
+        className="modal-content glass-panel network-modal-content"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: '520px', borderRadius: '20px', padding: '1.75rem' }}
+        style={{ maxWidth: '520px', width: '95%', maxHeight: '90vh', overflowY: 'auto', borderRadius: '20px' }}
       >
         <button className="modal-close-btn" onClick={onClose}>
           <X size={20} />
         </button>
 
         {/* Modal Header */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
+        <div className="network-modal-header" style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', marginBottom: '1rem' }}>
           <div
             style={{
               width: '44px',
@@ -113,6 +113,7 @@ export const NetworkCreateModal: React.FC<NetworkCreateModalProps> = ({
               justifyContent: 'center',
               color: '#fff',
               boxShadow: '0 4px 12px rgba(249, 115, 22, 0.3)',
+              flexShrink: 0,
             }}
           >
             <Network size={24} />
@@ -128,7 +129,7 @@ export const NetworkCreateModal: React.FC<NetworkCreateModalProps> = ({
         </div>
 
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '0.85rem' }}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+          <div className="modal-form-grid">
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label">Your Full Name *</label>
               <input
@@ -153,7 +154,7 @@ export const NetworkCreateModal: React.FC<NetworkCreateModalProps> = ({
             </div>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+          <div className="modal-form-grid">
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label">Select City Network *</label>
               <select
