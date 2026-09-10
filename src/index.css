@@ -882,12 +882,13 @@ body.modal-open {
   background-color: rgba(15, 17, 23, 0.65);
   backdrop-filter: blur(5px);
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
   z-index: 1100;
-  padding: 1rem;
+  padding: 2rem 1rem;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
 }
 
 .modal-content {
@@ -895,14 +896,15 @@ body.modal-open {
   border-radius: var(--radius-lg);
   max-width: 900px;
   width: 100%;
-  max-height: calc(100dvh - 3rem);
-  max-height: calc(100vh - 3rem);
+  max-height: calc(100dvh - 4rem);
+  max-height: calc(100vh - 4rem);
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   box-shadow: var(--shadow-xl);
   position: relative;
   animation: modalEnter 0.3s ease-out;
   margin: auto;
+  box-sizing: border-box;
 }
 
 @keyframes modalEnter {
@@ -3246,7 +3248,7 @@ button, input, select, textarea, a, .product-card, .brand-logo, .logo-section, .
 
   /* Modals */
   .modal-overlay {
-    padding: 0.75rem 0.5rem 3.5rem 0.5rem !important;
+    padding: 1rem 0.5rem 3rem 0.5rem !important;
     align-items: flex-start !important;
     overflow-y: auto !important;
     -webkit-overflow-scrolling: touch !important;
@@ -3255,10 +3257,12 @@ button, input, select, textarea, a, .product-card, .brand-logo, .logo-section, .
   .modal-content {
     width: 96% !important;
     max-width: 96vw !important;
-    max-height: none !important;
-    overflow-y: visible !important;
-    padding: 1.25rem 1rem 2.25rem 1rem !important;
-    margin: 0.5rem auto 3.5rem auto !important;
+    max-height: calc(100dvh - 2rem) !important;
+    max-height: calc(100vh - 2rem) !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+    padding: 1.25rem 1rem 1.75rem 1rem !important;
+    margin: 0.5rem auto 3rem auto !important;
     border-radius: 16px !important;
   }
 
