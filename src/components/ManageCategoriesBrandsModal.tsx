@@ -135,7 +135,7 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
       <div
         className="modal-content"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: '640px', width: '92%', maxHeight: '90vh', overflowY: 'auto' }}
+        style={{ maxWidth: '640px' }}
       >
         <button className="modal-close-btn" onClick={onClose}>
           <X size={18} />

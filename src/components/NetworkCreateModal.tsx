@@ -94,7 +94,7 @@ export const NetworkCreateModal: React.FC<NetworkCreateModalProps> = ({
       <div
         className="modal-content glass-panel network-modal-content"
         onClick={(e) => e.stopPropagation()}
-        style={{ maxWidth: '520px', width: '95%', maxHeight: '90vh', overflowY: 'auto', borderRadius: '20px' }}
+        style={{ maxWidth: '520px', borderRadius: '20px' }}
       >
         <button className="modal-close-btn" onClick={onClose}>
           <X size={20} />

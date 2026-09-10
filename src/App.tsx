@@ -293,6 +293,27 @@ export default function App() {
   // Network inquiry modal state
   const [isNetworkModalOpen, setIsNetworkModalOpen] = React.useState(false);
 
+
+
+  const isAnyModalActive = Boolean(
+    isNetworkModalOpen || 
+    showAuthModal || 
+    selectedProduct || 
+    isCatBrandModalOpen || 
+    showAddEditModal
+  );
+
+  React.useEffect(() => {
+    if (isAnyModalActive) {
+      document.body.classList.add('modal-open');
+    } else {
+      document.body.classList.remove('modal-open');
+    }
+    return () => {
+      document.body.classList.remove('modal-open');
+    };
+  }, [isAnyModalActive]);
+
   // customer dashboard sub-navigation tab state
   const [customerTab, setCustomerTab] = React.useState<'inquiries' | 'following' | 'network' | 'profile'>('inquiries');
   const [followedShops, setFollowedShops] = React.useState<Shop[]>([]);
