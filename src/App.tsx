@@ -2852,6 +2852,19 @@ export default function App() {
                 </div>
 
                 <div className="form-group">
+                  <label className="form-label">Available Stock Quantity (Units) *</label>
+                  <input
+                    type="number"
+                    className="form-input-text"
+                    required
+                    min="1"
+                    placeholder="e.g. 1, 2, 5 units"
+                    value={productForm.stock}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setProductForm({ ...productForm, stock: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
                   <label className="form-label">Battery Health / Capacity *</label>
                   <input
                     type="text"
