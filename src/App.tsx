@@ -426,6 +426,8 @@ export default function App() {
     images: ['', '', '', '', '', '', '']
   });
 
+  const [isSubmittingProduct, setIsSubmittingProduct] = React.useState(false);
+
   const [profileForm, setProfileForm] = React.useState({
     name: '',
     ownerName: '',
@@ -860,7 +862,7 @@ export default function App() {
 
   const handleProductSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!activeShop) return;
+    if (!activeShop || isSubmittingProduct) return;
 
     // Validate min 4 photos
     const validImages = productForm.images.filter(img => img.trim() !== '');
@@ -882,78 +884,11 @@ export default function App() {
 
     const offerPriceNum = productForm.offerPrice ? parseFloat(productForm.offerPrice) : undefined;
 
-    if (productToEdit) {
-      const updated: Product = {
-        ...productToEdit,
-        name: productForm.name,
-        brand: productForm.brand,
-        category: productForm.category,
-        description: productForm.description,
-        price: parseFloat(productForm.price),
-        offerPrice: offerPriceNum,
-        stock: parseInt(productForm.stock),
-        storage: productForm.storage,
-        ram: productForm.ram,
-        batteryHealth: productForm.batteryHealth,
-        condition: productForm.condition,
-        warranty: productForm.warranty,
-        color: productForm.color,
-        simType: productForm.simType,
-        network: productForm.network,
-        originalBill: productForm.originalBill,
-        accessories: productForm.accessories,
-        specs,
-        images: validImages
-      };
-      dispatch(editProduct(updated));
-      triggerToast("Listing updated successfully!", "success");
-    } else {
-      const token = localStorage.getItem('mlx_token');
-      if (token) {
-        try {
-          const savedProd = await createSellerProduct({
-            name: productForm.name,
-            brand: productForm.brand,
-            category: productForm.category,
-            description: productForm.description,
-            price: parseFloat(productForm.price),
-            stock: parseInt(productForm.stock),
-            specs,
-            images: validImages
-          }, token);
-
-          const newProduct: Product = {
-            id: savedProd.id || `prod-${Date.now()}`,
-            name: savedProd.name || productForm.name,
-            brand: savedProd.brand || productForm.brand,
-            category: savedProd.category || productForm.category,
-            description: savedProd.description || productForm.description,
-            price: savedProd.price || parseFloat(productForm.price),
-            offerPrice: offerPriceNum,
-            stock: savedProd.stock || parseInt(productForm.stock),
-            shopId: savedProd.shopId || activeShop.id,
-            storage: productForm.storage,
-            ram: productForm.ram,
-            batteryHealth: productForm.batteryHealth,
-            condition: productForm.condition,
-            warranty: productForm.warranty,
-            color: productForm.color,
-            simType: productForm.simType,
-            network: productForm.network,
-            originalBill: productForm.originalBill,
-            accessories: productForm.accessories,
-            specs: savedProd.specs || specs,
-            images: savedProd.images || validImages
-          };
-          dispatch(addProduct(newProduct));
-          triggerToast("New used gadget listed in database successfully!", "success");
-        } catch (err: any) {
-          triggerToast(err.message || 'Failed to list product in database', 'warning');
-          return;
-        }
-      } else {
-        const newProduct: Product = {
-          id: `prod-${Date.now()}`,
+    setIsSubmittingProduct(true);
+    try {
+      if (productToEdit) {
+        const updated: Product = {
+          ...productToEdit,
           name: productForm.name,
           brand: productForm.brand,
           category: productForm.category,
@@ -961,7 +896,6 @@ export default function App() {
           price: parseFloat(productForm.price),
           offerPrice: offerPriceNum,
           stock: parseInt(productForm.stock),
-          shopId: activeShop.id,
           storage: productForm.storage,
           ram: productForm.ram,
           batteryHealth: productForm.batteryHealth,
@@ -975,12 +909,86 @@ export default function App() {
           specs,
           images: validImages
         };
-        dispatch(addProduct(newProduct));
-        triggerToast("New used gadget listed successfully!", "success");
-      }
-    }
+        dispatch(editProduct(updated));
+        triggerToast("Listing updated successfully!", "success");
+        dispatch(setShowAddEditModal(false));
+      } else {
+        const token = localStorage.getItem('mlx_token');
+        if (token) {
+          try {
+            const savedProd = await createSellerProduct({
+              name: productForm.name,
+              brand: productForm.brand,
+              category: productForm.category,
+              description: productForm.description,
+              price: parseFloat(productForm.price),
+              stock: parseInt(productForm.stock),
+              specs,
+              images: validImages
+            }, token);
 
-    dispatch(setShowAddEditModal(false));
+            const newProduct: Product = {
+              id: savedProd.id || `prod-${Date.now()}`,
+              name: savedProd.name || productForm.name,
+              brand: savedProd.brand || productForm.brand,
+              category: savedProd.category || productForm.category,
+              description: savedProd.description || productForm.description,
+              price: savedProd.price || parseFloat(productForm.price),
+              offerPrice: offerPriceNum,
+              stock: savedProd.stock || parseInt(productForm.stock),
+              shopId: savedProd.shopId || activeShop.id,
+              storage: productForm.storage,
+              ram: productForm.ram,
+              batteryHealth: productForm.batteryHealth,
+              condition: productForm.condition,
+              warranty: productForm.warranty,
+              color: productForm.color,
+              simType: productForm.simType,
+              network: productForm.network,
+              originalBill: productForm.originalBill,
+              accessories: productForm.accessories,
+              specs: savedProd.specs || specs,
+              images: savedProd.images || validImages
+            };
+            dispatch(addProduct(newProduct));
+            triggerToast("New used gadget listed in database successfully!", "success");
+            dispatch(setShowAddEditModal(false));
+          } catch (err: any) {
+            triggerToast(err.message || 'Failed to list product in database', 'warning');
+            return;
+          }
+        } else {
+          const newProduct: Product = {
+            id: `prod-${Date.now()}`,
+            name: productForm.name,
+            brand: productForm.brand,
+            category: productForm.category,
+            description: productForm.description,
+            price: parseFloat(productForm.price),
+            offerPrice: offerPriceNum,
+            stock: parseInt(productForm.stock),
+            shopId: activeShop.id,
+            storage: productForm.storage,
+            ram: productForm.ram,
+            batteryHealth: productForm.batteryHealth,
+            condition: productForm.condition,
+            warranty: productForm.warranty,
+            color: productForm.color,
+            simType: productForm.simType,
+            network: productForm.network,
+            originalBill: productForm.originalBill,
+            accessories: productForm.accessories,
+            specs,
+            images: validImages
+          };
+          dispatch(addProduct(newProduct));
+          triggerToast("New used gadget listed successfully!", "success");
+          dispatch(setShowAddEditModal(false));
+        }
+      }
+    } finally {
+      setIsSubmittingProduct(false);
+    }
   };
 
   const handleToggleSoldOut = (product: Product) => {

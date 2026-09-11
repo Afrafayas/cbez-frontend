@@ -61,9 +61,12 @@ const productsSlice = createSlice({
       }
     },
     addProduct(state, action: PayloadAction<Product>) {
-      state.items.unshift(action.payload);
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('mlx_products', JSON.stringify(state.items));
+      const exists = state.items.some(p => p.id === action.payload.id);
+      if (!exists) {
+        state.items.unshift(action.payload);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('mlx_products', JSON.stringify(state.items));
+        }
       }
     },
     editProduct(state, action: PayloadAction<Product>) {

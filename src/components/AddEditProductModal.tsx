@@ -19,6 +19,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
   const [formImages, setFormImages] = useState<string[]>(['', '', '', '']);
   const [dbBrands, setDbBrands] = useState<string[]>([]);
   const [customBrandInput, setCustomBrandInput] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
     async function fetchDbBrands() {
@@ -132,6 +133,8 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
+
     const validImgs = formImages.map(img => img ? img.trim() : '').filter(Boolean);
 
     if (validImgs.length < 4) {
@@ -179,13 +182,11 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
     if (productToEdit) {
       dispatch(editProduct(productPayload));
       onToast(`Product "${productPayload.name}" updated successfully!`, 'success');
+      dispatch(setShowAddEditModal(false));
     } else {
-      dispatch(addProduct(productPayload));
-      onToast(`New product "${productPayload.name}" listed live!`, 'success');
-
-      // Sync product listing with live backend API if authenticated
       const token = localStorage.getItem('mlx_token');
       if (token) {
+        setIsSubmitting(true);
         createSellerProduct({
           name: productPayload.name,
           brand: productPayload.brand,
@@ -195,12 +196,32 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
           stock: productPayload.stock,
           specs: productPayload.specs,
           images: productPayload.images
-        }, token).catch(err => {
-          console.warn('Backend API product sync warning:', err.message);
-        });
+        }, token)
+          .then((savedProd) => {
+            const finalProduct: Product = {
+              ...productPayload,
+              id: savedProd.id || productPayload.id,
+              name: savedProd.name || productPayload.name,
+              brand: savedProd.brand || productPayload.brand,
+              price: savedProd.price || productPayload.price,
+              stock: savedProd.stock !== undefined ? savedProd.stock : productPayload.stock
+            };
+            dispatch(addProduct(finalProduct));
+            onToast(`New product "${finalProduct.name}" listed live!`, 'success');
+            dispatch(setShowAddEditModal(false));
+          })
+          .catch((err) => {
+            onToast(err.message || 'Failed to list product in backend database. Please try again.', 'info');
+          })
+          .finally(() => {
+            setIsSubmitting(false);
+          });
+      } else {
+        dispatch(addProduct(productPayload));
+        onToast(`New product "${productPayload.name}" listed live!`, 'success');
+        dispatch(setShowAddEditModal(false));
       }
     }
-    dispatch(setShowAddEditModal(false));
   };
 
   return (
@@ -552,8 +573,8 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
             >
               Cancel
             </button>
-            <button type="submit" className="btn-primary" style={{ padding: '0.6rem 1.4rem' }}>
-              {productToEdit ? 'Save Changes' : 'Submit Device Listing'}
+            <button type="submit" className="btn-primary" disabled={isSubmitting} style={{ padding: '0.6rem 1.4rem', opacity: isSubmitting ? 0.7 : 1, cursor: isSubmitting ? 'not-allowed' : 'pointer' }}>
+              {isSubmitting ? 'Saving Product...' : (productToEdit ? 'Save Changes' : 'Submit Device Listing')}
             </button>
           </div>
         </form>
