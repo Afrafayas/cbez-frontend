@@ -405,7 +405,7 @@ export default function App() {
     images: string[];
   }>({
     name: '',
-    brand: '',
+    brand: 'Apple',
     category: 'Mobiles',
     description: '',
     price: '',

@@ -43,7 +43,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
 
   const [productForm, setProductForm] = useState({
     name: '',
-    brand: '',
+    brand: 'Apple',
     category: 'Mobiles',
     description: '',
     price: '',
@@ -103,7 +103,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
       setFormImages(['', '', '', '']);
       setProductForm({
         name: '',
-        brand: '',
+        brand: 'Apple',
         category: 'Mobiles',
         description: '',
         price: '',
