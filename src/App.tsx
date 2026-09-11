@@ -2163,7 +2163,7 @@ export default function App() {
                     background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
                     borderRadius: '16px',
                     padding: '1.5rem 1.75rem',
-                    marginBottom: '1.5rem',
+                    marginBottom: '1.75rem',
                     color: '#ffffff',
                     display: 'flex',
                     alignItems: 'center',
@@ -2178,7 +2178,7 @@ export default function App() {
                   <div style={{ position: 'relative', zIndex: 2 }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
                       <span style={{ background: 'var(--primary)', color: '#fff', fontSize: '0.7rem', fontWeight: 800, padding: '0.15rem 0.5rem', borderRadius: '20px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                        ⚡ Merchant Quick Action
+                        ⚡ Merchant Dashboard
                       </span>
                       <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
                         ({products.filter(p => p.shopId === activeShop?.id).length} Active Listings)
@@ -2211,50 +2211,24 @@ export default function App() {
                     }}
                   >
                     <Plus size={18} />
-                    <span>+ Create Product Listing</span>
+                    <span>+ Add Product Listing</span>
                   </button>
                 </div>
 
-                {/* Quick Add Product Action Card UI */}
-                <div 
-                  className="add-product-dashed-card"
-                  onClick={handleOpenAddProduct}
-                  style={{
-                    border: '2px dashed var(--primary)',
-                    borderRadius: '16px',
-                    background: 'rgba(255, 111, 0, 0.04)',
-                    padding: '1.25rem 1.5rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    marginBottom: '1.5rem'
-                  }}
-                >
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
-                    <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px rgba(255, 111, 0, 0.3)' }}>
-                      <Plus size={22} />
-                    </div>
-                    <div>
-                      <h4 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, color: 'var(--text-primary-light)' }}>
-                        + Add New Used Product Listing
-                      </h4>
-                      <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary-light)', margin: 0, marginTop: '2px' }}>
-                        Click here to open product creation form & upload device details
-                      </p>
-                    </div>
+                <div className="panel-header" style={{ marginBottom: '1.2rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                    <h3 className="panel-title" style={{ margin: 0 }}>My Used Devices Inventory</h3>
+                    <span style={{ fontSize: '0.75rem', background: '#f1f5f9', color: '#475569', padding: '0.2rem 0.6rem', borderRadius: '20px', fontWeight: 700 }}>
+                      {products.filter(p => p.shopId === activeShop?.id).length} Listings
+                    </span>
                   </div>
-                  <button type="button" className="btn-primary" style={{ padding: '0.45rem 1rem', fontSize: '0.8rem', borderRadius: '8px' }}>
-                    + Create Product
-                  </button>
-                </div>
-
-                <div className="panel-header">
-                  <h3 className="panel-title">My Used Devices Inventory</h3>
-                  <button className="btn-primary" onClick={handleOpenAddProduct} style={{ padding: '0.5rem 1.2rem', fontSize: '0.85rem' }}>
+                  <button 
+                    className="btn-primary" 
+                    onClick={handleOpenAddProduct} 
+                    style={{ padding: '0.5rem 1.1rem', fontSize: '0.82rem', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
+                  >
                     <Plus size={16} />
-                    <span>List Used Product</span>
+                    <span>Add Product</span>
                   </button>
                 </div>
 
