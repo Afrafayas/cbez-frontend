@@ -2,7 +2,7 @@ import { ProductDetailModal } from './components/ProductDetailModal';
 import { ManageCategoriesBrandsModal } from './components/ManageCategoriesBrandsModal';
 import { NetworkCreateModal } from './components/NetworkCreateModal';
 import { Footer } from './components/Footer';
-import { getProducts, getShops, registerUser, createSellerProduct, sendLead, getFollowedShops, unfollowShop, getNetworkInquiries, getShopFollowers } from './services/apiService';
+import { getProducts, getShops, registerUser, createSellerProduct, sendLead, getFollowedShops, unfollowShop, getNetworkInquiries, getShopFollowers, getBrands } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import React, { ChangeEvent, FormEvent } from 'react';
 import { 
@@ -613,8 +613,32 @@ export default function App() {
     return 0; // Default Featured
   });
 
-  // Extract unique brands for sidebar filters
+  // Fetch brands from database
+  const [dbBrands, setDbBrands] = React.useState<string[]>([]);
+  React.useEffect(() => {
+    async function fetchDbBrands() {
+      try {
+        const fetched = await getBrands();
+        if (fetched && Array.isArray(fetched) && fetched.length > 0) {
+          setDbBrands(fetched.map(b => b.name));
+        }
+      } catch (err) {
+        console.warn('Failed to load DB brands:', err);
+      }
+    }
+    fetchDbBrands();
+  }, []);
+
+  // Extract unique brands for sidebar filters and product creation dropdown
   const uniqueBrands = Array.from(new Set(products.map(p => p.brand)));
+
+  const availableBrandsList = Array.from(
+    new Set([
+      'Apple', 'Samsung', 'OnePlus', 'Google', 'Xiaomi', 'Realme', 'Vivo', 'Oppo', 'Motorola', 'Asus', 'Lenovo', 'HP', 'Dell', 'Acer', 'Sony', 'Nothing',
+      ...dbBrands,
+      ...uniqueBrands
+    ])
+  ).filter(Boolean).sort();
 
   // --- HANDLERS ---
   const triggerToast = (message: string, type: 'info' | 'success' | 'warning' = 'info') => {
@@ -2774,15 +2798,37 @@ export default function App() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Brand *</label>
-                  <input
-                    type="text"
-                    className="form-input-text"
+                  <label className="form-label">Brand (Database) *</label>
+                  <select
+                    className="form-select-box"
                     required
-                    placeholder="e.g. Apple, Samsung, OnePlus"
-                    value={productForm.brand}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setProductForm({ ...productForm, brand: e.target.value })}
-                  />
+                    value={availableBrandsList.includes(productForm.brand) ? productForm.brand : (productForm.brand ? "Other" : "")}
+                    onChange={(e: ChangeEvent<HTMLSelectElement>) => {
+                      const val = e.target.value;
+                      if (val === "Other") {
+                        setProductForm({ ...productForm, brand: '' });
+                      } else {
+                        setProductForm({ ...productForm, brand: val });
+                      }
+                    }}
+                  >
+                    <option value="">-- Select Brand from Database --</option>
+                    {availableBrandsList.map(b => (
+                      <option key={b} value={b}>{b}</option>
+                    ))}
+                    <option value="Other">Other / Custom Brand</option>
+                  </select>
+                  {(!availableBrandsList.includes(productForm.brand) || productForm.brand === '') && (
+                    <input
+                      type="text"
+                      className="form-input-text"
+                      style={{ marginTop: '0.4rem' }}
+                      required
+                      placeholder="Type custom brand name..."
+                      value={productForm.brand}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setProductForm({ ...productForm, brand: e.target.value })}
+                    />
+                  )}
                 </div>
 
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>

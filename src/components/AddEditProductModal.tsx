@@ -4,7 +4,7 @@ import { useAppDispatch, useAppSelector } from '../store';
 import { setShowAddEditModal, addProduct, editProduct } from '../store/productsSlice';
 import { Product } from '../types';
 import { CATEGORIES } from '../data/mockData';
-import { createSellerProduct } from '../services/apiService';
+import { createSellerProduct, getBrands } from '../services/apiService';
 
 interface AddEditProductModalProps {
   onToast: (msg: string, type?: 'success' | 'info') => void;
@@ -16,6 +16,30 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
   const activeShop = useAppSelector(state => state.auth.activeShop);
 
   const [formImages, setFormImages] = useState<string[]>(['', '', '', '']);
+  const [dbBrands, setDbBrands] = useState<string[]>([]);
+  const [customBrandInput, setCustomBrandInput] = useState(false);
+
+  useEffect(() => {
+    async function fetchDbBrands() {
+      try {
+        const fetched = await getBrands();
+        if (fetched && Array.isArray(fetched) && fetched.length > 0) {
+          setDbBrands(fetched.map(b => b.name));
+        }
+      } catch (err) {
+        console.warn('Failed to load DB brands in modal:', err);
+      }
+    }
+    fetchDbBrands();
+  }, []);
+
+  const availableBrandsList = Array.from(
+    new Set([
+      'Apple', 'Samsung', 'OnePlus', 'Google', 'Xiaomi', 'Realme', 'Vivo', 'Oppo', 'Motorola', 'Asus', 'Lenovo', 'HP', 'Dell', 'Acer', 'Sony', 'Nothing',
+      ...dbBrands
+    ])
+  ).filter(Boolean).sort();
+
   const [productForm, setProductForm] = useState({
     name: '',
     brand: '',
@@ -396,8 +420,46 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
           </div>
 
           <div className="form-group">
-            <label className="form-label">Brand *</label>
-            <input type="text" className="form-input-text" required placeholder="Apple, Samsung, OnePlus..." value={productForm.brand} onChange={(e) => setProductForm({ ...productForm, brand: e.target.value })} />
+            <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span>Brand *</span>
+              <button
+                type="button"
+                style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}
+                onClick={() => setCustomBrandInput(!customBrandInput)}
+              >
+                {customBrandInput ? '← Choose from Database Brands' : '+ Type Custom Brand'}
+              </button>
+            </label>
+            {customBrandInput ? (
+              <input
+                type="text"
+                className="form-input-text"
+                required
+                placeholder="e.g. Nothing, Honor, Poco..."
+                value={productForm.brand}
+                onChange={(e) => setProductForm({ ...productForm, brand: e.target.value })}
+              />
+            ) : (
+              <select
+                className="form-select-box"
+                required
+                value={productForm.brand}
+                onChange={(e) => {
+                  if (e.target.value === 'OTHER_CUSTOM') {
+                    setCustomBrandInput(true);
+                    setProductForm({ ...productForm, brand: '' });
+                  } else {
+                    setProductForm({ ...productForm, brand: e.target.value });
+                  }
+                }}
+              >
+                <option value="">-- Select Brand from Database --</option>
+                {availableBrandsList.map(b => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+                <option value="OTHER_CUSTOM">+ Add Custom Brand</option>
+              </select>
+            )}
           </div>
 
           <div className="form-group">
