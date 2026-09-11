@@ -12,6 +12,7 @@ import { addShop } from '../store/productsSlice';
 import { Shop, User as CustomerUser } from '../types';
 import { CITIES } from '../data/mockData';
 import { registerUser, loginUser } from '../services/apiService';
+import { PhoneInputWithCountry } from './PhoneInputWithCountry';
 
 interface AuthModalProps {
   onToast: (msg: string, type?: 'success' | 'info') => void;
@@ -249,7 +250,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Phone Number *</label>
-                  <input type="text" className="form-input-text" required placeholder="+91 9876543210" value={regForm.phone} onChange={(e) => setRegForm({ ...regForm, phone: e.target.value })} />
+                  <PhoneInputWithCountry required value={regForm.phone} onChange={(val) => setRegForm({ ...regForm, phone: val })} />
                 </div>
               </>
             ) : (
@@ -272,11 +273,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 </div>
                 <div className="form-group">
                   <label className="form-label">Call Phone Number *</label>
-                  <input type="text" className="form-input-text" required placeholder="+91 9876543210" value={regForm.phone} onChange={(e) => setRegForm({ ...regForm, phone: e.target.value })} />
+                  <PhoneInputWithCountry required value={regForm.phone} onChange={(val) => setRegForm({ ...regForm, phone: val })} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">WhatsApp Number *</label>
-                  <input type="text" className="form-input-text" required placeholder="919876543210" value={regForm.whatsapp} onChange={(e) => setRegForm({ ...regForm, whatsapp: e.target.value })} />
+                  <PhoneInputWithCountry required value={regForm.whatsapp} onChange={(val) => setRegForm({ ...regForm, whatsapp: val })} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">City *</label>

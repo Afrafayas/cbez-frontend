@@ -2,6 +2,7 @@ import React, { useState, FormEvent } from 'react';
 import { X, Network, Send, ShieldCheck } from 'lucide-react';
 import { createNetworkInquiry } from '../services/apiService';
 import { CITIES, CATEGORIES } from '../data/mockData';
+import { PhoneInputWithCountry } from './PhoneInputWithCountry';
 
 interface NetworkCreateModalProps {
   isOpen: boolean;
@@ -143,13 +144,10 @@ export const NetworkCreateModal: React.FC<NetworkCreateModalProps> = ({
             </div>
             <div className="form-group" style={{ margin: 0 }}>
               <label className="form-label">Phone Number *</label>
-              <input
-                type="text"
-                className="form-input-text"
+              <PhoneInputWithCountry
                 required
-                placeholder="e.g. +91 98765 43210"
                 value={form.customerPhone}
-                onChange={(e) => setForm({ ...form, customerPhone: e.target.value })}
+                onChange={(val) => setForm({ ...form, customerPhone: val })}
               />
             </div>
           </div>

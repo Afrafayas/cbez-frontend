@@ -3,6 +3,7 @@ import { ManageCategoriesBrandsModal } from './components/ManageCategoriesBrands
 import { NetworkCreateModal } from './components/NetworkCreateModal';
 import { Footer } from './components/Footer';
 import { getProducts, getShops, registerUser, createSellerProduct, sendLead, getFollowedShops, unfollowShop, getNetworkInquiries, getShopFollowers } from './services/apiService';
+import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import React, { ChangeEvent, FormEvent } from 'react';
 import { 
   Search, 
@@ -2130,6 +2131,100 @@ export default function App() {
           <section style={{ flex: 1 }}>
             {dashboardTab === 'listings' ? (
               <div className="dashboard-panel">
+                {/* Seller Create Product Hero Action Card */}
+                <div 
+                  className="create-product-hero-card"
+                  style={{
+                    background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
+                    borderRadius: '16px',
+                    padding: '1.5rem 1.75rem',
+                    marginBottom: '1.5rem',
+                    color: '#ffffff',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: '1.25rem',
+                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2)',
+                    border: '1px solid rgba(255, 111, 0, 0.3)',
+                    position: 'relative',
+                    overflow: 'hidden'
+                  }}
+                >
+                  <div style={{ position: 'relative', zIndex: 2 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
+                      <span style={{ background: 'var(--primary)', color: '#fff', fontSize: '0.7rem', fontWeight: 800, padding: '0.15rem 0.5rem', borderRadius: '20px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                        ⚡ Merchant Quick Action
+                      </span>
+                      <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
+                        ({products.filter(p => p.shopId === activeShop?.id).length} Active Listings)
+                      </span>
+                    </div>
+                    <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: '#f8fafc' }}>
+                      List New Used Device for Sale
+                    </h3>
+                    <p style={{ fontSize: '0.82rem', color: '#cbd5e1', margin: 0, marginTop: '0.35rem', maxWidth: '540px', lineHeight: 1.45 }}>
+                      Upload multi-angle photos, storage specs & warranty details to broadcast your gadget to verified local buyers in {activeShop?.city || 'your city'}.
+                    </p>
+                  </div>
+
+                  <button 
+                    type="button"
+                    onClick={handleOpenAddProduct} 
+                    className="btn-primary"
+                    style={{
+                      padding: '0.75rem 1.4rem',
+                      fontSize: '0.9rem',
+                      fontWeight: 700,
+                      borderRadius: '12px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      flexShrink: 0,
+                      boxShadow: '0 4px 14px rgba(255, 111, 0, 0.4)',
+                      zIndex: 2,
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <Plus size={18} />
+                    <span>+ Create Product Listing</span>
+                  </button>
+                </div>
+
+                {/* Quick Add Product Action Card UI */}
+                <div 
+                  className="add-product-dashed-card"
+                  onClick={handleOpenAddProduct}
+                  style={{
+                    border: '2px dashed var(--primary)',
+                    borderRadius: '16px',
+                    background: 'rgba(255, 111, 0, 0.04)',
+                    padding: '1.25rem 1.5rem',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    marginBottom: '1.5rem'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                    <div style={{ width: '42px', height: '42px', borderRadius: '50%', background: 'var(--primary)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: '0 4px 12px rgba(255, 111, 0, 0.3)' }}>
+                      <Plus size={22} />
+                    </div>
+                    <div>
+                      <h4 style={{ fontSize: '0.95rem', fontWeight: 700, margin: 0, color: 'var(--text-primary-light)' }}>
+                        + Add New Used Product Listing
+                      </h4>
+                      <p style={{ fontSize: '0.78rem', color: 'var(--text-secondary-light)', margin: 0, marginTop: '2px' }}>
+                        Click here to open product creation form & upload device details
+                      </p>
+                    </div>
+                  </div>
+                  <button type="button" className="btn-primary" style={{ padding: '0.45rem 1rem', fontSize: '0.8rem', borderRadius: '8px' }}>
+                    + Create Product
+                  </button>
+                </div>
+
                 <div className="panel-header">
                   <h3 className="panel-title">My Used Devices Inventory</h3>
                   <button className="btn-primary" onClick={handleOpenAddProduct} style={{ padding: '0.5rem 1.2rem', fontSize: '0.85rem' }}>
@@ -2365,23 +2460,19 @@ export default function App() {
 
                   <div className="form-group">
                     <label className="form-label">Direct Phone Call Number *</label>
-                    <input 
-                      type="text" 
-                      className="form-input-text" 
+                    <PhoneInputWithCountry 
                       required
                       value={profileForm.phone}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setProfileForm({...profileForm, phone: e.target.value})}
+                      onChange={(val) => setProfileForm({...profileForm, phone: val})}
                     />
                   </div>
 
                   <div className="form-group">
-                    <label className="form-label">WhatsApp Number (e.g. 919876543210) *</label>
-                    <input 
-                      type="text" 
-                      className="form-input-text" 
+                    <label className="form-label">WhatsApp Number *</label>
+                    <PhoneInputWithCountry 
                       required
                       value={profileForm.whatsapp}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setProfileForm({...profileForm, whatsapp: e.target.value})}
+                      onChange={(val) => setProfileForm({...profileForm, whatsapp: val})}
                     />
                   </div>
 
@@ -2518,6 +2609,20 @@ export default function App() {
 
                 {/* 2. Basic Info */}
                 <div className="form-group">
+                  <label className="form-label">Category *</label>
+                  <select
+                    className="form-select-box"
+                    required
+                    value={productForm.category}
+                    onChange={(e: ChangeEvent<HTMLSelectElement>) => setProductForm({ ...productForm, category: e.target.value })}
+                  >
+                    {CATEGORIES.filter(c => c !== "All Categories").map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
                   <label className="form-label">Brand *</label>
                   <input
                     type="text"
@@ -2529,13 +2634,13 @@ export default function App() {
                   />
                 </div>
 
-                <div className="form-group">
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
                   <label className="form-label">Product Name / Model *</label>
                   <input
                     type="text"
                     className="form-input-text"
                     required
-                    placeholder="e.g. iPhone 15 Pro Max"
+                    placeholder="e.g. iPhone 15 Pro Max 256GB Natural Titanium"
                     value={productForm.name}
                     onChange={(e: ChangeEvent<HTMLInputElement>) => setProductForm({ ...productForm, name: e.target.value })}
                   />

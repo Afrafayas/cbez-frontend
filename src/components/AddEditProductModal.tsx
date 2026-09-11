@@ -4,6 +4,7 @@ import { useAppDispatch, useAppSelector } from '../store';
 import { setShowAddEditModal, addProduct, editProduct } from '../store/productsSlice';
 import { Product } from '../types';
 import { CATEGORIES } from '../data/mockData';
+import { createSellerProduct } from '../services/apiService';
 
 interface AddEditProductModalProps {
   onToast: (msg: string, type?: 'success' | 'info') => void;
@@ -106,7 +107,13 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
-    const validImgs = formImages.map(img => img.trim()).filter(Boolean);
+    const validImgs = formImages.map(img => img ? img.trim() : '').filter(Boolean);
+
+    if (validImgs.length < 4) {
+      onToast('Please upload at least 4 photo angles (Front, Back, Left Side, and Right Side photos are required)', 'info');
+      return;
+    }
+
     const shopId = activeShop ? activeShop.id : 'shop-101';
 
     const productPayload: Product = {
@@ -135,9 +142,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
       purchasedFromAmazon: productForm.purchasedFromAmazon,
       isAmazonRefurbished: productForm.isAmazonRefurbished,
       isSoldOut: Number(productForm.stock) <= 0,
-      images: validImgs.length > 0 ? validImgs : [
-        'https://images.unsplash.com/photo-1695048133142-1a20484d2569?w=800'
-      ],
+      images: validImgs,
       specs: {
         Storage: productForm.storage,
         RAM: productForm.ram,
@@ -152,6 +157,23 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
     } else {
       dispatch(addProduct(productPayload));
       onToast(`New product "${productPayload.name}" listed live!`, 'success');
+
+      // Sync product listing with live backend API if authenticated
+      const token = localStorage.getItem('mlx_token');
+      if (token) {
+        createSellerProduct({
+          name: productPayload.name,
+          brand: productPayload.brand,
+          category: productPayload.category,
+          description: productPayload.description,
+          price: productPayload.price,
+          stock: productPayload.stock,
+          specs: productPayload.specs,
+          images: productPayload.images
+        }, token).catch(err => {
+          console.warn('Backend API product sync warning:', err.message);
+        });
+      }
     }
     dispatch(setShowAddEditModal(false));
   };
@@ -173,42 +195,202 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
         </div>
 
         <form onSubmit={handleSubmit} className="modal-form grid-form">
-          {/* Multi-Angle Photo Inputs */}
+          {/* Multi-Angle Photo Inputs (File Upload Only) */}
           <div className="form-group" style={{ gridColumn: 'span 2' }}>
-            <label className="form-label">
-              📷 Multi-Angle Product Photos (Upload Min 4, Max 7 Image URLs) *
-            </label>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+              <label className="form-label" style={{ marginBottom: 0 }}>
+                📷 Multi-Angle Product Photos (Upload Min 4, Max 7 Images) *
+              </label>
+              <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 500 }}>
+                Select image files directly from device storage
+              </span>
+            </div>
+
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.75rem' }}>
               {formImages.map((img, idx) => {
-                const labels = ['1. Front Side Photo *', '2. Back Side Photo *', '3. Left Side Photo *', '4. Right Side Photo *', '5. Top/Bottom Angle', '6. Extra Angle 6', '7. Extra Angle 7'];
+                const labels = [
+                  '1. Front Side Photo *',
+                  '2. Back Side Photo *',
+                  '3. Left Side Photo *',
+                  '4. Right Side Photo *',
+                  '5. Top / Bottom Angle',
+                  '6. Additional Angle 6',
+                  '7. Additional Angle 7'
+                ];
+                const isRequired = idx < 4;
+                const hasImage = Boolean(img && img.trim());
+
+                const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+
+                  if (!file.type.startsWith('image/')) {
+                    onToast('Please select a valid image file (JPG, PNG, WEBP, etc.)', 'info');
+                    return;
+                  }
+
+                  const reader = new FileReader();
+                  reader.onload = (event) => {
+                    const result = event.target?.result as string;
+                    if (!result) return;
+
+                    // Compress high-res camera photos using HTML5 Canvas
+                    const tempImg = new Image();
+                    tempImg.onload = () => {
+                      const canvas = document.createElement('canvas');
+                      const MAX_DIM = 1200;
+                      let w = tempImg.width;
+                      let h = tempImg.height;
+
+                      if (w > h) {
+                        if (w > MAX_DIM) {
+                          h = Math.round((h * MAX_DIM) / w);
+                          w = MAX_DIM;
+                        }
+                      } else {
+                        if (h > MAX_DIM) {
+                          w = Math.round((w * MAX_DIM) / h);
+                          h = MAX_DIM;
+                        }
+                      }
+
+                      canvas.width = w;
+                      canvas.height = h;
+                      const ctx = canvas.getContext('2d');
+                      ctx?.drawImage(tempImg, 0, 0, w, h);
+
+                      const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+                      const updated = [...formImages];
+                      updated[idx] = compressedBase64;
+                      setFormImages(updated);
+                    };
+                    tempImg.src = result;
+                  };
+                  reader.readAsDataURL(file);
+                };
+
                 return (
-                  <div key={idx}>
-                    <span style={{ fontSize: '0.72rem', fontWeight: 600, color: '#475569', display: 'block', marginBottom: '0.2rem' }}>
-                      {labels[idx] || `Photo ${idx + 1}`}
-                    </span>
-                    <input
-                      type="url"
-                      className="form-input-text"
-                      required={idx < 4}
-                      placeholder="https://images.unsplash.com/..."
-                      value={img}
-                      onChange={(e) => {
-                        const copy = [...formImages];
-                        copy[idx] = e.target.value;
-                        setFormImages(copy);
-                      }}
-                    />
+                  <div
+                    key={idx}
+                    style={{
+                      border: hasImage ? '1.5px solid #10b981' : isRequired ? '1.5px dashed #cbd5e1' : '1px dashed #e2e8f0',
+                      borderRadius: '10px',
+                      padding: '0.6rem',
+                      background: hasImage ? '#f0fdf4' : '#f8fafc',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '0.4rem',
+                      position: 'relative'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.74rem', fontWeight: 700, color: isRequired ? '#0f172a' : '#475569' }}>
+                        {labels[idx] || `Photo ${idx + 1}`}
+                      </span>
+                      {hasImage && (
+                        <span style={{ fontSize: '0.65rem', background: '#dcfce7', color: '#15803d', padding: '0.15rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                          ✓ Loaded
+                        </span>
+                      )}
+                    </div>
+
+                    {hasImage ? (
+                      <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+                        <img
+                          src={img}
+                          alt={labels[idx]}
+                          style={{
+                            width: '56px',
+                            height: '56px',
+                            objectFit: 'cover',
+                            borderRadius: '8px',
+                            border: '1px solid #cbd5e1'
+                          }}
+                        />
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1 }}>
+                          <label
+                            style={{
+                              fontSize: '0.7rem',
+                              fontWeight: 600,
+                              color: '#2563eb',
+                              background: '#eff6ff',
+                              border: '1px solid #bfdbfe',
+                              borderRadius: '6px',
+                              padding: '0.25rem 0.5rem',
+                              textAlign: 'center',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Change File
+                            <input type="file" accept="image/*" onChange={handleFileSelect} style={{ display: 'none' }} />
+                          </label>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const updated = [...formImages];
+                              updated[idx] = '';
+                              setFormImages(updated);
+                            }}
+                            style={{
+                              fontSize: '0.68rem',
+                              fontWeight: 600,
+                              color: '#dc2626',
+                              background: '#fef2f2',
+                              border: '1px solid #fecaca',
+                              borderRadius: '6px',
+                              padding: '0.2rem 0.5rem',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                        <label
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            gap: '0.3rem',
+                            padding: '0.9rem 0.4rem',
+                            background: '#ffffff',
+                            border: '1px solid #cbd5e1',
+                            borderRadius: '8px',
+                            cursor: 'pointer',
+                            textAlign: 'center'
+                          }}
+                        >
+                          <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#2563eb' }}>
+                            📁 Choose File
+                          </span>
+                          <span style={{ fontSize: '0.65rem', color: '#64748b' }}>
+                            Select image (PNG, JPG, WEBP)
+                          </span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            required={isRequired && !hasImage}
+                            onChange={handleFileSelect}
+                            style={{ display: 'none' }}
+                          />
+                        </label>
+                      </div>
+                    )}
                   </div>
                 );
               })}
             </div>
+
             {formImages.length < 7 && (
               <button
                 type="button"
-                style={{ marginTop: '0.5rem', fontSize: '0.78rem', color: '#2563eb', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer' }}
+                style={{ marginTop: '0.6rem', fontSize: '0.78rem', color: '#2563eb', fontWeight: 600, background: 'none', border: 'none', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '0.3rem' }}
                 onClick={() => setFormImages([...formImages, ''])}
               >
-                + Add Another Photo Angle
+                + Add Another Photo Angle Slot
               </button>
             )}
           </div>
