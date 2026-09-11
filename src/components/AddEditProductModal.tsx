@@ -5,6 +5,7 @@ import { setShowAddEditModal, addProduct, editProduct } from '../store/productsS
 import { Product } from '../types';
 import { CATEGORIES } from '../data/mockData';
 import { createSellerProduct, getBrands } from '../services/apiService';
+import { CompactBrandSelect } from './CompactBrandSelect';
 
 interface AddEditProductModalProps {
   onToast: (msg: string, type?: 'success' | 'info') => void;
@@ -420,46 +421,12 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
           </div>
 
           <div className="form-group">
-            <label className="form-label" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span>Brand *</span>
-              <button
-                type="button"
-                style={{ background: 'none', border: 'none', color: '#2563eb', fontSize: '0.72rem', cursor: 'pointer', fontWeight: 600 }}
-                onClick={() => setCustomBrandInput(!customBrandInput)}
-              >
-                {customBrandInput ? '← Choose from Database Brands' : '+ Type Custom Brand'}
-              </button>
-            </label>
-            {customBrandInput ? (
-              <input
-                type="text"
-                className="form-input-text"
-                required
-                placeholder="e.g. Nothing, Honor, Poco..."
-                value={productForm.brand}
-                onChange={(e) => setProductForm({ ...productForm, brand: e.target.value })}
-              />
-            ) : (
-              <select
-                className="form-select-box"
-                required
-                value={productForm.brand}
-                onChange={(e) => {
-                  if (e.target.value === 'OTHER_CUSTOM') {
-                    setCustomBrandInput(true);
-                    setProductForm({ ...productForm, brand: '' });
-                  } else {
-                    setProductForm({ ...productForm, brand: e.target.value });
-                  }
-                }}
-              >
-                <option value="">-- Select Brand from Database --</option>
-                {availableBrandsList.map(b => (
-                  <option key={b} value={b}>{b}</option>
-                ))}
-                <option value="OTHER_CUSTOM">+ Add Custom Brand</option>
-              </select>
-            )}
+            <label className="form-label">Brand *</label>
+            <CompactBrandSelect
+              value={productForm.brand}
+              onChange={(val) => setProductForm({ ...productForm, brand: val })}
+              brands={availableBrandsList}
+            />
           </div>
 
           <div className="form-group">

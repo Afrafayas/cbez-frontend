@@ -1,6 +1,7 @@
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { ManageCategoriesBrandsModal } from './components/ManageCategoriesBrandsModal';
 import { NetworkCreateModal } from './components/NetworkCreateModal';
+import { CompactBrandSelect } from './components/CompactBrandSelect';
 import { Footer } from './components/Footer';
 import { getProducts, getShops, registerUser, createSellerProduct, sendLead, getFollowedShops, unfollowShop, getNetworkInquiries, getShopFollowers, getBrands } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
@@ -2798,37 +2799,12 @@ export default function App() {
                 </div>
 
                 <div className="form-group">
-                  <label className="form-label">Brand (Database) *</label>
-                  <select
-                    className="form-select-box"
-                    required
-                    value={availableBrandsList.includes(productForm.brand) ? productForm.brand : (productForm.brand ? "Other" : "")}
-                    onChange={(e: ChangeEvent<HTMLSelectElement>) => {
-                      const val = e.target.value;
-                      if (val === "Other") {
-                        setProductForm({ ...productForm, brand: '' });
-                      } else {
-                        setProductForm({ ...productForm, brand: val });
-                      }
-                    }}
-                  >
-                    <option value="">-- Select Brand from Database --</option>
-                    {availableBrandsList.map(b => (
-                      <option key={b} value={b}>{b}</option>
-                    ))}
-                    <option value="Other">Other / Custom Brand</option>
-                  </select>
-                  {(!availableBrandsList.includes(productForm.brand) || productForm.brand === '') && (
-                    <input
-                      type="text"
-                      className="form-input-text"
-                      style={{ marginTop: '0.4rem' }}
-                      required
-                      placeholder="Type custom brand name..."
-                      value={productForm.brand}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => setProductForm({ ...productForm, brand: e.target.value })}
-                    />
-                  )}
+                  <label className="form-label">Brand *</label>
+                  <CompactBrandSelect
+                    value={productForm.brand}
+                    onChange={(val) => setProductForm({ ...productForm, brand: val })}
+                    brands={availableBrandsList}
+                  />
                 </div>
 
                 <div className="form-group" style={{ gridColumn: 'span 2' }}>
