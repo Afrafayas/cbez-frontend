@@ -2156,79 +2156,51 @@ export default function App() {
           <section style={{ flex: 1 }}>
             {dashboardTab === 'listings' ? (
               <div className="dashboard-panel">
-                {/* Seller Create Product Hero Action Card */}
+                {/* Clean Unified Section Header */}
                 <div 
-                  className="create-product-hero-card"
-                  style={{
-                    background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
-                    borderRadius: '16px',
-                    padding: '1.5rem 1.75rem',
-                    marginBottom: '1.75rem',
-                    color: '#ffffff',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-between',
-                    gap: '1.25rem',
-                    boxShadow: '0 10px 25px -5px rgba(0, 0, 0, 0.2)',
-                    border: '1px solid rgba(255, 111, 0, 0.3)',
-                    position: 'relative',
-                    overflow: 'hidden'
+                  className="panel-header" 
+                  style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    marginBottom: '1.5rem',
+                    paddingBottom: '1rem',
+                    borderBottom: '1px solid #e2e8f0'
                   }}
                 >
-                  <div style={{ position: 'relative', zIndex: 2 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.35rem' }}>
-                      <span style={{ background: 'var(--primary)', color: '#fff', fontSize: '0.7rem', fontWeight: 800, padding: '0.15rem 0.5rem', borderRadius: '20px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                        ⚡ Merchant Dashboard
-                      </span>
-                      <span style={{ fontSize: '0.8rem', color: '#94a3b8' }}>
-                        ({products.filter(p => p.shopId === activeShop?.id).length} Active Listings)
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem', marginBottom: '0.25rem' }}>
+                      <h3 className="panel-title" style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#0f172a' }}>
+                        My Used Devices Inventory
+                      </h3>
+                      <span style={{ fontSize: '0.75rem', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', padding: '0.15rem 0.6rem', borderRadius: '20px', fontWeight: 700 }}>
+                        {products.filter(p => p.shopId === activeShop?.id).length} Active Listings
                       </span>
                     </div>
-                    <h3 style={{ fontSize: '1.25rem', fontWeight: 800, margin: 0, color: '#f8fafc' }}>
-                      List New Used Device for Sale
-                    </h3>
-                    <p style={{ fontSize: '0.82rem', color: '#cbd5e1', margin: 0, marginTop: '0.35rem', maxWidth: '540px', lineHeight: 1.45 }}>
+                    <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b' }}>
                       Upload multi-angle photos, storage specs & warranty details to broadcast your gadget to verified local buyers in {activeShop?.city || 'your city'}.
                     </p>
                   </div>
 
                   <button 
                     type="button"
+                    className="btn-primary" 
                     onClick={handleOpenAddProduct} 
-                    className="btn-primary"
-                    style={{
-                      padding: '0.75rem 1.4rem',
-                      fontSize: '0.9rem',
+                    style={{ 
+                      padding: '0.65rem 1.25rem', 
+                      fontSize: '0.85rem', 
                       fontWeight: 700,
-                      borderRadius: '12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: '0.5rem',
+                      borderRadius: '12px', 
+                      display: 'inline-flex', 
+                      alignItems: 'center', 
+                      gap: '0.4rem',
+                      boxShadow: '0 4px 12px rgba(255, 111, 0, 0.3)',
                       flexShrink: 0,
-                      boxShadow: '0 4px 14px rgba(255, 111, 0, 0.4)',
-                      zIndex: 2,
                       cursor: 'pointer'
                     }}
                   >
                     <Plus size={18} />
-                    <span>+ Add Product Listing</span>
-                  </button>
-                </div>
-
-                <div className="panel-header" style={{ marginBottom: '1.2rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                    <h3 className="panel-title" style={{ margin: 0 }}>My Used Devices Inventory</h3>
-                    <span style={{ fontSize: '0.75rem', background: '#f1f5f9', color: '#475569', padding: '0.2rem 0.6rem', borderRadius: '20px', fontWeight: 700 }}>
-                      {products.filter(p => p.shopId === activeShop?.id).length} Listings
-                    </span>
-                  </div>
-                  <button 
-                    className="btn-primary" 
-                    onClick={handleOpenAddProduct} 
-                    style={{ padding: '0.5rem 1.1rem', fontSize: '0.82rem', borderRadius: '10px', display: 'inline-flex', alignItems: 'center', gap: '0.35rem' }}
-                  >
-                    <Plus size={16} />
-                    <span>Add Product</span>
+                    <span>+ Add New Product</span>
                   </button>
                 </div>
 
