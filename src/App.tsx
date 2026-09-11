@@ -2598,7 +2598,7 @@ export default function App() {
                         if (!file) return;
 
                         if (!file.type.startsWith('image/')) {
-                          showToast('Please select a valid image file (JPG, PNG, WEBP, etc.)', 'info');
+                          triggerToast('Please select a valid image file (JPG, PNG, WEBP, etc.)', 'info');
                           return;
                         }
 
