@@ -2568,42 +2568,193 @@ export default function App() {
               </h3>
 
               <form onSubmit={handleProductSubmit} className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                {/* 1. Multi-Angle Image Uploads */}
+                {/* 1. Multi-Angle Image Uploads (File Upload Only) */}
                 <div className="form-group full-width" style={{ gridColumn: 'span 2', background: 'var(--card-bg, #f8f9fa)', padding: '1rem', borderRadius: '10px', border: '1px dashed #cbd5e1' }}>
-                  <label className="form-label" style={{ fontWeight: 700, color: 'var(--text-primary)' }}>
-                    📷 Multi-Angle Photos (Required: Min 4, Max 7) *
-                  </label>
-                  <span style={{ fontSize: '0.75rem', color: 'var(--text-secondary, #64748b)', display: 'block', marginBottom: '0.75rem' }}>
-                    Please provide photo URLs for required angles: Front, Back, Left Side, and Right Side.
-                  </span>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <label className="form-label" style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 0 }}>
+                      📷 Multi-Angle Photos (Required: Min 4, Max 7) *
+                    </label>
+                    <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 500 }}>
+                      Select image files directly from device storage
+                    </span>
+                  </div>
 
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.75rem' }}>
                     {[
-                      { label: '1. Front Side (Required) *', placeholder: 'https://... front side photo URL' },
-                      { label: '2. Back Side (Required) *', placeholder: 'https://... back side photo URL' },
-                      { label: '3. Left/Right Side (Required) *', placeholder: 'https://... side angle photo URL' },
-                      { label: '4. Top/Bottom Side (Required) *', placeholder: 'https://... top/bottom photo URL' },
-                      { label: '5. Additional Angle 1 (Optional)', placeholder: 'https://... extra photo URL' },
-                      { label: '6. Additional Angle 2 (Optional)', placeholder: 'https://... extra photo URL' },
-                      { label: '7. Additional Angle 3 (Optional)', placeholder: 'https://... extra photo URL' },
-                    ].map((slot, idx) => (
-                      <div key={idx} style={{ gridColumn: idx === 0 ? 'span 2' : 'span 1' }}>
-                        <label style={{ fontSize: '0.72rem', fontWeight: 600, color: '#475569' }}>{slot.label}</label>
-                        <input
-                          type="url"
-                          className="form-input-text"
-                          style={{ fontSize: '0.8rem', padding: '0.4rem 0.6rem' }}
-                          required={idx < 4}
-                          placeholder={slot.placeholder}
-                          value={productForm.images[idx] || ''}
-                          onChange={(e: ChangeEvent<HTMLInputElement>) => {
+                      '1. Front Side (Required) *',
+                      '2. Back Side (Required) *',
+                      '3. Left Side (Required) *',
+                      '4. Right Side (Required) *',
+                      '5. Additional Angle 1 (Optional)',
+                      '6. Additional Angle 2 (Optional)',
+                      '7. Additional Angle 3 (Optional)'
+                    ].map((label, idx) => {
+                      const isRequired = idx < 4;
+                      const img = productForm.images[idx] || '';
+                      const hasImage = Boolean(img && img.trim());
+
+                      const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+
+                        if (!file.type.startsWith('image/')) {
+                          showToast('Please select a valid image file (JPG, PNG, WEBP, etc.)', 'info');
+                          return;
+                        }
+
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          const result = event.target?.result as string;
+                          if (!result) return;
+
+                          // Compress high-res camera photos using HTML5 Canvas
+                          const tempImg = new Image();
+                          tempImg.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const MAX_DIM = 1200;
+                            let w = tempImg.width;
+                            let h = tempImg.height;
+
+                            if (w > h) {
+                              if (w > MAX_DIM) {
+                                h = Math.round((h * MAX_DIM) / w);
+                                w = MAX_DIM;
+                              }
+                            } else {
+                              if (h > MAX_DIM) {
+                                w = Math.round((w * MAX_DIM) / h);
+                                h = MAX_DIM;
+                              }
+                            }
+
+                            canvas.width = w;
+                            canvas.height = h;
+                            const ctx = canvas.getContext('2d');
+                            ctx?.drawImage(tempImg, 0, 0, w, h);
+
+                            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
                             const updatedImgs = [...productForm.images];
-                            updatedImgs[idx] = e.target.value;
+                            updatedImgs[idx] = compressedBase64;
                             setProductForm({ ...productForm, images: updatedImgs });
+                          };
+                          tempImg.src = result;
+                        };
+                        reader.readAsDataURL(file);
+                      };
+
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            border: hasImage ? '1.5px solid #10b981' : isRequired ? '1.5px dashed #cbd5e1' : '1px dashed #e2e8f0',
+                            borderRadius: '10px',
+                            padding: '0.6rem',
+                            background: hasImage ? '#f0fdf4' : '#ffffff',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.4rem',
+                            position: 'relative'
                           }}
-                        />
-                      </div>
-                    ))}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.74rem', fontWeight: 700, color: isRequired ? '#0f172a' : '#475569' }}>
+                              {label}
+                            </span>
+                            {hasImage && (
+                              <span style={{ fontSize: '0.65rem', background: '#dcfce7', color: '#15803d', padding: '0.15rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                                ✓ Loaded
+                              </span>
+                            )}
+                          </div>
+
+                          {hasImage ? (
+                            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+                              <img
+                                src={img}
+                                alt={label}
+                                style={{
+                                  width: '52px',
+                                  height: '52px',
+                                  objectFit: 'cover',
+                                  borderRadius: '8px',
+                                  border: '1px solid #cbd5e1'
+                                }}
+                              />
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1 }}>
+                                <label
+                                  style={{
+                                    fontSize: '0.7rem',
+                                    fontWeight: 600,
+                                    color: '#2563eb',
+                                    background: '#eff6ff',
+                                    border: '1px solid #bfdbfe',
+                                    borderRadius: '6px',
+                                    padding: '0.25rem 0.5rem',
+                                    textAlign: 'center',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  Change File
+                                  <input type="file" accept="image/*" onChange={handleFileSelect} style={{ display: 'none' }} />
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updatedImgs = [...productForm.images];
+                                    updatedImgs[idx] = '';
+                                    setProductForm({ ...productForm, images: updatedImgs });
+                                  }}
+                                  style={{
+                                    fontSize: '0.68rem',
+                                    fontWeight: 600,
+                                    color: '#dc2626',
+                                    background: '#fef2f2',
+                                    border: '1px solid #fecaca',
+                                    borderRadius: '6px',
+                                    padding: '0.2rem 0.5rem',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                              <label
+                                style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: '0.3rem',
+                                  padding: '0.8rem 0.4rem',
+                                  background: '#ffffff',
+                                  border: '1px solid #cbd5e1',
+                                  borderRadius: '8px',
+                                  cursor: 'pointer',
+                                  textAlign: 'center'
+                                }}
+                              >
+                                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#2563eb' }}>
+                                  📁 Choose File
+                                </span>
+                                <span style={{ fontSize: '0.65rem', color: '#64748b' }}>
+                                  Select image (PNG, JPG, WEBP)
+                                </span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  required={isRequired && !hasImage}
+                                  onChange={handleFileSelect}
+                                  style={{ display: 'none' }}
+                                />
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
