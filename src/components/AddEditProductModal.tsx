@@ -18,7 +18,6 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
 
   const [formImages, setFormImages] = useState<string[]>(['', '', '', '']);
   const [dbBrands, setDbBrands] = useState<string[]>([]);
-  const [customBrandInput, setCustomBrandInput] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {

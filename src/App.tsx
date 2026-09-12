@@ -1065,12 +1065,26 @@ export default function App() {
   };
 
   const handleWhatsAppSeller = (product: Product, seller: Shop) => {
+    const rawNum = (seller.whatsapp || seller.phone || '').replace(/\D/g, '');
+    if (!rawNum) {
+      triggerToast(`⚠️ WhatsApp number for ${seller.name} is unavailable.`, 'warning');
+      return;
+    }
+
     triggerLeadCapture(product, seller, 'whatsapp');
+    const cleanPhone = rawNum.length === 10 ? `91${rawNum}` : rawNum;
     const name = activeUser ? activeUser.name : "Customer";
-    const text = `Hi ${seller.ownerName}, I saw your product "${product.name}" listed for ₹${product.price.toLocaleString('en-IN')} on MLX Market. I am interested in buying it. Is it still available? - Sent by ${name}`;
-    const waUrl = `https://wa.me/${seller.whatsapp}?text=${encodeURIComponent(text)}`;
-    triggerToast(`💬 Opening WhatsApp chat with ${seller.name} regarding "${product.name}"...`, 'success');
+    const text = `Hi ${seller.ownerName || seller.name}, I saw your product "${product.name}" listed for ₹${(product.offerPrice || product.price).toLocaleString('en-IN')} on MLX Market. I am interested in buying it. Is it still available? - Sent by ${name}`;
+    const waUrl = `https://wa.me/${cleanPhone}?text=${encodeURIComponent(text)}`;
+    triggerToast(`💬 Opening WhatsApp chat with ${seller.name}...`, 'success');
     window.open(waUrl, '_blank');
+  };
+
+  const handleGetDirections = (seller: Shop) => {
+    const locationQuery = seller.address ? `${seller.name}, ${seller.address}, ${seller.city}` : `${seller.name}, ${seller.city}`;
+    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationQuery)}`;
+    triggerToast(`🗺️ Opening Google Maps directions for ${seller.name}...`, 'info');
+    window.open(mapsUrl, '_blank');
   };
 
   const renderCategoryIcon = (category: string, cssClass = "card-visual-svg") => {
@@ -2516,6 +2530,7 @@ export default function App() {
         getSellerShop={getSellerShop}
         onCallSeller={handleCallSeller}
         onWhatsAppSeller={handleWhatsAppSeller}
+        onGetDirections={handleGetDirections}
         onToast={triggerToast}
       />
 

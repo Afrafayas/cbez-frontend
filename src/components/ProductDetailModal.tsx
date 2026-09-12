@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Phone, Smartphone, MapPin, ShieldCheck, UserPlus, UserCheck } from 'lucide-react';
+import { X, Phone, Smartphone, MapPin, ShieldCheck, UserPlus, UserCheck, Navigation } from 'lucide-react';
 import { Product, Shop } from '../types';
 import { useAppDispatch, useAppSelector } from '../store';
 import { setSelectedProduct } from '../store/productsSlice';
@@ -9,13 +9,15 @@ interface ProductDetailModalProps {
   getSellerShop: (shopId: string) => Shop;
   onCallSeller: (product: Product, seller: Shop) => void;
   onWhatsAppSeller: (product: Product, seller: Shop) => void;
-  onToast?: (msg: string, type?: 'success' | 'info') => void;
+  onGetDirections?: (seller: Shop) => void;
+  onToast?: (msg: string, type?: 'success' | 'info' | 'warning') => void;
 }
 
 export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   getSellerShop,
   onCallSeller,
   onWhatsAppSeller,
+  onGetDirections,
   onToast,
 }) => {
   const dispatch = useAppDispatch();
@@ -367,10 +369,21 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   </div>
                   <div
                     className="dealer-card-address"
-                    style={{ fontSize: '0.78rem', color: '#64748b', marginTop: '0.2rem' }}
+                    onClick={() => onGetDirections && onGetDirections(seller)}
+                    style={{
+                      fontSize: '0.78rem',
+                      color: onGetDirections ? '#2563eb' : '#64748b',
+                      marginTop: '0.2rem',
+                      cursor: onGetDirections ? 'pointer' : 'default',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.25rem',
+                      width: 'fit-content'
+                    }}
+                    title={onGetDirections ? "Click to open Google Maps directions" : undefined}
                   >
-                    <MapPin size={12} style={{ display: 'inline', marginRight: '0.25rem' }} />
-                    <span>
+                    <MapPin size={13} style={{ display: 'inline', flexShrink: 0 }} />
+                    <span style={{ textDecoration: onGetDirections ? 'underline' : 'none' }}>
                       {seller.address}, {seller.city}
                     </span>
                   </div>
@@ -413,7 +426,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
               <div
                 className="sourcing-actions"
-                style={{ marginTop: '0.75rem', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}
+                style={{
+                  marginTop: '0.75rem',
+                  display: 'grid',
+                  gridTemplateColumns: onGetDirections ? '1fr 1fr 1fr' : '1fr 1fr',
+                  gap: '0.5rem'
+                }}
               >
                 <button
                   className="btn-call"
@@ -422,7 +440,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   style={{ opacity: isSoldOut ? 0.5 : 1 }}
                 >
                   <Phone size={16} />
-                  <span>Call Dealer Shop</span>
+                  <span>Call Dealer</span>
                 </button>
                 <button
                   className="btn-whatsapp"
@@ -431,8 +449,33 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   style={{ opacity: isSoldOut ? 0.5 : 1 }}
                 >
                   <Smartphone size={16} />
-                  <span>WhatsApp Merchant</span>
+                  <span>WhatsApp</span>
                 </button>
+                {onGetDirections && (
+                  <button
+                    type="button"
+                    className="btn-directions"
+                    onClick={() => onGetDirections(seller)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '0.4rem',
+                      padding: '0.6rem 0.8rem',
+                      borderRadius: '8px',
+                      background: '#0284c7',
+                      color: '#ffffff',
+                      fontWeight: 600,
+                      fontSize: '0.82rem',
+                      border: 'none',
+                      cursor: 'pointer',
+                      transition: 'background 0.2s ease',
+                    }}
+                  >
+                    <Navigation size={16} />
+                    <span>Directions</span>
+                  </button>
+                )}
               </div>
             </div>
           </div>

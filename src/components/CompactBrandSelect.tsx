@@ -74,7 +74,7 @@ export const CompactBrandSelect: React.FC<CompactBrandSelectProps> = ({ value, o
         className="form-select-box"
         style={{
           display: 'flex',
-          justify: 'space-between',
+          justifyContent: 'space-between',
           alignItems: 'center',
           cursor: 'pointer',
           background: '#ffffff',
@@ -150,7 +150,7 @@ export const CompactBrandSelect: React.FC<CompactBrandSelectProps> = ({ value, o
                     background: isSelected ? '#eff6ff' : 'transparent',
                     cursor: 'pointer',
                     display: 'flex',
-                    justify: 'space-between',
+                    justifyContent: 'space-between',
                     alignItems: 'center',
                     transition: 'background 0.15s ease'
                   }}
