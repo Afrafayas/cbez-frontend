@@ -1160,11 +1160,41 @@ export default function App() {
       {/* --- SITE HEADER --- */}
       <header className="site-header">
         <div className="header-container">
-          <div className="logo-section" onClick={() => { navigate('/'); dispatch(clearFilters()); }}>
-            <img src="/logo.png" alt="MLX Market Logo" className="logo-img" />
-            <div className="logo-text">
-              <span className="logo-title">MLX <span>DIRECT</span></span>
-              <span className="logo-subtitle">USED GADGETS DIRECTORY</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+            {location.pathname !== '/' && (
+              <button
+                type="button"
+                className="header-back-btn"
+                onClick={() => navigate(-1)}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.3rem',
+                  padding: '0.4rem 0.85rem',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(255, 255, 255, 0.25)',
+                  background: 'rgba(255, 255, 255, 0.12)',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                  backdropFilter: 'blur(6px)',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 2px 6px rgba(0, 0, 0, 0.15)',
+                }}
+                title="Go back to previous page"
+              >
+                <ChevronLeft size={16} />
+                <span>Back</span>
+              </button>
+            )}
+
+            <div className="logo-section" onClick={() => { navigate('/'); dispatch(clearFilters()); }}>
+              <img src="/logo.png" alt="MLX Market Logo" className="logo-img" />
+              <div className="logo-text">
+                <span className="logo-title">MLX <span>DIRECT</span></span>
+                <span className="logo-subtitle">USED GADGETS DIRECTORY</span>
+              </div>
             </div>
           </div>
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, FolderPlus, Tag } from 'lucide-react';
+import { X, Plus, Trash2, FolderPlus, Tag, ChevronLeft } from 'lucide-react';
 import { Category, Brand } from '../types';
 import { 
   getCategories, 
@@ -153,6 +153,27 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
         </button>
 
         <div className="modal-header" style={{ marginBottom: '1.5rem', paddingRight: '2rem' }}>
+          <button
+            type="button"
+            onClick={onClose}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.35rem',
+              padding: '0.35rem 0.75rem',
+              borderRadius: '8px',
+              border: '1px solid #cbd5e1',
+              background: '#f8fafc',
+              color: '#475569',
+              fontSize: '0.8rem',
+              fontWeight: 600,
+              cursor: 'pointer',
+              marginBottom: '0.75rem',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <ChevronLeft size={16} /> Back
+          </button>
           <h2 className="modal-title" style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
             Manage Categories & Brands
           </h2>
