@@ -328,6 +328,31 @@ export default function App() {
     phone: ''
   });
 
+  // --- Seller Dashboard Pagination & Search State ---
+  const [sellerListPage, setSellerListPage] = React.useState<number>(1);
+  const [sellerListPerPage, setSellerListPerPage] = React.useState<number>(5);
+  const [sellerSearchQuery, setSellerSearchQuery] = React.useState<string>('');
+
+  // --- Marketplace Catalog Pagination State ---
+  const [catalogPage, setCatalogPage] = React.useState<number>(1);
+  const [catalogPerPage, setCatalogPerPage] = React.useState<number>(8);
+
+  // --- Customer Dashboard Pagination States ---
+  const [custInquiriesPage, setCustInquiriesPage] = React.useState<number>(1);
+  const [custInquiriesPerPage, setCustInquiriesPerPage] = React.useState<number>(5);
+
+  React.useEffect(() => {
+    setSellerListPage(1);
+  }, [sellerSearchQuery, activeShop]);
+
+  React.useEffect(() => {
+    setCatalogPage(1);
+  }, [filters]);
+
+  React.useEffect(() => {
+    setCustInquiriesPage(1);
+  }, [customerTab]);
+
   // Sync profile editor fields & load customer dashboard data when logged in
   React.useEffect(() => {
     if (activeUser) {
@@ -1561,9 +1586,16 @@ export default function App() {
             </div>
 
             {sortedProducts.length > 0 ? (
-              <div className="product-grid">
-                {/* Dynamically insert Center Banner in between products (after 3 items) */}
-                {sortedProducts.map((product, index) => {
+              <>
+                <div className="product-grid">
+                  {/* Dynamically insert Center Banner in between products (after 3 items) */}
+                  {(() => {
+                    const totalCatalogItems = sortedProducts.length;
+                    const catalogStartIndex = (catalogPage - 1) * catalogPerPage;
+                    const catalogEndIndex = Math.min(catalogStartIndex + catalogPerPage, totalCatalogItems);
+                    const paginatedCatalogProducts = sortedProducts.slice(catalogStartIndex, catalogEndIndex);
+
+                    return paginatedCatalogProducts.map((product, index) => {
                   const seller = getSellerShop(product.shopId);
                   const isOutOfStock = product.stock <= 0;
                   
@@ -1659,9 +1691,132 @@ export default function App() {
                   }
 
                   return renderCard;
-                })}
+                });
+              })()}
               </div>
-            ) : (
+
+              {/* Marketplace Catalog Pagination Bar */}
+              {sortedProducts.length > 0 && (
+                <div 
+                  style={{ 
+                    display: 'flex', 
+                    justifyContent: 'space-between', 
+                    alignItems: 'center', 
+                    marginTop: '2rem', 
+                    padding: '1.25rem 1.5rem',
+                    background: '#ffffff',
+                    borderRadius: '16px',
+                    border: '1px solid #e2e8f0',
+                    boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
+                    flexWrap: 'wrap',
+                    gap: '1rem'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>Show per page:</span>
+                    <select
+                      value={catalogPerPage}
+                      onChange={(e) => {
+                        setCatalogPerPage(Number(e.target.value));
+                        setCatalogPage(1);
+                      }}
+                      style={{
+                        padding: '0.4rem 0.75rem',
+                        fontSize: '0.82rem',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        background: '#ffffff',
+                        fontWeight: 700,
+                        color: '#1e293b',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      <option value={8}>8 items</option>
+                      <option value={12}>12 items</option>
+                      <option value={24}>24 items</option>
+                      <option value={48}>48 items</option>
+                    </select>
+                    <span style={{ fontSize: '0.82rem', color: '#94a3b8', fontWeight: 600 }}>
+                      Showing {sortedProducts.length > 0 ? (catalogPage - 1) * catalogPerPage + 1 : 0} to {Math.min(catalogPage * catalogPerPage, sortedProducts.length)} of {sortedProducts.length} items
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                    <button
+                      type="button"
+                      disabled={catalogPage === 1}
+                      onClick={() => {
+                        setCatalogPage(prev => Math.max(prev - 1, 1));
+                        const gridEl = document.getElementById('marketplace-grid');
+                        if (gridEl) gridEl.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                      style={{
+                        padding: '0.45rem 0.85rem',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        background: '#ffffff',
+                        color: catalogPage === 1 ? '#cbd5e1' : '#334155',
+                        cursor: catalogPage === 1 ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      ◀ Prev
+                    </button>
+
+                    {Array.from({ length: Math.ceil(sortedProducts.length / catalogPerPage) || 1 }, (_, i) => i + 1).map(page => (
+                      <button
+                        key={page}
+                        type="button"
+                        onClick={() => {
+                          setCatalogPage(page);
+                          const gridEl = document.getElementById('marketplace-grid');
+                          if (gridEl) gridEl.scrollIntoView({ behavior: 'smooth' });
+                        }}
+                        style={{
+                          padding: '0.45rem 0.8rem',
+                          borderRadius: '8px',
+                          border: catalogPage === page ? '1px solid var(--primary)' : '1px solid #cbd5e1',
+                          fontSize: '0.82rem',
+                          fontWeight: 800,
+                          background: catalogPage === page ? 'var(--primary)' : '#ffffff',
+                          color: catalogPage === page ? '#ffffff' : '#334155',
+                          cursor: 'pointer',
+                          boxShadow: catalogPage === page ? '0 2px 8px rgba(255, 111, 0, 0.3)' : 'none'
+                        }}
+                      >
+                        {page}
+                      </button>
+                    ))}
+
+                    <button
+                      type="button"
+                      disabled={catalogPage === Math.ceil(sortedProducts.length / catalogPerPage)}
+                      onClick={() => {
+                        setCatalogPage(prev => Math.min(prev + 1, Math.ceil(sortedProducts.length / catalogPerPage)));
+                        const gridEl = document.getElementById('marketplace-grid');
+                        if (gridEl) gridEl.scrollIntoView({ behavior: 'smooth' });
+                      }}
+                      style={{
+                        padding: '0.45rem 0.85rem',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '0.82rem',
+                        fontWeight: 700,
+                        background: '#ffffff',
+                        color: catalogPage === Math.ceil(sortedProducts.length / catalogPerPage) ? '#cbd5e1' : '#334155',
+                        cursor: catalogPage === Math.ceil(sortedProducts.length / catalogPerPage) ? 'not-allowed' : 'pointer',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      Next ▶
+                    </button>
+                  </div>
+                </div>
+              )}
+            </>
+          ) : (
               <div className="empty-state">
                 <HelpCircle size={48} className="empty-icon" />
                 <h3 className="empty-title">No used gadgets match these criteria</h3>
@@ -1761,20 +1916,41 @@ export default function App() {
                     Below is the log of verified used gadgets you inquired about. You can use these details to contact store partners again.
                   </p>
                   
-                  {leads.filter(l => activeUser && l.customerPhone === activeUser.phone).length > 0 ? (
-                    <table className="leads-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                      <thead>
-                        <tr style={{ backgroundColor: 'var(--light-bg)', textAlign: 'left', borderBottom: '1px solid var(--light-border)' }}>
-                          <th style={{ padding: '0.75rem' }}>Inquiry Date</th>
-                          <th style={{ padding: '0.75rem' }}>Used Device Model</th>
-                          <th style={{ padding: '0.75rem' }}>Store Partner</th>
-                          <th style={{ padding: '0.75rem' }}>Store Location</th>
-                          <th style={{ padding: '0.75rem' }}>Contact Channel</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'center' }}>Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {leads.filter(l => activeUser && l.customerPhone === activeUser.phone).map((lead) => {
+                  {(() => {
+                    const custLeadsAll = leads.filter(l => activeUser && l.customerPhone === activeUser.phone);
+                    const totalItems = custLeadsAll.length;
+                    const totalPages = Math.ceil(totalItems / custInquiriesPerPage) || 1;
+                    const startIndex = (custInquiriesPage - 1) * custInquiriesPerPage;
+                    const endIndex = Math.min(startIndex + custInquiriesPerPage, totalItems);
+                    const paginatedLeads = custLeadsAll.slice(startIndex, endIndex);
+
+                    if (totalItems === 0) {
+                      return (
+                        <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-secondary-light)' }}>
+                          <HelpCircle size={40} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+                          <p>You haven't made any inquiries yet. Click Call/WhatsApp on any used device to connect with local stores!</p>
+                          <button className="btn-primary" onClick={() => navigate('/')} style={{ marginTop: '1rem', padding: '0.5rem 1rem' }}>
+                            Browse Used Gadgets
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <>
+                        <table className="leads-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                          <thead>
+                            <tr style={{ backgroundColor: 'var(--light-bg)', textAlign: 'left', borderBottom: '1px solid var(--light-border)' }}>
+                              <th style={{ padding: '0.75rem' }}>Inquiry Date</th>
+                              <th style={{ padding: '0.75rem' }}>Used Device Model</th>
+                              <th style={{ padding: '0.75rem' }}>Store Partner</th>
+                              <th style={{ padding: '0.75rem' }}>Store Location</th>
+                              <th style={{ padding: '0.75rem' }}>Contact Channel</th>
+                              <th style={{ padding: '0.75rem', textAlign: 'center' }}>Action</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {paginatedLeads.map((lead) => {
                           const matchingProduct = products.find(p => p.id === lead.productId);
                           const store = shops.find(s => s.id === lead.shopId);
                           return (
@@ -1824,15 +2000,58 @@ export default function App() {
                         })}
                       </tbody>
                     </table>
-                  ) : (
-                    <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-secondary-light)' }}>
-                      <HelpCircle size={40} style={{ opacity: 0.3, marginBottom: '1rem' }} />
-                      <p>You haven't made any inquiries yet. Click Call/WhatsApp on any used device to connect with local stores!</p>
-                      <button className="btn-primary" onClick={() => navigate('/')} style={{ marginTop: '1rem', padding: '0.5rem 1rem' }}>
-                        Browse Used Gadgets
-                      </button>
+
+                    {/* Customer Inquiries Pagination Controls Bar */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '1rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
+                        <span>Rows per page:</span>
+                        <select
+                          value={custInquiriesPerPage}
+                          onChange={(e) => {
+                            setCustInquiriesPerPage(Number(e.target.value));
+                            setCustInquiriesPage(1);
+                          }}
+                          style={{ padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: 700, color: '#334155', cursor: 'pointer' }}
+                        >
+                          <option value={5}>5</option>
+                          <option value={10}>10</option>
+                          <option value={20}>20</option>
+                        </select>
+                        <span>Showing {totalItems > 0 ? startIndex + 1 : 0} to {endIndex} of {totalItems} entries</span>
+                      </div>
+
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <button
+                          type="button"
+                          disabled={custInquiriesPage === 1}
+                          onClick={() => setCustInquiriesPage(prev => Math.max(prev - 1, 1))}
+                          style={{ padding: '0.35rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: 700, background: '#ffffff', color: custInquiriesPage === 1 ? '#cbd5e1' : '#334155', cursor: custInquiriesPage === 1 ? 'not-allowed' : 'pointer' }}
+                        >
+                          ◀ Prev
+                        </button>
+                        {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                          <button
+                            key={page}
+                            type="button"
+                            onClick={() => setCustInquiriesPage(page)}
+                            style={{ padding: '0.35rem 0.7rem', borderRadius: '8px', border: custInquiriesPage === page ? '1px solid var(--primary)' : '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: 800, background: custInquiriesPage === page ? 'var(--primary)' : '#ffffff', color: custInquiriesPage === page ? '#ffffff' : '#334155', cursor: 'pointer' }}
+                          >
+                            {page}
+                          </button>
+                        ))}
+                        <button
+                          type="button"
+                          disabled={custInquiriesPage === totalPages}
+                          onClick={() => setCustInquiriesPage(prev => Math.min(prev + 1, totalPages))}
+                          style={{ padding: '0.35rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: 700, background: '#ffffff', color: custInquiriesPage === totalPages ? '#cbd5e1' : '#334155', cursor: custInquiriesPage === totalPages ? 'not-allowed' : 'pointer' }}
+                        >
+                          Next ▶
+                        </button>
+                      </div>
                     </div>
-                  )}
+                  </>
+                );
+              })()}
                 </div>
               </div>
             ) : customerTab === 'following' ? (
@@ -2226,10 +2445,126 @@ export default function App() {
                   </button>
                 </div>
 
+                {/* Seller Inventory Search & Filter Controls */}
+                {products.filter(p => p.shopId === activeShop?.id).length > 0 && (
+                  <div 
+                    style={{ 
+                      display: 'flex', 
+                      justifyContent: 'space-between', 
+                      alignItems: 'center', 
+                      gap: '1rem', 
+                      marginBottom: '1.25rem',
+                      flexWrap: 'wrap',
+                      background: '#f8fafc',
+                      padding: '0.75rem 1rem',
+                      borderRadius: '12px',
+                      border: '1px solid #f1f5f9'
+                    }}
+                  >
+                    <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
+                      <Search size={15} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: '#94a3b8' }} />
+                      <input 
+                        type="text" 
+                        placeholder="Search your inventory by model, brand, category..." 
+                        value={sellerSearchQuery}
+                        onChange={(e) => setSellerSearchQuery(e.target.value)}
+                        style={{
+                          width: '100%',
+                          padding: '0.45rem 0.75rem 0.45rem 2.2rem',
+                          fontSize: '0.82rem',
+                          borderRadius: '8px',
+                          border: '1px solid #cbd5e1',
+                          outline: 'none',
+                          background: '#ffffff'
+                        }}
+                      />
+                      {sellerSearchQuery && (
+                        <button 
+                          onClick={() => setSellerSearchQuery('')}
+                          style={{ position: 'absolute', right: '0.6rem', top: '50%', transform: 'translateY(-50%)', border: 'none', background: 'none', color: '#94a3b8', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 700 }}
+                        >
+                          ✕
+                        </button>
+                      )}
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
+                      <span>Rows per page:</span>
+                      <select
+                        value={sellerListPerPage}
+                        onChange={(e) => {
+                          setSellerListPerPage(Number(e.target.value));
+                          setSellerListPage(1);
+                        }}
+                        style={{
+                          padding: '0.35rem 0.6rem',
+                          fontSize: '0.8rem',
+                          borderRadius: '8px',
+                          border: '1px solid #cbd5e1',
+                          background: '#ffffff',
+                          fontWeight: 700,
+                          color: '#334155',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <option value={5}>5</option>
+                        <option value={10}>10</option>
+                        <option value={20}>20</option>
+                        <option value={50}>50</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
+
                 <div className="listings-list">
-                  {products.filter(p => p.shopId === activeShop?.id).length > 0 ? (
-                    products.filter(p => p.shopId === activeShop?.id).map(product => (
-                      <div key={product.id} className="listing-item">
+                  {(() => {
+                    const sellerAllProducts = products.filter(p => p.shopId === activeShop?.id);
+                    const filteredSellerProducts = sellerAllProducts.filter(p => {
+                      if (!sellerSearchQuery) return true;
+                      const q = sellerSearchQuery.toLowerCase();
+                      return p.name.toLowerCase().includes(q) || p.brand.toLowerCase().includes(q) || p.category.toLowerCase().includes(q);
+                    });
+
+                    const totalSellerItems = filteredSellerProducts.length;
+                    const totalSellerPages = Math.ceil(totalSellerItems / sellerListPerPage) || 1;
+                    const startIndex = (sellerListPage - 1) * sellerListPerPage;
+                    const endIndex = Math.min(startIndex + sellerListPerPage, totalSellerItems);
+                    const paginatedSellerProducts = filteredSellerProducts.slice(startIndex, endIndex);
+
+                    if (sellerAllProducts.length === 0) {
+                      return (
+                        <div style={{ textAlign: 'center', padding: '3.5rem 1rem', color: 'var(--text-secondary-light)' }}>
+                          <Layers size={40} style={{ opacity: 0.3, marginBottom: '1rem', color: '#64748b' }} />
+                          <h4 style={{ fontSize: '1.05rem', fontWeight: 700, color: '#1e293b', margin: '0 0 0.5rem 0' }}>No Used Gadgets Listed Yet</h4>
+                          <p style={{ fontSize: '0.85rem', color: '#64748b', maxWidth: '360px', margin: '0 auto 1.5rem auto' }}>
+                            You have not listed any devices for buyers to discover in your store directory.
+                          </p>
+                          <button className="btn-primary" onClick={handleOpenAddProduct} style={{ padding: '0.6rem 1.4rem', fontSize: '0.85rem', fontWeight: 700, borderRadius: '10px' }}>
+                            <Plus size={16} style={{ display: 'inline', marginRight: '0.3rem' }} />
+                            <span>List Your First Device</span>
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    if (filteredSellerProducts.length === 0) {
+                      return (
+                        <div style={{ textAlign: 'center', padding: '2.5rem 1rem', color: '#64748b' }}>
+                          <p style={{ fontSize: '0.9rem', fontWeight: 600 }}>No products found matching "{sellerSearchQuery}"</p>
+                          <button 
+                            onClick={() => setSellerSearchQuery('')}
+                            style={{ marginTop: '0.5rem', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', padding: '0.35rem 0.9rem', borderRadius: '8px', fontSize: '0.78rem', fontWeight: 700, cursor: 'pointer' }}
+                          >
+                            Clear Search Filter
+                          </button>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <>
+                        {paginatedSellerProducts.map(product => (
+                          <div key={product.id} className="listing-item">
                         <div className="listing-preview-img">
                           {product.images && product.images.length > 0 ? (
                             <img src={product.images[0]} alt={product.name} className="product-card-img" style={{ borderRadius: 'var(--radius-sm)' }} />
@@ -2281,16 +2616,90 @@ export default function App() {
                           </button>
                         </div>
                       </div>
-                    ))
-                  ) : (
-                    <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary-light)' }}>
-                      <Layers size={36} style={{ opacity: 0.3, marginBottom: '1rem' }} />
-                      <p>You have not listed any gadgets for customers to discover yet.</p>
-                      <button className="btn-primary" onClick={handleOpenAddProduct} style={{ marginTop: '1rem', padding: '0.5rem 1.2rem', fontSize: '0.85rem' }}>
-                        List Your First Device
-                      </button>
-                    </div>
-                  )}
+                        ))}
+
+                        {/* Seller Dashboard Inventory Pagination Bar */}
+                        <div 
+                          style={{ 
+                            display: 'flex', 
+                            flexDirection: 'row', 
+                            justifyContent: 'space-between', 
+                            alignItems: 'center', 
+                            marginTop: '1.5rem',
+                            paddingTop: '1rem',
+                            borderTop: '1px solid #e2e8f0',
+                            gap: '1rem',
+                            flexWrap: 'wrap'
+                          }}
+                        >
+                          <span style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
+                            Showing {totalSellerItems > 0 ? startIndex + 1 : 0} to {endIndex} of {totalSellerItems} products
+                          </span>
+
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                            <button
+                              type="button"
+                              disabled={sellerListPage === 1}
+                              onClick={() => setSellerListPage(prev => Math.max(prev - 1, 1))}
+                              style={{
+                                padding: '0.35rem 0.75rem',
+                                borderRadius: '8px',
+                                border: '1px solid #cbd5e1',
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                background: '#ffffff',
+                                color: sellerListPage === 1 ? '#cbd5e1' : '#334155',
+                                cursor: sellerListPage === 1 ? 'not-allowed' : 'pointer',
+                                transition: 'all 0.2s ease'
+                              }}
+                            >
+                              ◀ Prev
+                            </button>
+
+                            {Array.from({ length: totalSellerPages }, (_, i) => i + 1).map(page => (
+                              <button
+                                key={page}
+                                type="button"
+                                onClick={() => setSellerListPage(page)}
+                                style={{
+                                  padding: '0.35rem 0.7rem',
+                                  borderRadius: '8px',
+                                  border: sellerListPage === page ? '1px solid var(--primary)' : '1px solid #cbd5e1',
+                                  fontSize: '0.8rem',
+                                  fontWeight: 800,
+                                  background: sellerListPage === page ? 'var(--primary)' : '#ffffff',
+                                  color: sellerListPage === page ? '#ffffff' : '#334155',
+                                  cursor: 'pointer',
+                                  boxShadow: sellerListPage === page ? '0 2px 8px rgba(255, 111, 0, 0.3)' : 'none'
+                                }}
+                              >
+                                {page}
+                              </button>
+                            ))}
+
+                            <button
+                              type="button"
+                              disabled={sellerListPage === totalSellerPages}
+                              onClick={() => setSellerListPage(prev => Math.min(prev + 1, totalSellerPages))}
+                              style={{
+                                padding: '0.35rem 0.75rem',
+                                borderRadius: '8px',
+                                border: '1px solid #cbd5e1',
+                                fontSize: '0.8rem',
+                                fontWeight: 700,
+                                background: '#ffffff',
+                                color: sellerListPage === totalSellerPages ? '#cbd5e1' : '#334155',
+                                cursor: sellerListPage === totalSellerPages ? 'not-allowed' : 'pointer',
+                                transition: 'all 0.2s ease'
+                              }}
+                            >
+                              Next ▶
+                            </button>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             ) : dashboardTab === 'leads' ? (
