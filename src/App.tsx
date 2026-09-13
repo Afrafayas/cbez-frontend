@@ -2441,7 +2441,7 @@ export default function App() {
                     }}
                   >
                     <Plus size={18} />
-                    <span>+ Add New Product</span>
+                    <span>Add New Product</span>
                   </button>
                 </div>
 
