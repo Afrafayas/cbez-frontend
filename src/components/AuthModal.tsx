@@ -1,5 +1,5 @@
 import React, { useState, ChangeEvent, FormEvent } from 'react';
-import { X } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { 
   setShowAuthModal, 
@@ -29,6 +29,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [regForm, setRegForm] = useState({
     name: '',
@@ -53,6 +54,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
     }
 
     try {
+      setIsSubmitting(true);
       const resData = await loginUser({
         email: loginEmail,
         password: loginPassword,
@@ -91,6 +93,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
       dispatch(setShowAuthModal(false));
     } catch (err: any) {
       onToast(err.message || 'Login failed. Please check credentials.', 'info');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -102,6 +106,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
     }
 
     try {
+      setIsSubmitting(true);
       if (authRole === 'customer') {
         const resData = await registerUser({
           email: regForm.email,
@@ -162,13 +167,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
       dispatch(setShowAuthModal(false));
     } catch (err: any) {
       onToast(err.message || 'Registration failed', 'info');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   return (
     <div className="modal-overlay" onClick={() => dispatch(setShowAuthModal(false))}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '440px' }}>
-        <button className="modal-close-btn" onClick={() => dispatch(setShowAuthModal(false))}>
+      <div
+        className="modal-content"
+        onClick={(e) => e.stopPropagation()}
+        style={{
+          maxWidth: '460px',
+          padding: '2.25rem 2rem',
+          borderRadius: '24px',
+          position: 'relative',
+          background: '#ffffff',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+        }}
+      >
+        <button
+          className="modal-close-btn"
+          onClick={() => dispatch(setShowAuthModal(false))}
+          style={{ top: '1.25rem', right: '1.25rem' }}
+        >
           <X size={18} />
         </button>
 
@@ -286,8 +308,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setLoginPassword(e.target.value)}
               />
             </div>
-            <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '0.5rem', padding: '0.7rem', justifyContent: 'center' }}>
-              {authRole === 'customer' ? 'Customer Sign In' : 'Shop Partner Sign In'}
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={isSubmitting}
+              style={{
+                width: '100%',
+                marginTop: '0.5rem',
+                padding: '0.75rem',
+                justifyContent: 'center',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                opacity: isSubmitting ? 0.75 : 1,
+                cursor: isSubmitting ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="animate-spin" size={18} />
+                  <span>Processing...</span>
+                </>
+              ) : (
+                authRole === 'customer' ? 'Customer Sign In' : 'Shop Partner Sign In'
+              )}
             </button>
             <div style={{ textAlign: 'center', marginTop: '0.75rem', fontSize: '0.83rem', color: '#64748b' }}>
               Don't have an account?{' '}
@@ -355,8 +399,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 </div>
               </>
             )}
-            <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '0.5rem', padding: '0.7rem', justifyContent: 'center' }}>
-              {authRole === 'customer' ? 'Create Customer Account' : 'Submit Shop Registration'}
+            <button
+              type="submit"
+              className="btn-primary"
+              disabled={isSubmitting}
+              style={{
+                width: '100%',
+                marginTop: '0.5rem',
+                padding: '0.75rem',
+                justifyContent: 'center',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.5rem',
+                opacity: isSubmitting ? 0.75 : 1,
+                cursor: isSubmitting ? 'not-allowed' : 'pointer'
+              }}
+            >
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="animate-spin" size={18} />
+                  <span>Processing...</span>
+                </>
+              ) : (
+                authRole === 'customer' ? 'Create Customer Account' : 'Submit Shop Registration'
+              )}
             </button>
             <div style={{ textAlign: 'center', marginTop: '0.75rem', fontSize: '0.83rem', color: '#64748b' }}>
               Already registered?{' '}
