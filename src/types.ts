@@ -66,20 +66,6 @@ export interface Lead {
   createdAt: string;
 }
 
-export interface NetworkInquiry {
-  id: string;
-  customerName: string;
-  customerPhone: string;
-  customerEmail?: string;
-  city: string;
-  category: string;
-  gadgetNeeded: string;
-  targetBudget?: number;
-  notes?: string;
-  createdAt: string;
-  userId?: string;
-}
-
 export interface Product {
   id: string;
   name: string;

@@ -3341,23 +3341,6 @@ button, input, select, textarea, a, .product-card, .brand-logo, .logo-section, .
     gap: 0.85rem !important;
   }
 
-  .network-modal-content {
-    padding: 1.25rem 1rem !important;
-    width: 95% !important;
-    max-width: 95vw !important;
-  }
-
-  .network-modal-header {
-    gap: 0.5rem !important;
-  }
-
-  .network-modal-header h2 {
-    font-size: 1.1rem !important;
-  }
-
-  .network-modal-header p {
-    font-size: 0.75rem !important;
-  }
 
   .modal-close-btn {
     top: 0.6rem !important;
