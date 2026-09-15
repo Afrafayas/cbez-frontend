@@ -184,7 +184,7 @@ export default function App() {
 
   // --- REDUX SELECTORS ---
   const { activeShop, activeUser, showAuthModal } = useAppSelector(state => state.auth);
-  const { items: products, shops, leads, selectedProduct, showAddEditModal, productToEdit } = useAppSelector(state => state.products);
+  const { items: products, shops, leads, selectedProduct, showAddEditModal, productToEdit, subscriptionPlans } = useAppSelector(state => state.products);
   const { toasts, dashboardTab } = useAppSelector(state => state.ui);
   const filters = useAppSelector(state => state.filters);
 
@@ -2177,6 +2177,63 @@ export default function App() {
                 <div className="profile-stat-lbl">Total Leads</div>
               </div>
             </div>
+
+            {/* Subscription Plan & Product Usage Summary Card */}
+            {(() => {
+              const activePlanObj = subscriptionPlans.find(p => p.id === (activeShop?.subscriptionPlanId || 'plan-free')) || {
+                name: 'Free Plan',
+                productLimit: 10
+              };
+              const activeCount = activeShop ? products.filter(p => p.shopId === activeShop.id).length : 0;
+              const slotsLeft = Math.max(0, activePlanObj.productLimit - activeCount);
+              const isPending = Boolean(activeShop && !activeShop.verified);
+
+              return (
+                <div
+                  style={{
+                    margin: '1rem 0',
+                    padding: '0.9rem',
+                    background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
+                    color: '#ffffff',
+                    borderRadius: '14px',
+                    border: '1px solid rgba(255, 255, 255, 0.12)',
+                    boxShadow: '0 4px 14px rgba(0,0,0,0.15)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
+                    <span style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>
+                      Subscription Plan
+                    </span>
+                    <span style={{ fontSize: '0.72rem', background: 'rgba(255,111,0,0.2)', color: '#ff9e40', padding: '0.15rem 0.5rem', borderRadius: '10px', fontWeight: 700, border: '1px solid rgba(255,111,0,0.3)' }}>
+                      {activePlanObj.name}
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem', background: 'rgba(15,23,42,0.6)', padding: '0.6rem', borderRadius: '10px' }}>
+                    <div>
+                      <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block' }}>Max Limit</span>
+                      <strong style={{ fontSize: '1rem', color: '#ffffff' }}>{activePlanObj.productLimit} Products</strong>
+                    </div>
+                    <div>
+                      <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block' }}>Remaining</span>
+                      <strong style={{ fontSize: '1rem', color: slotsLeft === 0 ? '#f43f5e' : '#10b981' }}>{slotsLeft} Slots</strong>
+                    </div>
+                  </div>
+
+                  {isPending && (
+                    <div style={{ marginTop: '0.65rem', padding: '0.4rem 0.6rem', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#fca5a5', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>
+                      ⚠️ Shop Status: PENDING Admin Approval
+                    </div>
+                  )}
+
+                  {!isPending && slotsLeft === 0 && (
+                    <div style={{ marginTop: '0.65rem', padding: '0.4rem 0.6rem', borderRadius: '8px', background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)', color: '#fecdd3', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>
+                      🚫 Limit Reached! Upgrade plan to add more products.
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
 
             <div className="dashboard-menu">
               <button 

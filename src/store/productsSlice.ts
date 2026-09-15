@@ -1,11 +1,12 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { Product, Shop, Lead } from '../types';
-import { INITIAL_SHOPS, INITIAL_PRODUCTS, INITIAL_LEADS } from '../data/mockData';
+import { Product, Shop, Lead, SubscriptionPlan } from '../types';
+import { INITIAL_SHOPS, INITIAL_PRODUCTS, INITIAL_LEADS, INITIAL_SUBSCRIPTION_PLANS } from '../data/mockData';
 
 interface ProductsState {
   items: Product[];
   shops: Shop[];
   leads: Lead[];
+  subscriptionPlans: SubscriptionPlan[];
   selectedProduct: Product | null;
   showAddEditModal: boolean;
   productToEdit: Product | null;
@@ -35,10 +36,19 @@ const getInitialLeads = (): Lead[] => {
   return INITIAL_LEADS;
 };
 
+const getInitialPlans = (): SubscriptionPlan[] => {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('mlx_subscription_plans');
+    return saved ? JSON.parse(saved) : INITIAL_SUBSCRIPTION_PLANS;
+  }
+  return INITIAL_SUBSCRIPTION_PLANS;
+};
+
 const initialState: ProductsState = {
   items: getInitialProducts(),
   shops: getInitialShops(),
   leads: getInitialLeads(),
+  subscriptionPlans: getInitialPlans(),
   selectedProduct: null,
   showAddEditModal: false,
   productToEdit: null,
@@ -107,6 +117,41 @@ const productsSlice = createSlice({
     },
     setLeads(state, action: PayloadAction<Lead[]>) {
       state.leads = action.payload;
+    },
+    setSubscriptionPlans(state, action: PayloadAction<SubscriptionPlan[]>) {
+      state.subscriptionPlans = action.payload;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('mlx_subscription_plans', JSON.stringify(state.subscriptionPlans));
+      }
+    },
+    addSubscriptionPlan(state, action: PayloadAction<SubscriptionPlan>) {
+      state.subscriptionPlans.push(action.payload);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('mlx_subscription_plans', JSON.stringify(state.subscriptionPlans));
+      }
+    },
+    updateSubscriptionPlan(state, action: PayloadAction<SubscriptionPlan>) {
+      state.subscriptionPlans = state.subscriptionPlans.map(p => p.id === action.payload.id ? action.payload : p);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('mlx_subscription_plans', JSON.stringify(state.subscriptionPlans));
+      }
+    },
+    deleteSubscriptionPlan(state, action: PayloadAction<string>) {
+      state.subscriptionPlans = state.subscriptionPlans.filter(p => p.id !== action.payload);
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('mlx_subscription_plans', JSON.stringify(state.subscriptionPlans));
+      }
+    },
+    toggleSubscriptionPlanStatus(state, action: PayloadAction<string>) {
+      state.subscriptionPlans = state.subscriptionPlans.map(p => {
+        if (p.id === action.payload) {
+          return { ...p, status: p.status === 'ACTIVE' ? 'INACTIVE' : 'ACTIVE' };
+        }
+        return p;
+      });
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('mlx_subscription_plans', JSON.stringify(state.subscriptionPlans));
+      }
     }
   },
 });
@@ -123,7 +168,12 @@ export const {
   addLead,
   setProducts,
   setShops,
-  setLeads
+  setLeads,
+  setSubscriptionPlans,
+  addSubscriptionPlan,
+  updateSubscriptionPlan,
+  deleteSubscriptionPlan,
+  toggleSubscriptionPlanStatus
 } = productsSlice.actions;
 
 export default productsSlice.reducer;

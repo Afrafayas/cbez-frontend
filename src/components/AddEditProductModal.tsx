@@ -13,7 +13,7 @@ interface AddEditProductModalProps {
 
 export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToast }) => {
   const dispatch = useAppDispatch();
-  const { showAddEditModal, productToEdit } = useAppSelector(state => state.products);
+  const { showAddEditModal, productToEdit, items: products, subscriptionPlans } = useAppSelector(state => state.products);
   const activeShop = useAppSelector(state => state.auth.activeShop);
 
   const [formImages, setFormImages] = useState<string[]>(['', '', '', '']);
@@ -40,6 +40,19 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
       ...dbBrands
     ])
   ).filter(Boolean).sort();
+
+  const currentPlan = subscriptionPlans.find(p => p.id === (activeShop?.subscriptionPlanId || 'plan-free')) || {
+    id: 'plan-free',
+    name: 'Free Plan',
+    description: 'Basic Starter Plan',
+    productLimit: 10,
+    status: 'ACTIVE' as const
+  };
+
+  const shopProductsCount = activeShop ? products.filter(p => p.shopId === activeShop.id).length : 0;
+  const remainingSlots = Math.max(0, currentPlan.productLimit - shopProductsCount);
+  const isLimitReached = shopProductsCount >= currentPlan.productLimit;
+  const isShopPending = Boolean(activeShop && !activeShop.verified);
 
   const [productForm, setProductForm] = useState({
     name: '',
@@ -133,6 +146,21 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (isSubmitting) return;
+
+    // Step 1: Check Shop Approval Status
+    if (activeShop && !activeShop.verified) {
+      onToast('Your shop registration is currently PENDING Admin approval. Only approved shops can add products.', 'info');
+      return;
+    }
+
+    // Step 2 & 3: Check Subscription Plan Product Limit (for new product creation)
+    if (!productToEdit && isLimitReached) {
+      onToast(
+        `Product limit reached. Your ${currentPlan.name} allows a maximum of ${currentPlan.productLimit} products. You currently have ${shopProductsCount} products. Please upgrade or change your subscription plan to add more products.`,
+        'info'
+      );
+      return;
+    }
 
     const validImgs = formImages.map(img => img ? img.trim() : '').filter(Boolean);
 
@@ -237,6 +265,47 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
           <span style={{ fontSize: '0.82rem', color: '#64748b' }}>
             Store Partner Listing Portal • Multi-Angle Photos & Device Specifications
           </span>
+
+          {/* Subscription Usage Header Banner */}
+          {activeShop && (
+            <div
+              style={{
+                marginTop: '0.75rem',
+                padding: '0.65rem 0.9rem',
+                borderRadius: '10px',
+                fontSize: '0.82rem',
+                fontWeight: 600,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                flexWrap: 'wrap',
+                gap: '0.5rem',
+                background: isShopPending
+                  ? '#fef2f2'
+                  : (isLimitReached ? '#fff1f2' : '#f0fdf4'),
+                color: isShopPending
+                  ? '#991b1b'
+                  : (isLimitReached ? '#be123c' : '#166534'),
+                border: isShopPending
+                  ? '1px solid #fecaca'
+                  : (isLimitReached ? '1px solid #fecdd3' : '1px solid #bbf7d0')
+              }}
+            >
+              <div>
+                <strong>Current Plan:</strong> {currentPlan.name} &bull; <strong>Product Limit:</strong> {currentPlan.productLimit} &bull; <strong>Products Used:</strong> {shopProductsCount} &bull; <strong>Remaining Slots:</strong> {remainingSlots}
+              </div>
+              {isShopPending && (
+                <div style={{ fontWeight: 700, color: '#dc2626' }}>
+                  ⚠️ Shop Status: PENDING Admin Approval
+                </div>
+              )}
+              {!isShopPending && isLimitReached && !productToEdit && (
+                <div style={{ fontWeight: 700, color: '#e11d48' }}>
+                  🚫 Limit Reached! Upgrade plan to add more.
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <form onSubmit={handleSubmit} className="modal-form grid-form">

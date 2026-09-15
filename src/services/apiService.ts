@@ -1,5 +1,5 @@
 import { API_BASE_URL } from '../config/api';
-import { Product, Shop, Lead, Category, Brand } from '../types';
+import { Product, Shop, Lead, Category, Brand, SubscriptionPlan } from '../types';
 
 export async function getProducts(params?: {
   search?: string;
@@ -140,6 +140,71 @@ export async function deleteBrand(id: string, token: string): Promise<{ success:
   return result;
 }
 
+/* Subscription Plan APIs */
+export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/subscriptions/plans`);
+    if (!res.ok) throw new Error('Failed to fetch subscription plans');
+    const result = await res.json();
+    return result.data?.plans ?? (Array.isArray(result) ? result : []);
+  } catch {
+    const saved = localStorage.getItem('mlx_subscription_plans');
+    return saved ? JSON.parse(saved) : [];
+  }
+}
+
+export async function getActiveSubscriptionPlans(): Promise<SubscriptionPlan[]> {
+  try {
+    const plans = await getSubscriptionPlans();
+    return plans.filter(p => p.status === 'ACTIVE');
+  } catch {
+    const saved = localStorage.getItem('mlx_subscription_plans');
+    if (saved) {
+      const plans: SubscriptionPlan[] = JSON.parse(saved);
+      return plans.filter(p => p.status === 'ACTIVE');
+    }
+    return [];
+  }
+}
+
+export async function createSubscriptionPlan(planData: Omit<SubscriptionPlan, 'id'>, token?: string): Promise<SubscriptionPlan> {
+  const res = await fetch(`${API_BASE_URL}/subscriptions/plans`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(planData),
+  });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.message || 'Failed to create subscription plan');
+  return result;
+}
+
+export async function updateSubscriptionPlan(id: string, planData: Partial<SubscriptionPlan>, token?: string): Promise<SubscriptionPlan> {
+  const res = await fetch(`${API_BASE_URL}/subscriptions/plans/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(planData),
+  });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.message || 'Failed to update subscription plan');
+  return result;
+}
+
+export async function deleteSubscriptionPlan(id: string, token?: string): Promise<{ success: boolean }> {
+  const res = await fetch(`${API_BASE_URL}/subscriptions/plans/${id}`, {
+    method: 'DELETE',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.message || 'Failed to delete subscription plan');
+  return result;
+}
+
 /* Auth APIs */
 export async function loginUser(credentials: { email: string; password: string }) {
   const res = await fetch(`${API_BASE_URL}/auth/login`, {
@@ -164,6 +229,14 @@ export async function registerUser(userData: {
   address?: string;
   city?: string;
   category?: string;
+  subscriptionPlanId?: string;
+  district?: string;
+  country?: string;
+  aadhaarNumber?: string;
+  panNumber?: string;
+  profileImage?: string;
+  gstNumber?: string;
+  websiteUrl?: string;
 }) {
   const res = await fetch(`${API_BASE_URL}/auth/register`, {
     method: 'POST',

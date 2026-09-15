@@ -1,3 +1,13 @@
+export interface SubscriptionPlan {
+  id: string;
+  name: string;
+  description: string;
+  productLimit: number;
+  status: 'ACTIVE' | 'INACTIVE';
+  createdAt?: string;
+  updatedAt?: string;
+}
+
 export interface Shop {
   id: string;
   name: string;
@@ -10,6 +20,15 @@ export interface Shop {
   verified: boolean;
   rating: number;
   joinedDate: string;
+  subscriptionPlanId?: string;
+  district?: string;
+  country?: string;
+  aadhaarNumber?: string;
+  panNumber?: string;
+  profileImage?: string;
+  gstNumber?: string;
+  websiteUrl?: string;
+  status?: 'PENDING' | 'APPROVED' | 'REJECTED';
 }
 
 export interface User {
@@ -109,6 +128,7 @@ export interface ReduxState {
     items: Product[];
     shops: Shop[];
     leads: Lead[];
+    subscriptionPlans: SubscriptionPlan[];
     selectedProduct: Product | null;
     showAddEditModal: boolean;
     productToEdit: Product | null;

@@ -1,4 +1,4 @@
-import React, { useState, ChangeEvent, FormEvent } from 'react';
+import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react';
 import { X, Loader2, Store, ArrowRight, User } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { 
@@ -9,9 +9,9 @@ import {
   setActiveShop 
 } from '../store/authSlice';
 import { addShop } from '../store/productsSlice';
-import { Shop, User as CustomerUser } from '../types';
+import { Shop, User as CustomerUser, SubscriptionPlan } from '../types';
 import { CITIES } from '../data/mockData';
-import { registerUser, loginUser } from '../services/apiService';
+import { registerUser, loginUser, getActiveSubscriptionPlans } from '../services/apiService';
 import { PhoneInputWithCountry } from './PhoneInputWithCountry';
 
 interface AuthModalProps {
@@ -20,16 +20,18 @@ interface AuthModalProps {
 
 export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const dispatch = useAppDispatch();
-  const { showAuthModal, authTab, authRole, shops } = useAppSelector(state => ({
+  const { showAuthModal, authTab, authRole, shops, subscriptionPlans } = useAppSelector(state => ({
     showAuthModal: state.auth.showAuthModal,
     authTab: state.auth.authTab,
     authRole: state.auth.authRole,
-    shops: state.products.shops
+    shops: state.products.shops,
+    subscriptionPlans: state.products.subscriptionPlans
   }));
 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [activePlans, setActivePlans] = useState<SubscriptionPlan[]>([]);
   
   const [regForm, setRegForm] = useState({
     name: '',
@@ -41,8 +43,38 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
     whatsapp: '',
     address: '',
     city: 'Kochi',
-    category: 'Mobiles & Tablets'
+    category: 'Mobiles & Tablets',
+    district: 'Ernakulam',
+    country: 'India',
+    aadhaarNumber: '',
+    panNumber: '',
+    profileImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
+    subscriptionPlanId: '',
+    gstNumber: '',
+    websiteUrl: ''
   });
+
+  useEffect(() => {
+    async function loadPlans() {
+      try {
+        const fetched = await getActiveSubscriptionPlans();
+        const available = fetched.length > 0 ? fetched : subscriptionPlans.filter(p => p.status === 'ACTIVE');
+        setActivePlans(available);
+        if (available.length > 0 && !regForm.subscriptionPlanId) {
+          setRegForm(prev => ({ ...prev, subscriptionPlanId: available[0].id }));
+        }
+      } catch {
+        const fallback = subscriptionPlans.filter(p => p.status === 'ACTIVE');
+        setActivePlans(fallback);
+        if (fallback.length > 0 && !regForm.subscriptionPlanId) {
+          setRegForm(prev => ({ ...prev, subscriptionPlanId: fallback[0].id }));
+        }
+      }
+    }
+    if (showAuthModal && authRole === 'seller') {
+      loadPlans();
+    }
+  }, [showAuthModal, authRole, subscriptionPlans]);
 
   if (!showAuthModal) return null;
 
@@ -76,7 +108,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           category: 'Mobiles & Tablets',
           verified: Boolean(resData.user?.shop?.verified),
           rating: 5.0,
-          joinedDate: 'Today'
+          joinedDate: 'Today',
+          status: resData.user?.shop?.verified ? 'APPROVED' : 'PENDING'
         };
         dispatch(setActiveShop(shop));
         onToast(`Merchant Shop Signed In: ${shop.name}`, 'success');
@@ -129,18 +162,45 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         dispatch(setActiveUser(user));
         onToast(`Customer account created! Welcome ${user.name}`, 'success');
       } else {
+        // Enforce all mandatory fields for Shop Registration
+        if (
+          !regForm.ownerName ||
+          !regForm.profileImage ||
+          !regForm.shopName ||
+          !regForm.address ||
+          !regForm.city ||
+          !regForm.district ||
+          !regForm.country ||
+          !regForm.email ||
+          !regForm.aadhaarNumber ||
+          !regForm.panNumber ||
+          !regForm.subscriptionPlanId
+        ) {
+          onToast('Please fill out all mandatory fields for shop registration (including Aadhaar, PAN, and Subscription Plan)', 'info');
+          setIsSubmitting(false);
+          return;
+        }
+
         const resData = await registerUser({
           email: regForm.email,
           password: regForm.password,
           name: regForm.shopName || regForm.name || regForm.ownerName,
           phone: regForm.phone,
           role: 'seller',
-          shopName: regForm.shopName || regForm.name,
-          ownerName: regForm.ownerName || regForm.name,
+          shopName: regForm.shopName,
+          ownerName: regForm.ownerName,
           whatsapp: regForm.whatsapp || regForm.phone,
           address: regForm.address,
           city: regForm.city,
           category: regForm.category,
+          district: regForm.district,
+          country: regForm.country,
+          aadhaarNumber: regForm.aadhaarNumber,
+          panNumber: regForm.panNumber,
+          profileImage: regForm.profileImage,
+          subscriptionPlanId: regForm.subscriptionPlanId,
+          gstNumber: regForm.gstNumber,
+          websiteUrl: regForm.websiteUrl
         });
 
         if (resData.token) {
@@ -149,20 +209,29 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
 
         const newShop: Shop = resData.user?.shop || {
           id: resData.user?.id || `shop-${Date.now()}`,
-          name: regForm.shopName || regForm.name,
-          ownerName: regForm.ownerName || regForm.name,
+          name: regForm.shopName,
+          ownerName: regForm.ownerName,
           phone: regForm.phone,
           whatsapp: regForm.whatsapp || regForm.phone,
           address: regForm.address,
           city: regForm.city,
           category: regForm.category,
-          verified: true,
+          district: regForm.district,
+          country: regForm.country,
+          aadhaarNumber: regForm.aadhaarNumber,
+          panNumber: regForm.panNumber,
+          profileImage: regForm.profileImage,
+          subscriptionPlanId: regForm.subscriptionPlanId || activePlans[0]?.id || 'plan-free',
+          gstNumber: regForm.gstNumber,
+          websiteUrl: regForm.websiteUrl,
+          verified: false, // PENDING ADMIN APPROVAL
+          status: 'PENDING',
           rating: 5.0,
           joinedDate: 'Today'
         };
         dispatch(addShop(newShop));
         dispatch(setActiveShop(newShop));
-        onToast(`Merchant Shop Registered: ${newShop.name}`, 'success');
+        onToast(`Merchant Shop Registered: ${newShop.name} (Status: PENDING Admin Approval)`, 'success');
       }
       dispatch(setShowAuthModal(false));
     } catch (err: any) {
@@ -380,12 +449,32 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
             ) : (
               <>
                 <div className="form-group">
+                  <label className="form-label">Subscription Plan *</label>
+                  <select 
+                    className="form-select-box" 
+                    required 
+                    value={regForm.subscriptionPlanId} 
+                    onChange={(e) => setRegForm({ ...regForm, subscriptionPlanId: e.target.value })}
+                    style={{ borderColor: '#ff9e40' }}
+                  >
+                    {activePlans.map(plan => (
+                      <option key={plan.id} value={plan.id}>
+                        {plan.name} — Limit: {plan.productLimit} Products ({plan.description})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="form-group">
                   <label className="form-label">Shop Business Name *</label>
                   <input type="text" className="form-input-text" required placeholder="e.g. Kochi iStore Mobiles" value={regForm.shopName} onChange={(e) => setRegForm({ ...regForm, shopName: e.target.value })} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Owner Name *</label>
                   <input type="text" className="form-input-text" required placeholder="e.g. Afraf Fayas" value={regForm.ownerName} onChange={(e) => setRegForm({ ...regForm, ownerName: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Profile / Logo Image URL *</label>
+                  <input type="text" className="form-input-text" required placeholder="https://..." value={regForm.profileImage} onChange={(e) => setRegForm({ ...regForm, profileImage: e.target.value })} />
                 </div>
                 <div className="form-group">
                   <label className="form-label">Email Address *</label>
@@ -410,8 +499,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                   </select>
                 </div>
                 <div className="form-group">
+                  <label className="form-label">District *</label>
+                  <input type="text" className="form-input-text" required placeholder="e.g. Ernakulam" value={regForm.district} onChange={(e) => setRegForm({ ...regForm, district: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Country *</label>
+                  <input type="text" className="form-input-text" required placeholder="India" value={regForm.country} onChange={(e) => setRegForm({ ...regForm, country: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Aadhaar Card Number *</label>
+                  <input type="text" className="form-input-text" required placeholder="12-digit Aadhaar Number" value={regForm.aadhaarNumber} onChange={(e) => setRegForm({ ...regForm, aadhaarNumber: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">PAN Card Number *</label>
+                  <input type="text" className="form-input-text" required placeholder="10-character PAN Number" value={regForm.panNumber} onChange={(e) => setRegForm({ ...regForm, panNumber: e.target.value })} />
+                </div>
+                <div className="form-group">
                   <label className="form-label">Market Business Address *</label>
                   <textarea className="form-textarea" required rows={2} placeholder="MG Road, Broadway Corner" value={regForm.address} onChange={(e) => setRegForm({ ...regForm, address: e.target.value })}></textarea>
+                </div>
+                {/* Optional Fields */}
+                <div className="form-group">
+                  <label className="form-label">GST Number (Optional)</label>
+                  <input type="text" className="form-input-text" placeholder="e.g. 32AAAAA0000A1Z5" value={regForm.gstNumber} onChange={(e) => setRegForm({ ...regForm, gstNumber: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Website URL (Optional)</label>
+                  <input type="text" className="form-input-text" placeholder="https://yourstore.com" value={regForm.websiteUrl} onChange={(e) => setRegForm({ ...regForm, websiteUrl: e.target.value })} />
                 </div>
               </>
             )}

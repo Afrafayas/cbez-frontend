@@ -1,14 +1,24 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, FolderPlus, Tag, ChevronLeft } from 'lucide-react';
-import { Category, Brand } from '../types';
+import { X, Plus, Trash2, FolderPlus, Tag, ChevronLeft, ShieldCheck } from 'lucide-react';
+import { Category, Brand, SubscriptionPlan } from '../types';
 import { 
   getCategories, 
   createCategory, 
   deleteCategory, 
   getBrands, 
   createBrand, 
-  deleteBrand 
+  deleteBrand,
+  getSubscriptionPlans,
+  createSubscriptionPlan,
+  deleteSubscriptionPlan
 } from '../services/apiService';
+import { useAppDispatch, useAppSelector } from '../store';
+import { 
+  addSubscriptionPlan, 
+  deleteSubscriptionPlan as deletePlanInStore,
+  toggleSubscriptionPlanStatus,
+  setSubscriptionPlans 
+} from '../store/productsSlice';
 
 interface ManageCategoriesBrandsModalProps {
   isOpen: boolean;
@@ -21,9 +31,12 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
   onClose,
   onToast,
 }) => {
-  const [activeTab, setActiveTab] = useState<'categories' | 'brands'>('categories');
+  const dispatch = useAppDispatch();
+  const storePlans = useAppSelector(state => state.products.subscriptionPlans);
+  const [activeTab, setActiveTab] = useState<'categories' | 'brands' | 'subscriptions'>('categories');
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
+  const [plans, setPlans] = useState<SubscriptionPlan[]>(storePlans);
   const [loading, setLoading] = useState(false);
 
   // New Category Form State
@@ -35,16 +48,28 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
   const [brandName, setBrandName] = useState('');
   const [brandLogo, setBrandLogo] = useState('');
 
+  // New Subscription Plan Form State
+  const [planName, setPlanName] = useState('');
+  const [planDesc, setPlanDesc] = useState('');
+  const [planLimit, setPlanLimit] = useState('10');
+
   const token = localStorage.getItem('mlx_token') || '';
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [cats, brs] = await Promise.all([getCategories(), getBrands()]);
+      const [cats, brs, loadedPlans] = await Promise.all([
+        getCategories().catch(() => []),
+        getBrands().catch(() => []),
+        getSubscriptionPlans().catch(() => storePlans)
+      ]);
       setCategories(cats);
       setBrands(brs);
+      const finalPlans = loadedPlans.length > 0 ? loadedPlans : storePlans;
+      setPlans(finalPlans);
+      dispatch(setSubscriptionPlans(finalPlans));
     } catch (err) {
-      console.warn('Failed to load categories/brands:', err);
+      console.warn('Failed to load categories/brands/plans:', err);
     } finally {
       setLoading(false);
     }
@@ -55,6 +80,10 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
       fetchData();
     }
   }, [isOpen]);
+
+  useEffect(() => {
+    setPlans(storePlans);
+  }, [storePlans]);
 
   if (!isOpen) return null;
 
@@ -128,6 +157,46 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
     } catch (err: any) {
       onToast(err.message || 'Failed to delete brand', 'warning');
     }
+  };
+
+  const handleCreatePlan = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!planName.trim() || !planLimit) {
+      onToast('Plan name and product limit are required', 'info');
+      return;
+    }
+
+    const newPlan: SubscriptionPlan = {
+      id: `plan-${Date.now()}`,
+      name: planName.trim(),
+      description: planDesc.trim() || 'Custom Subscription Plan',
+      productLimit: Number(planLimit),
+      status: 'ACTIVE',
+      createdAt: new Date().toISOString()
+    };
+
+    try {
+      dispatch(addSubscriptionPlan(newPlan));
+      await createSubscriptionPlan(newPlan, token).catch(() => null);
+      onToast(`Subscription Plan "${newPlan.name}" (Limit: ${newPlan.productLimit}) created!`, 'success');
+      setPlanName('');
+      setPlanDesc('');
+      setPlanLimit('10');
+    } catch (err: any) {
+      onToast(err.message || 'Plan created in local store', 'info');
+    }
+  };
+
+  const handleTogglePlan = async (id: string, name: string) => {
+    dispatch(toggleSubscriptionPlanStatus(id));
+    onToast(`Plan "${name}" status updated`, 'info');
+  };
+
+  const handleDeletePlan = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to delete subscription plan "${name}"?`)) return;
+    dispatch(deletePlanInStore(id));
+    await deleteSubscriptionPlan(id, token).catch(() => null);
+    onToast(`Plan "${name}" deleted`, 'info');
   };
 
   return (
@@ -243,6 +312,31 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
             <Tag size={16} />
             Brands ({brands.length})
           </button>
+          <button
+            type="button"
+            className={`role-tab ${activeTab === 'subscriptions' ? 'active' : ''}`}
+            onClick={() => setActiveTab('subscriptions')}
+            style={{
+              flex: 1,
+              padding: '0.65rem 1rem',
+              borderRadius: '9px',
+              border: 'none',
+              fontWeight: activeTab === 'subscriptions' ? 700 : 600,
+              fontSize: '0.9rem',
+              background: activeTab === 'subscriptions' ? '#ffffff' : 'transparent',
+              color: activeTab === 'subscriptions' ? '#ea580c' : '#64748b',
+              boxShadow: activeTab === 'subscriptions' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <ShieldCheck size={16} />
+            Plans ({plans.length})
+          </button>
         </div>
 
         {activeTab === 'categories' ? (
@@ -288,9 +382,9 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">Image URL (Optional)</label>
                 <input
-                  type="url"
+                  type="text"
                   className="form-input-text"
-                  placeholder="https://images.unsplash.com/..."
+                  placeholder="https://..."
                   value={catImage}
                   onChange={(e) => setCatImage(e.target.value)}
                 />
@@ -298,9 +392,17 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
               <button
                 type="submit"
                 className="btn-primary"
-                style={{ width: '100%', marginTop: '0.25rem', padding: '0.75rem', justifyContent: 'center' }}
+                style={{
+                  alignSelf: 'flex-start',
+                  padding: '0.6rem 1.25rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                }}
               >
-                <Plus size={16} /> Add Category
+                <Plus size={16} /> Create Category
               </button>
             </form>
 
@@ -329,10 +431,8 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
                     }}
                   >
                     <div>
-                      <strong style={{ fontSize: '0.9rem', color: '#0f172a' }}>{c.name}</strong>
-                      <span style={{ fontSize: '0.8rem', color: '#64748b', marginLeft: '0.6rem' }}>
-                        ({c.slug})
-                      </span>
+                      <strong style={{ fontSize: '0.9rem', color: '#0f172a', display: 'block' }}>{c.name}</strong>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b' }}>Slug: {c.slug}</span>
                     </div>
                     {token && (
                       <button
@@ -359,7 +459,7 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
               </div>
             )}
           </div>
-        ) : (
+        ) : activeTab === 'brands' ? (
           <div>
             {/* Create Brand Form */}
             <form
@@ -384,7 +484,7 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
                   type="text"
                   className="form-input-text"
                   required
-                  placeholder="e.g. RealMe, Vivo, Google"
+                  placeholder="e.g. Sony Electronics"
                   value={brandName}
                   onChange={(e) => setBrandName(e.target.value)}
                 />
@@ -392,9 +492,9 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
               <div className="form-group" style={{ marginBottom: 0 }}>
                 <label className="form-label">Logo URL (Optional)</label>
                 <input
-                  type="url"
+                  type="text"
                   className="form-input-text"
-                  placeholder="https://logo.clearbit.com/..."
+                  placeholder="https://..."
                   value={brandLogo}
                   onChange={(e) => setBrandLogo(e.target.value)}
                 />
@@ -402,9 +502,17 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
               <button
                 type="submit"
                 className="btn-primary"
-                style={{ width: '100%', marginTop: '0.25rem', padding: '0.75rem', justifyContent: 'center' }}
+                style={{
+                  alignSelf: 'flex-start',
+                  padding: '0.6rem 1.25rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                }}
               >
-                <Plus size={16} /> Add Brand
+                <Plus size={16} /> Create Brand
               </button>
             </form>
 
@@ -467,6 +575,156 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
                 ))}
               </div>
             )}
+          </div>
+        ) : (
+          <div>
+            {/* Create Subscription Plan Form */}
+            <form
+              onSubmit={handleCreatePlan}
+              style={{
+                background: '#f8fafc',
+                padding: '1.25rem',
+                borderRadius: '14px',
+                border: '1px solid #e2e8f0',
+                marginBottom: '1.5rem',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '1rem',
+              }}
+            >
+              <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e293b', margin: 0 }}>
+                ➕ Create Subscription Plan (POST /api/subscriptions/plans)
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Plan Name *</label>
+                  <input
+                    type="text"
+                    className="form-input-text"
+                    required
+                    placeholder="e.g. Enterprise Plan"
+                    value={planName}
+                    onChange={(e) => setPlanName(e.target.value)}
+                  />
+                </div>
+                <div className="form-group" style={{ marginBottom: 0 }}>
+                  <label className="form-label">Product Limit (Max Listings) *</label>
+                  <input
+                    type="number"
+                    className="form-input-text"
+                    required
+                    min={1}
+                    placeholder="e.g. 100"
+                    value={planLimit}
+                    onChange={(e) => setPlanLimit(e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="form-group" style={{ marginBottom: 0 }}>
+                <label className="form-label">Description</label>
+                <input
+                  type="text"
+                  className="form-input-text"
+                  placeholder="e.g. Unlimited scale for multi-store chains"
+                  value={planDesc}
+                  onChange={(e) => setPlanDesc(e.target.value)}
+                />
+              </div>
+              <button
+                type="submit"
+                className="btn-primary"
+                style={{
+                  alignSelf: 'flex-start',
+                  padding: '0.6rem 1.25rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.4rem',
+                }}
+              >
+                <Plus size={16} /> Create Subscription Plan
+              </button>
+            </form>
+
+            {/* List Existing Subscription Plans */}
+            <h4 style={{ fontSize: '0.95rem', fontWeight: 700, color: '#1e293b', marginBottom: '0.75rem' }}>
+              Configured Subscription Plans ({plans.length})
+            </h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+              {plans.map((p) => (
+                <div
+                  key={p.id}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    padding: '0.9rem 1.1rem',
+                    background: p.status === 'ACTIVE' ? '#ffffff' : '#f8fafc',
+                    border: `1px solid ${p.status === 'ACTIVE' ? '#e2e8f0' : '#cbd5e1'}`,
+                    borderRadius: '12px',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                    opacity: p.status === 'ACTIVE' ? 1 : 0.65
+                  }}
+                >
+                  <div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                      <strong style={{ fontSize: '0.95rem', color: '#0f172a' }}>{p.name}</strong>
+                      <span
+                        style={{
+                          fontSize: '0.7rem',
+                          fontWeight: 700,
+                          padding: '0.15rem 0.5rem',
+                          borderRadius: '12px',
+                          background: p.status === 'ACTIVE' ? '#dcfce7' : '#f1f5f9',
+                          color: p.status === 'ACTIVE' ? '#15803d' : '#64748b',
+                        }}
+                      >
+                        {p.status}
+                      </span>
+                    </div>
+                    <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.2rem 0 0 0' }}>
+                      {p.description}
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                    <div style={{ textAlign: 'right' }}>
+                      <span style={{ fontSize: '0.75rem', color: '#64748b', display: 'block' }}>Max Limit</span>
+                      <strong style={{ fontSize: '1.1rem', color: '#ea580c' }}>{p.productLimit} Products</strong>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePlan(p.id, p.name)}
+                      style={{
+                        padding: '0.35rem 0.75rem',
+                        fontSize: '0.78rem',
+                        fontWeight: 600,
+                        borderRadius: '6px',
+                        border: '1px solid #cbd5e1',
+                        background: '#ffffff',
+                        cursor: 'pointer'
+                      }}
+                    >
+                      {p.status === 'ACTIVE' ? 'Deactivate' : 'Activate'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeletePlan(p.id, p.name)}
+                      style={{
+                        background: '#fef2f2',
+                        border: '1px solid #fee2e2',
+                        color: '#ef4444',
+                        cursor: 'pointer',
+                        padding: '0.4rem',
+                        borderRadius: '6px'
+                      }}
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>

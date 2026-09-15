@@ -1,4 +1,31 @@
-import { Shop, Product, User, Lead } from '../types';
+import { Shop, Product, User, Lead, SubscriptionPlan } from '../types';
+
+export const INITIAL_SUBSCRIPTION_PLANS: SubscriptionPlan[] = [
+  {
+    id: "plan-free",
+    name: "Free Plan",
+    description: "Basic starter plan allowing up to 10 product listings for small store dealers.",
+    productLimit: 10,
+    status: "ACTIVE",
+    createdAt: "2026-01-01T00:00:00.000Z"
+  },
+  {
+    id: "plan-pro",
+    name: "Pro Plan",
+    description: "Expanded inventory plan for growing shops, allowing up to 20 listings.",
+    productLimit: 20,
+    status: "ACTIVE",
+    createdAt: "2026-01-01T00:00:00.000Z"
+  },
+  {
+    id: "plan-premium",
+    name: "Premium Plan",
+    description: "High-volume merchant plan supporting up to 50 tech product listings.",
+    productLimit: 50,
+    status: "ACTIVE",
+    createdAt: "2026-01-01T00:00:00.000Z"
+  }
+];
 
 export const INITIAL_SHOPS: Shop[] = [
   {
@@ -12,7 +39,10 @@ export const INITIAL_SHOPS: Shop[] = [
     category: "Mobiles & Tablets",
     verified: true,
     rating: 4.9,
-    joinedDate: "Feb 2024"
+    joinedDate: "Feb 2024",
+    subscriptionPlanId: "plan-pro",
+    district: "Ernakulam",
+    country: "India"
   },
   {
     id: "shop-2",
