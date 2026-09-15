@@ -172,41 +172,105 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           <X size={18} />
         </button>
 
-        <div className="auth-role-tabs" style={{ display: 'flex', gap: '0.5rem', marginBottom: '1rem' }}>
-          <button
-            className={`role-tab ${authRole === 'customer' ? 'active' : ''}`}
-            onClick={() => dispatch(setAuthRole('customer'))}
-            style={{ flex: 1, padding: '0.5rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontWeight: 600 }}
+        {/* Merchant Partner Header Badge (Visible only when in Seller Mode) */}
+        {authRole === 'seller' && (
+          <div
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '0.4rem',
+              background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',
+              color: '#c2410c',
+              border: '1px solid #fed7aa',
+              padding: '0.35rem 0.75rem',
+              borderRadius: '20px',
+              fontSize: '0.78rem',
+              fontWeight: 700,
+              marginBottom: '0.85rem',
+            }}
           >
-            Buyer / Consumer
-          </button>
-          <button
-            className={`role-tab ${authRole === 'seller' ? 'active' : ''}`}
-            onClick={() => dispatch(setAuthRole('seller'))}
-            style={{ flex: 1, padding: '0.5rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontWeight: 600 }}
-          >
-            Seller Merchant
-          </button>
-        </div>
+            <span>🏪 Merchant Store Partner Portal</span>
+          </div>
+        )}
 
-        <div className="modal-header">
-          <h2 className="modal-title">
-            {authTab === 'login' 
-              ? (authRole === 'customer' ? 'Customer Sign In' : 'Merchant Shop Portal Login')
-              : (authRole === 'customer' ? 'Create Customer Account' : 'Register New Merchant Shop')
+        {/* Modal Main Header */}
+        <div className="modal-header" style={{ marginBottom: '1.25rem' }}>
+          <h2 className="modal-title" style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+            {authTab === 'login'
+              ? (authRole === 'customer' ? 'Customer Sign In' : 'Shop Partner Sign In')
+              : (authRole === 'customer' ? 'Create Customer Account' : 'Register Shop Partner')
             }
           </h2>
+          <p style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '0.25rem', margin: 0 }}>
+            {authRole === 'customer'
+              ? 'Sign in to browse, buy and contact local store dealers'
+              : 'Access your merchant shop dashboard and listings'
+            }
+          </p>
+        </div>
+
+        {/* Primary Tabs (Sign In vs Register Account) */}
+        <div
+          style={{
+            display: 'flex',
+            gap: '0.35rem',
+            marginBottom: '1.25rem',
+            background: '#f1f5f9',
+            padding: '4px',
+            borderRadius: '10px',
+          }}
+        >
+          <button
+            type="button"
+            className={`role-tab ${authTab === 'login' ? 'active' : ''}`}
+            onClick={() => dispatch(setAuthTab('login'))}
+            style={{
+              flex: 1,
+              padding: '0.5rem',
+              borderRadius: '7px',
+              border: 'none',
+              fontWeight: authTab === 'login' ? 700 : 600,
+              fontSize: '0.85rem',
+              background: authTab === 'login' ? '#ffffff' : 'transparent',
+              color: authTab === 'login' ? '#0f172a' : '#64748b',
+              boxShadow: authTab === 'login' ? '0 1px 4px rgba(0,0,0,0.06)' : 'none',
+              cursor: 'pointer',
+              transition: 'all 0.2s Ease',
+            }}
+          >
+            Sign In
+          </button>
+          <button
+            type="button"
+            className={`role-tab ${authTab === 'register' ? 'active' : ''}`}
+            onClick={() => dispatch(setAuthTab('register'))}
+            style={{
+              flex: 1,
+              padding: '0.5rem',
+              borderRadius: '7px',
+              border: 'none',
+              fontWeight: authTab === 'register' ? 700 : 600,
+              fontSize: '0.85rem',
+              background: authTab === 'register' ? '#ffffff' : 'transparent',
+              color: authTab === 'register' ? '#0f172a' : '#64748b',
+              boxShadow: authTab === 'register' ? '0 1px 4px rgba(0,0,0,0.06)' : 'none',
+              cursor: 'pointer',
+              transition: 'all 0.2s Ease',
+            }}
+          >
+            Register Account
+          </button>
         </div>
 
         {authTab === 'login' ? (
           <form onSubmit={handleLoginSubmit} className="modal-form">
             <div className="form-group">
-              <label className="form-label">Email Address *</label>
+              <label className="form-label">{authRole === 'seller' ? 'Business Email *' : 'Email Address *'}</label>
               <input 
                 type="email" 
                 className="form-input-text" 
                 required 
-                placeholder="e.g. store@gmail.com or user@gmail.com"
+                placeholder={authRole === 'seller' ? "e.g. store@gmail.com" : "e.g. user@gmail.com"}
                 value={loginEmail}
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setLoginEmail(e.target.value)}
               />
@@ -222,12 +286,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 onChange={(e: ChangeEvent<HTMLInputElement>) => setLoginPassword(e.target.value)}
               />
             </div>
-            <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '0.5rem' }}>
-              {authRole === 'customer' ? 'Sign In as Consumer' : 'Sign In to Shop Dashboard'}
+            <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '0.5rem', padding: '0.7rem', justifyContent: 'center' }}>
+              {authRole === 'customer' ? 'Customer Sign In' : 'Access Shop Dashboard'}
             </button>
-            <div style={{ textAlign: 'center', marginTop: '0.75rem', fontSize: '0.85rem' }}>
+            <div style={{ textAlign: 'center', marginTop: '0.75rem', fontSize: '0.83rem', color: '#64748b' }}>
               Don't have an account?{' '}
-              <a href="#" onClick={(e) => { e.preventDefault(); dispatch(setAuthTab('register')); }} style={{ color: '#2563eb', fontWeight: 600 }}>
+              <a href="#" onClick={(e) => { e.preventDefault(); dispatch(setAuthTab('register')); }} style={{ color: '#ea580c', fontWeight: 700, textDecoration: 'none' }}>
                 Register Here
               </a>
             </div>
@@ -291,17 +355,83 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 </div>
               </>
             )}
-            <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '0.5rem' }}>
-              Submit Registration
+            <button type="submit" className="btn-primary" style={{ width: '100%', marginTop: '0.5rem', padding: '0.7rem', justifyContent: 'center' }}>
+              {authRole === 'customer' ? 'Create Customer Account' : 'Submit Shop Registration'}
             </button>
-            <div style={{ textAlign: 'center', marginTop: '0.75rem', fontSize: '0.85rem' }}>
+            <div style={{ textAlign: 'center', marginTop: '0.75rem', fontSize: '0.83rem', color: '#64748b' }}>
               Already registered?{' '}
-              <a href="#" onClick={(e) => { e.preventDefault(); dispatch(setAuthTab('login')); }} style={{ color: '#2563eb', fontWeight: 600 }}>
+              <a href="#" onClick={(e) => { e.preventDefault(); dispatch(setAuthTab('login')); }} style={{ color: '#ea580c', fontWeight: 700, textDecoration: 'none' }}>
                 Sign In
               </a>
             </div>
           </form>
         )}
+
+        {/* Subtle Footer Switcher for Shop Owners */}
+        <div
+          className="auth-shop-partner-footer"
+          style={{
+            marginTop: '1.25rem',
+            paddingTop: '0.9rem',
+            borderTop: '1px solid #f1f5f9',
+            textAlign: 'center',
+          }}
+        >
+          {authRole === 'customer' ? (
+            <div>
+              <span style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>
+                Are you a Shop Owner?
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  dispatch(setAuthRole('seller'));
+                  dispatch(setAuthTab('login'));
+                }}
+                style={{
+                  background: '#fff7ed',
+                  border: '1px solid #ffedd5',
+                  color: '#ea580c',
+                  fontWeight: 700,
+                  fontSize: '0.82rem',
+                  padding: '0.4rem 0.85rem',
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  transition: 'all 0.2s Ease',
+                }}
+              >
+                <span>🏪 Sign In / Register as a Store Partner →</span>
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                dispatch(setAuthRole('customer'));
+                dispatch(setAuthTab('login'));
+              }}
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                color: '#475569',
+                fontWeight: 600,
+                fontSize: '0.8rem',
+                padding: '0.4rem 0.85rem',
+                borderRadius: '8px',
+                cursor: 'pointer',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                transition: 'all 0.2s Ease',
+              }}
+            >
+              <span>← Switch back to Customer Sign In</span>
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
