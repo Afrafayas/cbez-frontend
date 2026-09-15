@@ -4,7 +4,7 @@ import { NetworkCreateModal } from './components/NetworkCreateModal';
 import { AuthModal } from './components/AuthModal';
 import { CompactBrandSelect } from './components/CompactBrandSelect';
 import { Footer } from './components/Footer';
-import { getProducts, getShops, registerUser, createSellerProduct, sendLead, getFollowedShops, unfollowShop, getNetworkInquiries, getShopFollowers, getBrands } from './services/apiService';
+import { getProducts, getShops, createSellerProduct, sendLead, getFollowedShops, unfollowShop, getNetworkInquiries, getShopFollowers, getBrands } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import React, { ChangeEvent, FormEvent } from 'react';
 import { 
@@ -46,7 +46,6 @@ import {
   setAuthTab 
 } from './store/authSlice';
 import { 
-  addShop, 
   updateShop,
   addProduct, 
   editProduct, 
@@ -77,7 +76,7 @@ import {
   removeToast, 
   setDashboardTab 
 } from './store/uiSlice';
-import { CATEGORIES, CITIES, BUDGET_PRESETS, INITIAL_USERS } from './data/mockData';
+import { CATEGORIES, CITIES, BUDGET_PRESETS } from './data/mockData';
 import { Product, Shop, Lead, User as CustomerUser } from './types';
 
 interface CustomSelectProps {
@@ -184,7 +183,7 @@ export default function App() {
   const location = useLocation();
 
   // --- REDUX SELECTORS ---
-  const { activeShop, activeUser, authRole, showAuthModal, authTab } = useAppSelector(state => state.auth);
+  const { activeShop, activeUser, showAuthModal } = useAppSelector(state => state.auth);
   const { items: products, shops, leads, selectedProduct, showAddEditModal, productToEdit } = useAppSelector(state => state.products);
   const { toasts, dashboardTab } = useAppSelector(state => state.ui);
   const filters = useAppSelector(state => state.filters);
@@ -283,13 +282,6 @@ export default function App() {
     }, 4500);
     return () => clearInterval(timer);
   }, []);
-  
-  const [customerRegisterForm, setCustomerRegisterForm] = React.useState({
-    name: '',
-    email: '',
-    phone: '',
-    password: ''
-  });
 
   // Network inquiry modal state
   const [isNetworkModalOpen, setIsNetworkModalOpen] = React.useState(false);
@@ -393,18 +385,6 @@ export default function App() {
       triggerToast(err.message || 'Failed to unfollow shop', 'warning');
     }
   };
-
-  const [registerForm, setRegisterForm] = React.useState({
-    name: '',
-    ownerName: '',
-    email: '',
-    password: '',
-    phone: '',
-    whatsapp: '',
-    address: '',
-    city: 'Kochi',
-    category: 'Mobiles & Tablets'
-  });
 
   const [productForm, setProductForm] = React.useState<{
     name: string;
