@@ -182,14 +182,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           padding: '2.25rem 2rem',
           borderRadius: '24px',
           position: 'relative',
-          background: '#ffffff',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          background: 'linear-gradient(145deg, #0f172a 0%, #1e293b 100%)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
+          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.75), 0 0 40px rgba(255, 111, 0, 0.15)',
+          color: '#ffffff',
         }}
       >
         <button
           className="modal-close-btn"
           onClick={() => dispatch(setShowAuthModal(false))}
-          style={{ top: '1.25rem', right: '1.25rem' }}
+          style={{
+            top: '1.25rem',
+            right: '1.25rem',
+            background: 'rgba(255, 255, 255, 0.08)',
+            border: '1px solid rgba(255, 255, 255, 0.12)',
+            color: '#94a3b8',
+          }}
         >
           <X size={18} />
         </button>
@@ -201,14 +209,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
               display: 'inline-flex',
               alignItems: 'center',
               gap: '0.4rem',
-              background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',
-              color: '#c2410c',
-              border: '1px solid #fed7aa',
-              padding: '0.35rem 0.75rem',
+              background: 'linear-gradient(135deg, rgba(255, 111, 0, 0.2) 0%, rgba(234, 88, 12, 0.12) 100%)',
+              color: '#ff9e40',
+              border: '1px solid rgba(255, 111, 0, 0.35)',
+              padding: '0.4rem 0.85rem',
               borderRadius: '20px',
               fontSize: '0.78rem',
               fontWeight: 700,
-              marginBottom: '0.85rem',
+              marginBottom: '1rem',
+              boxShadow: '0 0 15px rgba(255, 111, 0, 0.15)',
             }}
           >
             <span>🏪 Merchant Store Partner Portal</span>
@@ -216,14 +225,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         )}
 
         {/* Modal Main Header */}
-        <div className="modal-header" style={{ marginBottom: '1.25rem' }}>
-          <h2 className="modal-title" style={{ fontSize: '1.35rem', fontWeight: 800, color: '#0f172a', margin: 0 }}>
+        <div className="modal-header" style={{ marginBottom: '1.5rem' }}>
+          <h2 className="modal-title" style={{ fontSize: '1.4rem', fontWeight: 800, color: '#ffffff', margin: 0, letterSpacing: '-0.3px' }}>
             {authTab === 'login'
               ? (authRole === 'customer' ? 'Customer Sign In' : 'Shop Partner Sign In')
               : (authRole === 'customer' ? 'Create Customer Account' : 'Register Shop Partner')
             }
           </h2>
-          <p style={{ fontSize: '0.82rem', color: '#64748b', marginTop: '0.25rem', margin: 0 }}>
+          <p style={{ fontSize: '0.83rem', color: '#94a3b8', marginTop: '0.35rem', margin: 0, lineHeight: 1.4 }}>
             {authRole === 'customer'
               ? 'Sign in to browse, buy and contact local store dealers'
               : 'Access your merchant shop dashboard and listings'
@@ -236,10 +245,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           style={{
             display: 'flex',
             gap: '0.35rem',
-            marginBottom: '1.25rem',
-            background: '#f1f5f9',
-            padding: '4px',
-            borderRadius: '10px',
+            marginBottom: '1.5rem',
+            background: '#0f172a',
+            padding: '5px',
+            borderRadius: '12px',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
           }}
         >
           <button
@@ -248,14 +258,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
             onClick={() => dispatch(setAuthTab('login'))}
             style={{
               flex: 1,
-              padding: '0.5rem',
-              borderRadius: '7px',
+              padding: '0.6rem',
+              borderRadius: '9px',
               border: 'none',
               fontWeight: authTab === 'login' ? 700 : 600,
               fontSize: '0.85rem',
-              background: authTab === 'login' ? '#ffffff' : 'transparent',
-              color: authTab === 'login' ? '#0f172a' : '#64748b',
-              boxShadow: authTab === 'login' ? '0 1px 4px rgba(0,0,0,0.06)' : 'none',
+              background: authTab === 'login' ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'transparent',
+              color: authTab === 'login' ? '#ffffff' : '#94a3b8',
+              boxShadow: authTab === 'login' ? '0 4px 12px rgba(255, 111, 0, 0.35)' : 'none',
               cursor: 'pointer',
               transition: 'all 0.2s ease',
             }}
@@ -268,14 +278,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
             onClick={() => dispatch(setAuthTab('register'))}
             style={{
               flex: 1,
-              padding: '0.5rem',
-              borderRadius: '7px',
+              padding: '0.6rem',
+              borderRadius: '9px',
               border: 'none',
               fontWeight: authTab === 'register' ? 700 : 600,
               fontSize: '0.85rem',
-              background: authTab === 'register' ? '#ffffff' : 'transparent',
-              color: authTab === 'register' ? '#0f172a' : '#64748b',
-              boxShadow: authTab === 'register' ? '0 1px 4px rgba(0,0,0,0.06)' : 'none',
+              background: authTab === 'register' ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'transparent',
+              color: authTab === 'register' ? '#ffffff' : '#94a3b8',
+              boxShadow: authTab === 'register' ? '0 4px 12px rgba(255, 111, 0, 0.35)' : 'none',
               cursor: 'pointer',
               transition: 'all 0.2s ease',
             }}
@@ -314,28 +324,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
               disabled={isSubmitting}
               style={{
                 width: '100%',
-                marginTop: '0.5rem',
-                padding: '0.75rem',
+                marginTop: '0.75rem',
+                padding: '0.85rem',
                 justifyContent: 'center',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.5rem',
+                borderRadius: '12px',
+                fontWeight: 700,
+                fontSize: '0.95rem',
+                background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
+                boxShadow: '0 4px 18px rgba(255, 111, 0, 0.35)',
                 opacity: isSubmitting ? 0.75 : 1,
                 cursor: isSubmitting ? 'not-allowed' : 'pointer'
               }}
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="animate-spin" size={18} />
+                  <Loader2 className="animate-spin" size={19} />
                   <span>Processing...</span>
                 </>
               ) : (
                 authRole === 'customer' ? 'Customer Sign In' : 'Shop Partner Sign In'
               )}
             </button>
-            <div style={{ textAlign: 'center', marginTop: '0.75rem', fontSize: '0.83rem', color: '#64748b' }}>
+            <div style={{ textAlign: 'center', marginTop: '0.85rem', fontSize: '0.83rem', color: '#94a3b8' }}>
               Don't have an account?{' '}
-              <a href="#" onClick={(e) => { e.preventDefault(); dispatch(setAuthTab('register')); }} style={{ color: '#ea580c', fontWeight: 700, textDecoration: 'none' }}>
+              <a href="#" onClick={(e) => { e.preventDefault(); dispatch(setAuthTab('register')); }} style={{ color: '#ff9e40', fontWeight: 700, textDecoration: 'none' }}>
                 Register Here
               </a>
             </div>
@@ -405,28 +420,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
               disabled={isSubmitting}
               style={{
                 width: '100%',
-                marginTop: '0.5rem',
-                padding: '0.75rem',
+                marginTop: '0.75rem',
+                padding: '0.85rem',
                 justifyContent: 'center',
                 display: 'flex',
                 alignItems: 'center',
                 gap: '0.5rem',
+                borderRadius: '12px',
+                fontWeight: 700,
+                fontSize: '0.95rem',
+                background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
+                boxShadow: '0 4px 18px rgba(255, 111, 0, 0.35)',
                 opacity: isSubmitting ? 0.75 : 1,
                 cursor: isSubmitting ? 'not-allowed' : 'pointer'
               }}
             >
               {isSubmitting ? (
                 <>
-                  <Loader2 className="animate-spin" size={18} />
+                  <Loader2 className="animate-spin" size={19} />
                   <span>Processing...</span>
                 </>
               ) : (
                 authRole === 'customer' ? 'Create Customer Account' : 'Submit Shop Registration'
               )}
             </button>
-            <div style={{ textAlign: 'center', marginTop: '0.75rem', fontSize: '0.83rem', color: '#64748b' }}>
+            <div style={{ textAlign: 'center', marginTop: '0.85rem', fontSize: '0.83rem', color: '#94a3b8' }}>
               Already registered?{' '}
-              <a href="#" onClick={(e) => { e.preventDefault(); dispatch(setAuthTab('login')); }} style={{ color: '#ea580c', fontWeight: 700, textDecoration: 'none' }}>
+              <a href="#" onClick={(e) => { e.preventDefault(); dispatch(setAuthTab('login')); }} style={{ color: '#ff9e40', fontWeight: 700, textDecoration: 'none' }}>
                 Sign In
               </a>
             </div>
@@ -437,15 +457,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         <div
           className="auth-shop-partner-footer"
           style={{
-            marginTop: '1.25rem',
-            paddingTop: '0.9rem',
-            borderTop: '1px solid #f1f5f9',
+            marginTop: '1.5rem',
+            paddingTop: '1.1rem',
+            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
             textAlign: 'center',
           }}
         >
           {authRole === 'customer' ? (
             <div>
-              <span style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', marginBottom: '0.25rem' }}>
+              <span style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'block', marginBottom: '0.4rem' }}>
                 Are you a Shop Owner?
               </span>
               <button
@@ -455,17 +475,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                   dispatch(setAuthTab('login'));
                 }}
                 style={{
-                  background: '#fff7ed',
-                  border: '1px solid #ffedd5',
-                  color: '#ea580c',
+                  background: 'rgba(255, 111, 0, 0.1)',
+                  border: '1px solid rgba(255, 111, 0, 0.3)',
+                  color: '#ff9e40',
                   fontWeight: 700,
-                  fontSize: '0.82rem',
-                  padding: '0.4rem 0.85rem',
-                  borderRadius: '8px',
+                  fontSize: '0.83rem',
+                  padding: '0.5rem 1rem',
+                  borderRadius: '10px',
                   cursor: 'pointer',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '0.35rem',
+                  gap: '0.4rem',
                   transition: 'all 0.2s ease',
                 }}
               >
@@ -480,17 +500,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 dispatch(setAuthTab('login'));
               }}
               style={{
-                background: '#f8fafc',
-                border: '1px solid #e2e8f0',
-                color: '#475569',
+                background: '#0f172a',
+                border: '1px solid #334155',
+                color: '#cbd5e1',
                 fontWeight: 600,
-                fontSize: '0.8rem',
-                padding: '0.4rem 0.85rem',
-                borderRadius: '8px',
+                fontSize: '0.82rem',
+                padding: '0.5rem 1rem',
+                borderRadius: '10px',
                 cursor: 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '0.35rem',
+                gap: '0.4rem',
                 transition: 'all 0.2s ease',
               }}
             >

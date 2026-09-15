@@ -73,17 +73,13 @@ export const PhoneInputWithCountry: React.FC<PhoneInputWithCountryProps> = ({
       <select
         value={selectedCode}
         onChange={handleCodeChange}
+        className="form-select-box"
         style={{
           width: '115px',
           flexShrink: 0,
-          backgroundColor: 'var(--light-bg)',
-          border: '1px solid var(--light-border)',
-          borderRadius: 'var(--radius-md)',
           padding: '0.75rem 0.4rem',
           fontSize: '0.85rem',
           fontWeight: 600,
-          color: 'var(--text-primary-light)',
-          outline: 'none',
           cursor: 'pointer',
         }}
       >
