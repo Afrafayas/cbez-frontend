@@ -1,5 +1,5 @@
 import React, { useState, ChangeEvent, FormEvent } from 'react';
-import { X, Loader2 } from 'lucide-react';
+import { X, Loader2, Store, ArrowRight, User } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { 
   setShowAuthModal, 
@@ -208,7 +208,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '0.4rem',
+              gap: '0.45rem',
               background: 'linear-gradient(135deg, rgba(255, 111, 0, 0.2) 0%, rgba(234, 88, 12, 0.12) 100%)',
               color: '#ff9e40',
               border: '1px solid rgba(255, 111, 0, 0.35)',
@@ -220,7 +220,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
               boxShadow: '0 0 15px rgba(255, 111, 0, 0.15)',
             }}
           >
-            <span>🏪 Merchant Store Partner Portal</span>
+            <Store size={15} style={{ color: '#ff9e40' }} />
+            <span>Merchant Store Partner Portal</span>
           </div>
         )}
 
@@ -485,11 +486,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                   cursor: 'pointer',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '0.4rem',
+                  gap: '0.45rem',
                   transition: 'all 0.2s ease',
                 }}
               >
-                <span>🏪 Sign In / Register as a Store Partner →</span>
+                <Store size={15} />
+                <span>Sign In / Register as a Store Partner</span>
+                <ArrowRight size={14} />
               </button>
             </div>
           ) : (
@@ -510,11 +513,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 cursor: 'pointer',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '0.4rem',
+                gap: '0.45rem',
                 transition: 'all 0.2s ease',
               }}
             >
-              <span>← Switch back to Customer Sign In</span>
+              <User size={15} />
+              <span>Switch back to Customer Sign In</span>
             </button>
           )}
         </div>
