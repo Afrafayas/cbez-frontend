@@ -41,7 +41,8 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
     ])
   ).filter(Boolean).sort();
 
-  const currentPlan = subscriptionPlans.find(p => p.id === (activeShop?.subscriptionPlanId || 'plan-free')) || {
+  const assignedPlan = subscriptionPlans.find(p => p.id === activeShop?.subscriptionPlanId);
+  const currentPlan = assignedPlan || {
     id: 'plan-free',
     name: 'Free Plan',
     description: 'Basic Starter Plan',
@@ -50,8 +51,8 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
   };
 
   const shopProductsCount = activeShop ? products.filter(p => p.shopId === activeShop.id).length : 0;
-  const remainingSlots = Math.max(0, currentPlan.productLimit - shopProductsCount);
-  const isLimitReached = shopProductsCount >= currentPlan.productLimit;
+  const remainingSlots = assignedPlan ? Math.max(0, assignedPlan.productLimit - shopProductsCount) : 0;
+  const isLimitReached = assignedPlan ? shopProductsCount >= assignedPlan.productLimit : false;
   const isShopPending = Boolean(activeShop && !activeShop.verified);
 
   const [productForm, setProductForm] = useState({
@@ -147,19 +148,28 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
     e.preventDefault();
     if (isSubmitting) return;
 
-    // Step 1: Check Shop Approval Status
+    // Step 1 — Shop Approval Check
     if (activeShop && !activeShop.verified) {
       onToast('Your shop registration is currently PENDING Admin approval. Only approved shops can add products.', 'info');
       return;
     }
 
-    // Step 2 & 3: Check Subscription Plan Product Limit (for new product creation)
-    if (!productToEdit && isLimitReached) {
-      onToast(
-        `Product limit reached. Your ${currentPlan.name} allows a maximum of ${currentPlan.productLimit} products. You currently have ${shopProductsCount} products. Please upgrade or change your subscription plan to add more products.`,
-        'info'
-      );
+    // Step 2 — Subscription Plan Check
+    if (!productToEdit && !assignedPlan) {
+      onToast('Please select a subscription plan before adding products.', 'info');
       return;
+    }
+
+    // Step 3, 4 & 5 — Get Product Limit, Count Products & Compare Count With Limit
+    if (!productToEdit && assignedPlan) {
+      const productLimit = assignedPlan.productLimit;
+      if (shopProductsCount >= productLimit) {
+        onToast(
+          `Product limit reached! Your ${assignedPlan.name} allows a maximum of ${productLimit} products. (Current: ${shopProductsCount}/${productLimit}). Please upgrade your subscription plan to list more products.`,
+          'info'
+        );
+        return;
+      }
     }
 
     const validImgs = formImages.map(img => img ? img.trim() : '').filter(Boolean);

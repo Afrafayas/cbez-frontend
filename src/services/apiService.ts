@@ -258,6 +258,11 @@ export async function registerUser(userData: {
   profileImage?: string;
   gstNumber?: string;
   websiteUrl?: string;
+  latitude?: number;
+  longitude?: number;
+  businessHours?: string;
+  businessDescription?: string;
+  alternatePhone?: string;
 }) {
   const res = await fetch(`${API_BASE_URL}/auth/register`, {
     method: 'POST',
@@ -435,5 +440,53 @@ export async function getNetworkInquiries(params?: {
   if (!res.ok) throw new Error('Failed to fetch network inquiries');
   const result = await res.json();
   return result.data?.inquiries ?? [];
+}
+
+/* Location & Geocoding APIs */
+export async function geocodeAddress(address: string): Promise<{ latitude: number; longitude: number; formattedAddress: string }> {
+  const res = await fetch(`${API_BASE_URL}/location/geocode?address=${encodeURIComponent(address)}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Geocoding failed');
+  return {
+    latitude: data.latitude,
+    longitude: data.longitude,
+    formattedAddress: data.formattedAddress || address,
+  };
+}
+
+export async function reverseGeocodeCoords(lat: number, lng: number): Promise<{
+  formattedAddress: string;
+  city?: string;
+  district?: string;
+  country?: string;
+}> {
+  const res = await fetch(`${API_BASE_URL}/location/reverse-geocode?lat=${lat}&lng=${lng}`);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Reverse geocoding failed');
+
+  let city: string | undefined;
+  let district: string | undefined;
+  let country: string | undefined;
+
+  if (Array.isArray(data.addressComponents)) {
+    for (const comp of data.addressComponents) {
+      if (comp.types.includes('locality') || comp.types.includes('administrative_area_level_2')) {
+        city = city || comp.long_name;
+      }
+      if (comp.types.includes('administrative_area_level_2') || comp.types.includes('administrative_area_level_1')) {
+        district = district || comp.long_name;
+      }
+      if (comp.types.includes('country')) {
+        country = comp.long_name;
+      }
+    }
+  }
+
+  return {
+    formattedAddress: data.formattedAddress || '',
+    city,
+    district,
+    country,
+  };
 }
 

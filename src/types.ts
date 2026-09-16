@@ -28,6 +28,11 @@ export interface Shop {
   profileImage?: string;
   gstNumber?: string;
   websiteUrl?: string;
+  latitude?: number;
+  longitude?: number;
+  businessHours?: string;
+  businessDescription?: string;
+  alternatePhone?: string;
   status?: 'PENDING' | 'APPROVED' | 'REJECTED';
 }
 

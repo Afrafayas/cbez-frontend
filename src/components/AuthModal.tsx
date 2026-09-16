@@ -1,5 +1,5 @@
-import React, { useState, useEffect, ChangeEvent, FormEvent } from 'react';
-import { X, Loader2, Store, ArrowRight, User } from 'lucide-react';
+import React, { useState, useEffect, FormEvent } from 'react';
+import { X, Loader2, Store, ArrowRight, User, MapPin, Search } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { 
   setShowAuthModal, 
@@ -11,7 +11,7 @@ import {
 import { addShop } from '../store/productsSlice';
 import { Shop, User as CustomerUser, SubscriptionPlan } from '../types';
 import { CITIES } from '../data/mockData';
-import { registerUser, loginUser, getActiveSubscriptionPlans } from '../services/apiService';
+import { registerUser, loginUser, getActiveSubscriptionPlans, geocodeAddress, reverseGeocodeCoords } from '../services/apiService';
 import { PhoneInputWithCountry } from './PhoneInputWithCountry';
 
 interface AuthModalProps {
@@ -31,6 +31,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
   const [activePlans, setActivePlans] = useState<SubscriptionPlan[]>([]);
   
   const [regForm, setRegForm] = useState({
@@ -50,9 +51,82 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
     panNumber: '',
     profileImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
     subscriptionPlanId: '',
+    latitude: undefined as number | undefined,
+    longitude: undefined as number | undefined,
     gstNumber: '',
-    websiteUrl: ''
+    websiteUrl: '',
+    businessHours: '',
+    businessDescription: '',
+    alternatePhone: ''
   });
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      onToast('Geolocation is not supported by your browser. Please search address manually.', 'info');
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        setRegForm(prev => ({
+          ...prev,
+          latitude: lat,
+          longitude: lng,
+        }));
+        onToast(`GPS Coordinates detected: (${lat.toFixed(4)}, ${lng.toFixed(4)})`, 'success');
+
+        try {
+          const rev = await reverseGeocodeCoords(lat, lng);
+          if (rev.formattedAddress) {
+            setRegForm(prev => ({
+              ...prev,
+              address: prev.address || rev.formattedAddress,
+              city: rev.city || prev.city,
+              district: rev.district || prev.district,
+              country: rev.country || prev.country,
+            }));
+          }
+        } catch {
+          // Keep detected coordinates even if reverse geocode fails
+        } finally {
+          setIsLocating(false);
+        }
+      },
+      (error) => {
+        setIsLocating(false);
+        onToast(`Geolocation permission denied or unavailable: ${error.message}. Please search address manually.`, 'info');
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
+  };
+
+  const handleSearchLocationCoordinates = async () => {
+    const query = regForm.address || regForm.city || 'Kochi Market';
+    if (!query) {
+      onToast('Please enter a business address or city name to search on map', 'info');
+      return;
+    }
+
+    try {
+      setIsLocating(true);
+      const res = await geocodeAddress(`${query}, ${regForm.city || ''}, ${regForm.country || 'India'}`);
+      setRegForm(prev => ({
+        ...prev,
+        latitude: res.latitude,
+        longitude: res.longitude,
+        address: prev.address || res.formattedAddress,
+      }));
+      onToast(`Map location found: (${res.latitude.toFixed(4)}, ${res.longitude.toFixed(4)})`, 'success');
+    } catch (err: any) {
+      onToast(err.message || 'Could not find coordinates for entered address. Try refining street name.', 'info');
+    } finally {
+      setIsLocating(false);
+    }
+  };
+
 
   useEffect(() => {
     async function loadPlans() {
@@ -174,9 +248,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           !regForm.email ||
           !regForm.aadhaarNumber ||
           !regForm.panNumber ||
-          !regForm.subscriptionPlanId
+          !regForm.subscriptionPlanId ||
+          regForm.latitude === undefined ||
+          regForm.longitude === undefined
         ) {
-          onToast('Please fill out all mandatory fields for shop registration (including Aadhaar, PAN, and Subscription Plan)', 'info');
+          onToast('Please fill out all mandatory fields and select your shop location (GPS coordinates required)', 'info');
           setIsSubmitting(false);
           return;
         }
@@ -199,8 +275,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           panNumber: regForm.panNumber,
           profileImage: regForm.profileImage,
           subscriptionPlanId: regForm.subscriptionPlanId,
+          latitude: regForm.latitude,
+          longitude: regForm.longitude,
           gstNumber: regForm.gstNumber,
-          websiteUrl: regForm.websiteUrl
+          websiteUrl: regForm.websiteUrl,
+          businessHours: regForm.businessHours,
+          businessDescription: regForm.businessDescription,
+          alternatePhone: regForm.alternatePhone,
         });
 
         if (resData.token) {
@@ -222,8 +303,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           panNumber: regForm.panNumber,
           profileImage: regForm.profileImage,
           subscriptionPlanId: regForm.subscriptionPlanId || activePlans[0]?.id || 'plan-free',
+          latitude: regForm.latitude,
+          longitude: regForm.longitude,
           gstNumber: regForm.gstNumber,
           websiteUrl: regForm.websiteUrl,
+          businessHours: regForm.businessHours,
+          businessDescription: regForm.businessDescription,
+          alternatePhone: regForm.alternatePhone,
           verified: false, // PENDING ADMIN APPROVAL
           status: 'PENDING',
           rating: 5.0,
@@ -248,144 +334,167 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         onClick={(e) => e.stopPropagation()}
         style={{
           maxWidth: '460px',
-          padding: '2.25rem 2rem',
+          width: '92%',
+          background: '#0f172a',
+          color: '#f8fafc',
           borderRadius: '24px',
-          position: 'relative',
-          background: 'linear-gradient(145deg, #0f172a 0%, #1e293b 100%)',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
-          boxShadow: '0 25px 60px -15px rgba(0, 0, 0, 0.75), 0 0 40px rgba(255, 111, 0, 0.15)',
-          color: '#ffffff',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
+          border: '1px solid rgba(255, 255, 255, 0.1)',
+          padding: '2rem 1.75rem',
+          position: 'relative'
         }}
       >
         <button
           className="modal-close-btn"
           onClick={() => dispatch(setShowAuthModal(false))}
           style={{
+            position: 'absolute',
             top: '1.25rem',
             right: '1.25rem',
             background: 'rgba(255, 255, 255, 0.08)',
-            border: '1px solid rgba(255, 255, 255, 0.12)',
+            border: 'none',
             color: '#94a3b8',
+            borderRadius: '50%',
+            width: '32px',
+            height: '32px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer'
           }}
         >
           <X size={18} />
         </button>
 
-        {/* Merchant Partner Header Badge (Visible only when in Seller Mode) */}
-        {authRole === 'seller' && (
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '0.45rem',
-              background: 'linear-gradient(135deg, rgba(255, 111, 0, 0.2) 0%, rgba(234, 88, 12, 0.12) 100%)',
-              color: '#ff9e40',
-              border: '1px solid rgba(255, 111, 0, 0.35)',
-              padding: '0.4rem 0.85rem',
-              borderRadius: '20px',
-              fontSize: '0.78rem',
-              fontWeight: 700,
-              marginBottom: '1rem',
-              boxShadow: '0 0 15px rgba(255, 111, 0, 0.15)',
-            }}
-          >
-            <Store size={15} style={{ color: '#ff9e40' }} />
-            <span>Merchant Store Partner Portal</span>
+        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+          <div style={{
+            width: '56px',
+            height: '56px',
+            borderRadius: '16px',
+            background: authRole === 'seller' ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            margin: '0 auto 1rem auto',
+            boxShadow: authRole === 'seller' ? '0 10px 25px rgba(255, 111, 0, 0.4)' : '0 10px 25px rgba(37, 99, 235, 0.4)'
+          }}>
+            {authRole === 'seller' ? <Store size={28} color="#ffffff" /> : <User size={28} color="#ffffff" />}
           </div>
-        )}
-
-        {/* Modal Main Header */}
-        <div className="modal-header" style={{ marginBottom: '1.5rem' }}>
-          <h2 className="modal-title" style={{ fontSize: '1.4rem', fontWeight: 800, color: '#ffffff', margin: 0, letterSpacing: '-0.3px' }}>
-            {authTab === 'login'
-              ? (authRole === 'customer' ? 'Customer Sign In' : 'Shop Partner Sign In')
-              : (authRole === 'customer' ? 'Create Customer Account' : 'Register Shop Partner')
-            }
+          <h2 style={{ fontSize: '1.45rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
+            {authRole === 'seller' ? (authTab === 'login' ? 'Merchant Partner Portal' : 'Register Seller Shop') : (authTab === 'login' ? 'Customer Sign In' : 'Create Customer Account')}
           </h2>
-          <p style={{ fontSize: '0.83rem', color: '#94a3b8', marginTop: '0.35rem', margin: 0, lineHeight: 1.4 }}>
-            {authRole === 'customer'
-              ? 'Sign in to browse, buy and contact local store dealers'
-              : 'Access your merchant shop dashboard and listings'
-            }
+          <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '0.35rem' }}>
+            {authRole === 'seller' ? 'Trusted Kerala Used Electronics Marketplace' : 'Buy verified used gadgets directly from local stores'}
           </p>
         </div>
 
-        {/* Primary Tabs (Sign In vs Register Account) */}
-        <div
-          style={{
-            display: 'flex',
-            gap: '0.35rem',
-            marginBottom: '1.5rem',
-            background: '#0f172a',
-            padding: '5px',
-            borderRadius: '12px',
-            border: '1px solid rgba(255, 255, 255, 0.08)',
-          }}
-        >
+        {/* Role Toggle Switch */}
+        <div style={{
+          display: 'flex',
+          background: 'rgba(255, 255, 255, 0.05)',
+          padding: '4px',
+          borderRadius: '14px',
+          marginBottom: '1.5rem',
+          border: '1px solid rgba(255, 255, 255, 0.08)'
+        }}>
           <button
             type="button"
-            className={`role-tab ${authTab === 'login' ? 'active' : ''}`}
+            onClick={() => dispatch(setAuthRole('customer'))}
+            style={{
+              flex: 1,
+              padding: '0.55rem',
+              borderRadius: '10px',
+              border: 'none',
+              fontWeight: 700,
+              fontSize: '0.82rem',
+              background: authRole === 'customer' ? '#2563eb' : 'transparent',
+              color: authRole === 'customer' ? '#ffffff' : '#94a3b8',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            Customer
+          </button>
+          <button
+            type="button"
+            onClick={() => dispatch(setAuthRole('seller'))}
+            style={{
+              flex: 1,
+              padding: '0.55rem',
+              borderRadius: '10px',
+              border: 'none',
+              fontWeight: 700,
+              fontSize: '0.82rem',
+              background: authRole === 'seller' ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'transparent',
+              color: authRole === 'seller' ? '#ffffff' : '#94a3b8',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            🏪 Store Partner
+          </button>
+        </div>
+
+        {/* Tab Navigation: Login / Register */}
+        <div style={{ display: 'flex', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', marginBottom: '1.5rem' }}>
+          <button
+            type="button"
             onClick={() => dispatch(setAuthTab('login'))}
             style={{
               flex: 1,
-              padding: '0.6rem',
-              borderRadius: '9px',
+              padding: '0.65rem',
+              background: 'none',
               border: 'none',
-              fontWeight: authTab === 'login' ? 700 : 600,
-              fontSize: '0.85rem',
-              background: authTab === 'login' ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'transparent',
+              borderBottom: authTab === 'login' ? '2.5px solid #ff9e40' : '2.5px solid transparent',
               color: authTab === 'login' ? '#ffffff' : '#94a3b8',
-              boxShadow: authTab === 'login' ? '0 4px 12px rgba(255, 111, 0, 0.35)' : 'none',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
+              fontWeight: 700,
+              fontSize: '0.88rem',
+              cursor: 'pointer'
             }}
           >
             Sign In
           </button>
           <button
             type="button"
-            className={`role-tab ${authTab === 'register' ? 'active' : ''}`}
             onClick={() => dispatch(setAuthTab('register'))}
             style={{
               flex: 1,
-              padding: '0.6rem',
-              borderRadius: '9px',
+              padding: '0.65rem',
+              background: 'none',
               border: 'none',
-              fontWeight: authTab === 'register' ? 700 : 600,
-              fontSize: '0.85rem',
-              background: authTab === 'register' ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'transparent',
+              borderBottom: authTab === 'register' ? '2.5px solid #ff9e40' : '2.5px solid transparent',
               color: authTab === 'register' ? '#ffffff' : '#94a3b8',
-              boxShadow: authTab === 'register' ? '0 4px 12px rgba(255, 111, 0, 0.35)' : 'none',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease',
+              fontWeight: 700,
+              fontSize: '0.88rem',
+              cursor: 'pointer'
             }}
           >
-            Register Account
+            Register
           </button>
         </div>
 
         {authTab === 'login' ? (
           <form onSubmit={handleLoginSubmit} className="modal-form">
             <div className="form-group">
-              <label className="form-label">{authRole === 'seller' ? 'Business Email *' : 'Email Address *'}</label>
-              <input 
-                type="email" 
-                className="form-input-text" 
-                required 
-                placeholder={authRole === 'seller' ? "e.g. store@gmail.com" : "e.g. user@gmail.com"}
+              <label className="form-label">Email Address / Phone *</label>
+              <input
+                type="text"
+                className="form-input-text"
+                required
+                placeholder="e.g. store@gmail.com"
                 value={loginEmail}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setLoginEmail(e.target.value)}
+                onChange={(e) => setLoginEmail(e.target.value)}
               />
             </div>
             <div className="form-group">
               <label className="form-label">Password *</label>
-              <input 
-                type="password" 
-                className="form-input-text" 
-                required 
+              <input
+                type="password"
+                className="form-input-text"
+                required
                 placeholder="••••••••"
                 value={loginPassword}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => setLoginPassword(e.target.value)}
+                onChange={(e) => setLoginPassword(e.target.value)}
               />
             </div>
             <button
@@ -394,7 +503,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
               disabled={isSubmitting}
               style={{
                 width: '100%',
-                marginTop: '0.75rem',
+                marginTop: '1rem',
                 padding: '0.85rem',
                 justifyContent: 'center',
                 display: 'flex',
@@ -514,6 +623,89 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                   <label className="form-label">PAN Card Number *</label>
                   <input type="text" className="form-input-text" required placeholder="10-character PAN Number" value={regForm.panNumber} onChange={(e) => setRegForm({ ...regForm, panNumber: e.target.value })} />
                 </div>
+
+                {/* MANDATORY LOCATION SELECTION SECTION */}
+                <div className="form-group" style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1.5px dashed #ff9e40', padding: '1rem', borderRadius: '14px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                    <label className="form-label" style={{ fontWeight: 700, color: '#ff9e40', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <MapPin size={16} />
+                      <span>Shop Map Coordinates (Mandatory) *</span>
+                    </label>
+                    {regForm.latitude !== undefined && regForm.longitude !== undefined && (
+                      <span style={{ fontSize: '0.72rem', background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', padding: '0.2rem 0.6rem', borderRadius: '12px', fontWeight: 700 }}>
+                        ✓ Coordinates Set
+                      </span>
+                    )}
+                  </div>
+
+                  <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.75rem' }}>
+                    Please select your shop location using GPS or address map search:
+                  </p>
+
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                    {/* Option 1: Use Current Location */}
+                    <button
+                      type="button"
+                      disabled={isLocating}
+                      onClick={handleUseCurrentLocation}
+                      style={{
+                        flex: 1,
+                        minWidth: '150px',
+                        padding: '0.55rem 0.8rem',
+                        borderRadius: '10px',
+                        border: '1px solid #ff9e40',
+                        background: 'rgba(255, 158, 64, 0.15)',
+                        color: '#ff9e40',
+                        fontWeight: 700,
+                        fontSize: '0.78rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.4rem',
+                        cursor: isLocating ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      {isLocating ? <Loader2 className="animate-spin" size={14} /> : <MapPin size={14} />}
+                      <span>Use Current GPS Location</span>
+                    </button>
+
+                    {/* Option 2: Search Address Coordinates */}
+                    <button
+                      type="button"
+                      disabled={isLocating}
+                      onClick={handleSearchLocationCoordinates}
+                      style={{
+                        padding: '0.55rem 0.8rem',
+                        borderRadius: '10px',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        color: '#f8fafc',
+                        fontWeight: 600,
+                        fontSize: '0.78rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.4rem',
+                        cursor: isLocating ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      <Search size={14} />
+                      <span>Search Map Address</span>
+                    </button>
+                  </div>
+
+                  {/* Display Coordinates Status */}
+                  {regForm.latitude !== undefined && regForm.longitude !== undefined ? (
+                    <div style={{ fontSize: '0.78rem', background: 'rgba(0, 0, 0, 0.3)', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#e2e8f0' }}>
+                      📍 <strong>Selected Coordinates:</strong> Lat: {regForm.latitude.toFixed(5)}, Lng: {regForm.longitude.toFixed(5)}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '0.76rem', color: '#f87171', fontStyle: 'italic' }}>
+                      ⚠️ Location coordinates required. Click "Use Current GPS Location" or "Search Map Address".
+                    </div>
+                  )}
+                </div>
+
                 <div className="form-group">
                   <label className="form-label">Market Business Address *</label>
                   <textarea className="form-textarea" required rows={2} placeholder="MG Road, Broadway Corner" value={regForm.address} onChange={(e) => setRegForm({ ...regForm, address: e.target.value })}></textarea>
@@ -526,6 +718,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 <div className="form-group">
                   <label className="form-label">Website URL (Optional)</label>
                   <input type="text" className="form-input-text" placeholder="https://yourstore.com" value={regForm.websiteUrl} onChange={(e) => setRegForm({ ...regForm, websiteUrl: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Business Opening Hours (Optional)</label>
+                  <input type="text" className="form-input-text" placeholder="e.g. 9:30 AM - 8:30 PM (Mon-Sat)" value={regForm.businessHours} onChange={(e) => setRegForm({ ...regForm, businessHours: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Business Description (Optional)</label>
+                  <input type="text" className="form-input-text" placeholder="e.g. Authorised Multi-brand mobile & laptop sales" value={regForm.businessDescription} onChange={(e) => setRegForm({ ...regForm, businessDescription: e.target.value })} />
+                </div>
+                <div className="form-group">
+                  <label className="form-label">Alternate Contact Phone (Optional)</label>
+                  <input type="text" className="form-input-text" placeholder="e.g. +91 98460 00000" value={regForm.alternatePhone} onChange={(e) => setRegForm({ ...regForm, alternatePhone: e.target.value })} />
                 </div>
               </>
             )}
@@ -553,10 +757,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
               {isSubmitting ? (
                 <>
                   <Loader2 className="animate-spin" size={19} />
-                  <span>Processing...</span>
+                  <span>Submitting Shop Registration...</span>
                 </>
               ) : (
-                authRole === 'customer' ? 'Create Customer Account' : 'Submit Shop Registration'
+                authRole === 'customer' ? 'Register Customer Account' : 'Submit Shop Registration for Approval'
               )}
             </button>
             <div style={{ textAlign: 'center', marginTop: '0.85rem', fontSize: '0.83rem', color: '#94a3b8' }}>
@@ -567,17 +771,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
             </div>
           </form>
         )}
-
-        {/* Subtle Footer Switcher for Shop Owners */}
-        <div
-          className="auth-shop-partner-footer"
-          style={{
-            marginTop: '1.5rem',
-            paddingTop: '1.1rem',
-            borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-            textAlign: 'center',
-          }}
-        >
+        <div style={{
+          marginTop: '1.5rem',
+          paddingTop: '1.1rem',
+          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+          textAlign: 'center',
+        }}>
           {authRole === 'customer' ? (
             <div>
               <span style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'block', marginBottom: '0.4rem' }}>
