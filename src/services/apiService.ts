@@ -155,15 +155,22 @@ export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
 
 export async function getActiveSubscriptionPlans(): Promise<SubscriptionPlan[]> {
   try {
-    const plans = await getSubscriptionPlans();
-    return plans.filter(p => p.status === 'ACTIVE');
+    const res = await fetch(`${API_BASE_URL}/subscriptions/plans/active`);
+    if (!res.ok) throw new Error('Failed to fetch active subscription plans');
+    const result = await res.json();
+    return result.data?.plans ?? (Array.isArray(result) ? result : []);
   } catch {
-    const saved = localStorage.getItem('mlx_subscription_plans');
-    if (saved) {
-      const plans: SubscriptionPlan[] = JSON.parse(saved);
+    try {
+      const plans = await getSubscriptionPlans();
       return plans.filter(p => p.status === 'ACTIVE');
+    } catch {
+      const saved = localStorage.getItem('mlx_subscription_plans');
+      if (saved) {
+        const plans: SubscriptionPlan[] = JSON.parse(saved);
+        return plans.filter(p => p.status === 'ACTIVE');
+      }
+      return [];
     }
-    return [];
   }
 }
 
@@ -183,7 +190,7 @@ export async function createSubscriptionPlan(planData: Omit<SubscriptionPlan, 'i
 
 export async function updateSubscriptionPlan(id: string, planData: Partial<SubscriptionPlan>, token?: string): Promise<SubscriptionPlan> {
   const res = await fetch(`${API_BASE_URL}/subscriptions/plans/${id}`, {
-    method: 'PUT',
+    method: 'PATCH',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -192,6 +199,20 @@ export async function updateSubscriptionPlan(id: string, planData: Partial<Subsc
   });
   const result = await res.json();
   if (!res.ok) throw new Error(result.message || 'Failed to update subscription plan');
+  return result;
+}
+
+export async function toggleSubscriptionPlanStatus(id: string, status?: string, token?: string): Promise<SubscriptionPlan> {
+  const res = await fetch(`${API_BASE_URL}/subscriptions/plans/${id}/status`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ status }),
+  });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.message || 'Failed to toggle subscription plan status');
   return result;
 }
 
