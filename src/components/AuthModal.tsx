@@ -388,52 +388,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           </p>
         </div>
 
-        {/* Role Toggle Switch */}
-        <div style={{
-          display: 'flex',
-          background: 'rgba(255, 255, 255, 0.05)',
-          padding: '4px',
-          borderRadius: '14px',
-          marginBottom: '1.5rem',
-          border: '1px solid rgba(255, 255, 255, 0.08)'
-        }}>
-          <button
-            type="button"
-            onClick={() => dispatch(setAuthRole('customer'))}
-            style={{
-              flex: 1,
-              padding: '0.55rem',
-              borderRadius: '10px',
-              border: 'none',
-              fontWeight: 700,
-              fontSize: '0.82rem',
-              background: authRole === 'customer' ? '#2563eb' : 'transparent',
-              color: authRole === 'customer' ? '#ffffff' : '#94a3b8',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            Customer
-          </button>
-          <button
-            type="button"
-            onClick={() => dispatch(setAuthRole('seller'))}
-            style={{
-              flex: 1,
-              padding: '0.55rem',
-              borderRadius: '10px',
-              border: 'none',
-              fontWeight: 700,
-              fontSize: '0.82rem',
-              background: authRole === 'seller' ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'transparent',
-              color: authRole === 'seller' ? '#ffffff' : '#94a3b8',
-              cursor: 'pointer',
-              transition: 'all 0.2s ease'
-            }}
-          >
-            🏪 Store Partner
-          </button>
-        </div>
+
 
         {/* Tab Navigation: Login / Register */}
         <div style={{ display: 'flex', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', marginBottom: '1.5rem' }}>
@@ -779,7 +734,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         }}>
           {authRole === 'customer' ? (
             <div>
-              <span style={{ fontSize: '0.8rem', color: '#94a3b8', display: 'block', marginBottom: '0.4rem' }}>
+              <span style={{ fontSize: '0.82rem', color: '#94a3b8', display: 'block', marginBottom: '0.45rem', fontWeight: 500 }}>
                 Are you a Shop Owner?
               </span>
               <button
@@ -789,23 +744,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                   dispatch(setAuthTab('login'));
                 }}
                 style={{
-                  background: 'rgba(255, 111, 0, 0.1)',
-                  border: '1px solid rgba(255, 111, 0, 0.3)',
+                  background: 'rgba(255, 111, 0, 0.12)',
+                  border: '1px solid rgba(255, 111, 0, 0.4)',
                   color: '#ff9e40',
                   fontWeight: 700,
-                  fontSize: '0.83rem',
-                  padding: '0.5rem 1rem',
-                  borderRadius: '10px',
+                  fontSize: '0.85rem',
+                  padding: '0.6rem 1.1rem',
+                  borderRadius: '12px',
                   cursor: 'pointer',
                   display: 'inline-flex',
                   alignItems: 'center',
-                  gap: '0.45rem',
+                  gap: '0.5rem',
                   transition: 'all 0.2s ease',
+                  boxShadow: '0 4px 12px rgba(255, 111, 0, 0.12)'
                 }}
               >
-                <Store size={15} />
-                <span>Sign In / Register as a Store Partner</span>
-                <ArrowRight size={14} />
+                <Store size={16} />
+                <span>Partner Sign In / Register Here</span>
+                <ArrowRight size={15} />
               </button>
             </div>
           ) : (
