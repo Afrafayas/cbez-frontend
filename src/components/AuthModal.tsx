@@ -248,7 +248,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           !regForm.email ||
           !regForm.aadhaarNumber ||
           !regForm.panNumber ||
-          !regForm.subscriptionPlanId ||
           regForm.latitude === undefined ||
           regForm.longitude === undefined
         ) {
@@ -512,22 +511,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
               </>
             ) : (
               <>
-                <div className="form-group">
-                  <label className="form-label">Subscription Plan *</label>
-                  <select 
-                    className="form-select-box" 
-                    required 
-                    value={regForm.subscriptionPlanId} 
-                    onChange={(e) => setRegForm({ ...regForm, subscriptionPlanId: e.target.value })}
-                    style={{ borderColor: '#ff9e40' }}
-                  >
-                    {activePlans.map(plan => (
-                      <option key={plan.id} value={plan.id}>
-                        {plan.name} — Limit: {plan.productLimit} Products ({plan.description})
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                
                 <div className="form-group">
                   <label className="form-label">Shop Business Name *</label>
                   <input type="text" className="form-input-text" required placeholder="e.g. Kochi iStore Mobiles" value={regForm.shopName} onChange={(e) => setRegForm({ ...regForm, shopName: e.target.value })} />

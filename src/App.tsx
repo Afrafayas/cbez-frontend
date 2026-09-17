@@ -3,7 +3,8 @@ import { ManageCategoriesBrandsModal } from './components/ManageCategoriesBrands
 import { AuthModal } from './components/AuthModal';
 import { CompactBrandSelect } from './components/CompactBrandSelect';
 import { Footer } from './components/Footer';
-import { getProducts, getShops, createSellerProduct, sendLead, getFollowedShops, unfollowShop, getShopFollowers, getBrands } from './services/apiService';
+import { getProducts, getShops, createSellerProduct, sendLead, getFollowedShops, unfollowShop, getShopFollowers, getBrands, getUserWishlist, toggleWishlist } from './services/apiService';
+import { WishlistPage } from './pages/WishlistPage';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import React, { ChangeEvent, FormEvent } from 'react';
 import { 
@@ -32,7 +33,8 @@ import {
   Tablet as TabletIcon,
   MessageSquare,
   Tag,
-  Calendar
+  Calendar,
+  Heart
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from './store';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
@@ -300,8 +302,12 @@ export default function App() {
   }, [isAnyModalActive]);
 
   // customer dashboard sub-navigation tab state
-  const [customerTab, setCustomerTab] = React.useState<'inquiries' | 'following' | 'profile'>('inquiries');
+  const [customerTab, setCustomerTab] = React.useState<'inquiries' | 'following' | 'profile' | 'wishlist'>('inquiries');
   const [followedShops, setFollowedShops] = React.useState<Shop[]>([]);
+
+  // Wishlist state
+  const [wishlistProductIds, setWishlistProductIds] = React.useState<string[]>([]);
+  const [wishlistItems, setWishlistItems] = React.useState<Array<Product & { shop?: Shop; wishlistedAt?: string }>>([]);
 
   // customer profile editor form inputs state
   const [custProfileForm, setCustProfileForm] = React.useState({
@@ -335,7 +341,7 @@ export default function App() {
     setCustInquiriesPage(1);
   }, [customerTab]);
 
-  // Sync profile editor fields & load customer dashboard data when logged in
+  // Sync profile editor fields & load customer dashboard data & wishlist when logged in
   React.useEffect(() => {
     if (activeUser) {
       setCustProfileForm({
@@ -354,10 +360,56 @@ export default function App() {
         } catch (err) {
           console.warn('Failed to load followed shops:', err);
         }
+
+        try {
+          const wishData = await getUserWishlist(token);
+          if (wishData && wishData.products) {
+            setWishlistItems(wishData.products);
+            setWishlistProductIds(wishData.products.map((p: any) => p.id));
+          }
+        } catch (err) {
+          console.warn('Failed to load wishlist:', err);
+        }
+      } else {
+        setWishlistItems([]);
+        setWishlistProductIds([]);
       }
     }
     loadCustomerData();
   }, [activeUser, customerTab]);
+
+  const handleToggleWishlist = async (product: Product) => {
+    if (!activeUser) {
+      triggerToast("Please log in to add to your wishlist", "info");
+      dispatch(setAuthRole('customer'));
+      dispatch(setAuthTab('login'));
+      dispatch(setShowAuthModal(true));
+      return;
+    }
+    const token = localStorage.getItem('mlx_token');
+    if (!token) {
+      triggerToast("Please log in to add to your wishlist", "info");
+      dispatch(setAuthRole('customer'));
+      dispatch(setAuthTab('login'));
+      dispatch(setShowAuthModal(true));
+      return;
+    }
+    try {
+      const res = await toggleWishlist(product.id, token);
+      if (res.isWishlisted) {
+        triggerToast(`Added "${product.name}" to wishlist`, "success");
+        setWishlistProductIds(prev => [...prev, product.id]);
+        const shop = shops.find(s => s.id === product.shopId);
+        setWishlistItems(prev => [{ ...product, shop }, ...prev]);
+      } else {
+        triggerToast(`Removed "${product.name}" from wishlist`, "info");
+        setWishlistProductIds(prev => prev.filter(id => id !== product.id));
+        setWishlistItems(prev => prev.filter(p => p.id !== product.id));
+      }
+    } catch (err: any) {
+      triggerToast(err.message || "Failed to update wishlist", "warning");
+    }
+  };
 
   const handleUnfollowShopInDash = async (shopId: string) => {
     const token = localStorage.getItem('mlx_token');
@@ -1102,7 +1154,46 @@ export default function App() {
           </div>
 
           {/* Header Action Buttons for standard Users and Seller Shop Portal */}
-          <div className="header-actions">
+          <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+            {/* Wishlist Header Action */}
+            <button
+              type="button"
+              className={`action-btn ${location.pathname === '/wishlist' ? 'active' : ''}`}
+              onClick={() => {
+                if (activeUser) {
+                  navigate('/wishlist');
+                } else {
+                  triggerToast("Please log in to access your wishlist", "info");
+                  dispatch(setAuthRole('customer'));
+                  dispatch(setAuthTab('login'));
+                  dispatch(setShowAuthModal(true));
+                }
+              }}
+              title="My Wishlist"
+              style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.5rem 0.65rem' }}
+            >
+              <Heart size={18} fill={wishlistProductIds.length > 0 ? '#ef4444' : 'transparent'} color={wishlistProductIds.length > 0 ? '#ef4444' : 'currentColor'} />
+              {wishlistProductIds.length > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: '-5px',
+                  right: '-5px',
+                  backgroundColor: '#ef4444',
+                  color: '#ffffff',
+                  fontSize: '0.65rem',
+                  fontWeight: 800,
+                  width: '18px',
+                  height: '18px',
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                }}>
+                  {wishlistProductIds.length}
+                </span>
+              )}
+            </button>
 
             {activeShop ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1129,17 +1220,19 @@ export default function App() {
                 <button 
                   className={`action-btn sell-btn ${location.pathname === '/customer-dashboard' ? 'active' : ''}`}
                   onClick={() => navigate('/customer-dashboard')}
+                  title="Go to My Dashboard"
                 >
-                  <Layers size={15} />
-                  <span className="nav-btn-text">My Dashboard</span>
-                </button>
-                <span className="user-indicator">
-                  <User size={14} />
-                  <span className="user-badge-text-container">
-                    <span className="user-badge-name">{activeUser.name}</span>
-                    <span className="user-badge-role"> (Buyer)</span>
+                  <User size={15} />
+                  <span className="nav-btn-text">
+                    {activeUser.name && !activeUser.name.includes('@')
+                      ? activeUser.name
+                      : activeUser.name && activeUser.name.includes('@')
+                        ? activeUser.name.split('@')[0].charAt(0).toUpperCase() + activeUser.name.split('@')[0].slice(1)
+                        : activeUser.email
+                          ? activeUser.email.split('@')[0].charAt(0).toUpperCase() + activeUser.email.split('@')[0].slice(1)
+                          : 'My Dashboard'}
                   </span>
-                </span>
+                </button>
                 <button className="action-btn" onClick={() => { dispatch(setActiveUser(null)); triggerToast("Logged out successfully."); navigate('/'); }} title="Logout User">
                   <LogOut size={16} />
                 </button>
@@ -1402,7 +1495,36 @@ export default function App() {
                       className="product-card"
                       onClick={() => dispatch(setSelectedProduct(product))}
                     >
-                      <div className="card-img-wrapper">
+                      <div className="card-img-wrapper" style={{ position: 'relative' }}>
+                        {/* Wishlist Heart Overlay */}
+                        <button
+                          type="button"
+                          title={wishlistProductIds.includes(product.id) ? "Remove from Wishlist" : "Add to Wishlist"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleWishlist(product);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            top: '10px',
+                            right: '10px',
+                            zIndex: 11,
+                            width: '32px',
+                            height: '32px',
+                            borderRadius: '50%',
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            border: '1px solid #e2e8f0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: wishlistProductIds.includes(product.id) ? '#ef4444' : '#64748b',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <Heart size={16} fill={wishlistProductIds.includes(product.id) ? '#ef4444' : 'transparent'} />
+                        </button>
                         {product.images && product.images.length > 0 ? (
                           <img src={product.images[0]} alt={product.name} className="product-card-img" />
                         ) : (
@@ -1663,6 +1785,14 @@ export default function App() {
               </button>
 
               <button 
+                className={`dash-menu-btn ${customerTab === 'wishlist' ? 'active' : ''}`}
+                onClick={() => setCustomerTab('wishlist')}
+              >
+                <Heart size={16} fill={customerTab === 'wishlist' ? '#ef4444' : 'transparent'} color={customerTab === 'wishlist' ? '#ef4444' : 'currentColor'} />
+                <span>My Wishlist ({wishlistProductIds.length})</span>
+              </button>
+
+              <button 
                 className={`dash-menu-btn ${customerTab === 'following' ? 'active' : ''}`}
                 onClick={() => setCustomerTab('following')}
               >
@@ -1690,7 +1820,24 @@ export default function App() {
           </aside>
 
           <section className="dashboard-content">
-            {customerTab === 'inquiries' ? (
+            {customerTab === 'wishlist' ? (
+              <WishlistPage
+                wishlistProducts={wishlistItems}
+                onRemoveWishlist={(productId) => {
+                  const prod = products.find(p => p.id === productId) || wishlistItems.find(p => p.id === productId);
+                  if (prod) handleToggleWishlist(prod);
+                }}
+                onCallSeller={handleCallSeller}
+                onWhatsAppSeller={handleWhatsAppSeller}
+                onSelectProduct={(prod) => dispatch(setSelectedProduct(prod))}
+                activeUser={activeUser}
+                onOpenLogin={() => {
+                  dispatch(setAuthRole('customer'));
+                  dispatch(setAuthTab('login'));
+                  dispatch(setShowAuthModal(true));
+                }}
+              />
+            ) : customerTab === 'inquiries' ? (
               /* Customer Inquiries Log */
               <div className="dashboard-panel">
                 <div className="panel-header">
@@ -2017,6 +2164,25 @@ export default function App() {
             )}
           </section>
         </main>
+      } />
+
+      <Route path="/wishlist" element={
+        <WishlistPage
+          wishlistProducts={wishlistItems}
+          onRemoveWishlist={(productId) => {
+            const prod = products.find(p => p.id === productId) || wishlistItems.find(p => p.id === productId);
+            if (prod) handleToggleWishlist(prod);
+          }}
+          onCallSeller={handleCallSeller}
+          onWhatsAppSeller={handleWhatsAppSeller}
+          onSelectProduct={(prod) => dispatch(setSelectedProduct(prod))}
+          activeUser={activeUser}
+          onOpenLogin={() => {
+            dispatch(setAuthRole('customer'));
+            dispatch(setAuthTab('login'));
+            dispatch(setShowAuthModal(true));
+          }}
+        />
       } />
       
       <Route path="/seller-dashboard" element={
@@ -2702,6 +2868,8 @@ export default function App() {
         onWhatsAppSeller={handleWhatsAppSeller}
         onGetDirections={handleGetDirections}
         onToast={triggerToast}
+        isWishlisted={selectedProduct ? wishlistProductIds.includes(selectedProduct.id) : false}
+        onToggleWishlist={handleToggleWishlist}
       />
 
       {/* --- ADD / EDIT PRODUCT MODAL --- */}

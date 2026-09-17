@@ -490,3 +490,53 @@ export async function reverseGeocodeCoords(lat: number, lng: number): Promise<{
   };
 }
 
+/* Wishlist APIs */
+export async function toggleWishlist(productId: string, token: string) {
+  const res = await fetch(`${API_BASE_URL}/wishlist/toggle/${productId}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to update wishlist');
+  return data;
+}
+
+export async function addToWishlist(productId: string, token: string) {
+  const res = await fetch(`${API_BASE_URL}/wishlist/${productId}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to add to wishlist');
+  return data;
+}
+
+export async function removeFromWishlist(productId: string, token: string) {
+  const res = await fetch(`${API_BASE_URL}/wishlist/${productId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to remove from wishlist');
+  return data;
+}
+
+export async function getUserWishlist(token: string) {
+  const res = await fetch(`${API_BASE_URL}/wishlist`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to fetch wishlist');
+  return data.data ?? { count: 0, items: [], products: [] };
+}
+
+export async function getWishlistIds(token: string): Promise<string[]> {
+  const res = await fetch(`${API_BASE_URL}/wishlist/ids`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) return [];
+  return data.data?.productIds ?? [];
+}
+
+

@@ -302,7 +302,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
               }}
             >
               <div>
-                <strong>Current Plan:</strong> {currentPlan.name} &bull; <strong>Product Limit:</strong> {currentPlan.productLimit} &bull; <strong>Products Used:</strong> {shopProductsCount} &bull; <strong>Remaining Slots:</strong> {remainingSlots}
+                <strong>Current Plan:</strong> {currentPlan.name} (Price: ₹{currentPlan.price ?? 0}) &bull; <strong>Product Limit:</strong> {currentPlan.productLimit} &bull; <strong>Products Used:</strong> {shopProductsCount} &bull; <strong>Remaining Slots:</strong> {remainingSlots}
               </div>
               {isShopPending && (
                 <div style={{ fontWeight: 700, color: '#dc2626' }}>

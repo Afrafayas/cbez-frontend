@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Phone, Smartphone, MapPin, ShieldCheck, UserPlus, UserCheck, Navigation } from 'lucide-react';
+import { X, Phone, Smartphone, MapPin, ShieldCheck, UserPlus, UserCheck, Navigation, Heart } from 'lucide-react';
 import { Product, Shop } from '../types';
 import { useAppDispatch, useAppSelector } from '../store';
 import { setSelectedProduct } from '../store/productsSlice';
@@ -11,6 +11,8 @@ interface ProductDetailModalProps {
   onWhatsAppSeller: (product: Product, seller: Shop) => void;
   onGetDirections?: (seller: Shop) => void;
   onToast?: (msg: string, type?: 'success' | 'info' | 'warning') => void;
+  isWishlisted?: boolean;
+  onToggleWishlist?: (product: Product) => void;
 }
 
 export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
@@ -19,6 +21,8 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   onWhatsAppSeller,
   onGetDirections,
   onToast,
+  isWishlisted = false,
+  onToggleWishlist,
 }) => {
   const dispatch = useAppDispatch();
   const selectedProduct = useAppSelector((state) => state.products.selectedProduct);
@@ -197,12 +201,39 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   Brand: <strong>{selectedProduct.brand}</strong>
                 </span>
               </div>
-              <h2
-                className="detail-title"
-                style={{ fontSize: '1.4rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.3 }}
-              >
-                {selectedProduct.name}
-              </h2>
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.5rem' }}>
+                <h2
+                  className="detail-title"
+                  style={{ fontSize: '1.4rem', fontWeight: 700, color: '#0f172a', lineHeight: 1.3 }}
+                >
+                  {selectedProduct.name}
+                </h2>
+                {onToggleWishlist && (
+                  <button
+                    type="button"
+                    title={isWishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
+                    onClick={() => onToggleWishlist(selectedProduct)}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      padding: '0.45rem 0.8rem',
+                      borderRadius: '20px',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      border: isWishlisted ? '1px solid #fca5a5' : '1px solid #cbd5e1',
+                      backgroundColor: isWishlisted ? '#fef2f2' : '#ffffff',
+                      color: isWishlisted ? '#ef4444' : '#475569',
+                      flexShrink: 0,
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <Heart size={16} fill={isWishlisted ? '#ef4444' : 'transparent'} />
+                    <span>{isWishlisted ? 'Wishlisted' : 'Wishlist'}</span>
+                  </button>
+                )}
+              </div>
             </div>
 
             {/* Pricing & Discount Row */}

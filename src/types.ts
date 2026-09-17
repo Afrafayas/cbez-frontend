@@ -1,4 +1,5 @@
 export interface SubscriptionPlan {
+  price?: number;
   id: string;
   name: string;
   description: string;
@@ -9,6 +10,11 @@ export interface SubscriptionPlan {
 }
 
 export interface Shop {
+  subscription?: {
+    id: string;
+    planId: string;
+    plan?: SubscriptionPlan;
+  };
   id: string;
   name: string;
   ownerName: string;
@@ -100,6 +106,15 @@ export interface Product {
   imeiNumber?: string;
   documents?: string[];
 }
+
+export interface WishlistItem {
+  id: string;
+  userId: string;
+  productId: string;
+  createdAt: string;
+  product: Product & { shop?: Shop };
+}
+
 
 export interface SourcingToast {
   id: number;
