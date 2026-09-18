@@ -11,7 +11,8 @@ import {
   Navigation,
   ChevronRight,
   Store,
-  Sparkles
+  Sparkles,
+  Heart
 } from 'lucide-react';
 import { Product, Shop } from '../types';
 import { useAppDispatch, useAppSelector } from '../store';
@@ -26,6 +27,8 @@ interface ProductDetailPageProps {
   onWhatsAppSeller: (product: Product, seller: Shop) => void;
   onGetDirections?: (seller: Shop) => void;
   onToast?: (msg: string, type?: 'success' | 'info' | 'warning') => void;
+  isWishlisted?: (productId: string) => boolean;
+  onToggleWishlist?: (product: Product) => void;
 }
 
 export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
@@ -34,6 +37,8 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   onWhatsAppSeller,
   onGetDirections,
   onToast,
+  isWishlisted,
+  onToggleWishlist,
 }) => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -346,11 +351,39 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                     Brand: <strong style={{ color: '#0f172a' }}>{product.brand}</strong>
                   </span>
                 </div>
-                <h1
-                  style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.25, margin: 0 }}
-                >
-                  {product.name}
-                </h1>
+                <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: '0.75rem' }}>
+                  <h1
+                    style={{ fontSize: '1.75rem', fontWeight: 800, color: '#0f172a', lineHeight: 1.25, margin: 0 }}
+                  >
+                    {product.name}
+                  </h1>
+                  {onToggleWishlist && (
+                    <button
+                      type="button"
+                      title={isWishlisted && isWishlisted(product.id) ? "Remove from Wishlist" : "Add to Wishlist"}
+                      onClick={() => onToggleWishlist(product)}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        padding: '0.55rem 0.95rem',
+                        borderRadius: '20px',
+                        fontSize: '0.85rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        border: isWishlisted && isWishlisted(product.id) ? '1px solid #fca5a5' : '1px solid #cbd5e1',
+                        backgroundColor: isWishlisted && isWishlisted(product.id) ? '#fef2f2' : '#ffffff',
+                        color: isWishlisted && isWishlisted(product.id) ? '#ef4444' : '#475569',
+                        flexShrink: 0,
+                        transition: 'all 0.2s ease',
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.05)'
+                      }}
+                    >
+                      <Heart size={18} fill={isWishlisted && isWishlisted(product.id) ? '#ef4444' : 'transparent'} />
+                      <span>{isWishlisted && isWishlisted(product.id) ? 'Wishlisted' : 'Wishlist'}</span>
+                    </button>
+                  )}
+                </div>
               </div>
 
               {/* Pricing & Offer Savings Box */}
@@ -718,6 +751,8 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                   seller={getSellerShop(relProd.shopId)}
                   onCallSeller={onCallSeller}
                   onWhatsAppSeller={onWhatsAppSeller}
+                  isWishlisted={isWishlisted ? isWishlisted(relProd.id) : false}
+                  onToggleWishlist={onToggleWishlist}
                 />
               ))}
             </div>

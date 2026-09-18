@@ -1,8 +1,10 @@
 import { ProductDetailPage } from './pages/ProductDetailPage';
+import { WishlistPage } from './pages/WishlistPage';
+import { ProductDetailModal } from './components/ProductDetailModal';
 import { AuthModal } from './components/AuthModal';
 import { CompactBrandSelect } from './components/CompactBrandSelect';
 import { Footer } from './components/Footer';
-import { getProducts, getShops, createSellerProduct, sendLead, getFollowedShops, unfollowShop, getShopFollowers, getBrands, geocodeAddress } from './services/apiService';
+import { getProducts, getShops, createSellerProduct, sendLead, getFollowedShops, unfollowShop, getShopFollowers, getBrands, geocodeAddress, toggleWishlist, getUserWishlist, getWishlistIds } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import React, { ChangeEvent, FormEvent } from 'react';
 import { 
@@ -32,7 +34,8 @@ import {
   MessageSquare,
   Tag,
   Clock,
-  Calendar
+  Calendar,
+  Heart
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from './store';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
@@ -175,6 +178,24 @@ function ToastItem({ toast, onClose }: ToastItemProps) {
   );
 }
 
+const getFormattedUserName = (user: { name?: string; email?: string } | null): string => {
+  if (!user) return '';
+  if (user.name && !user.name.includes('@')) return user.name;
+  const rawEmail = (user.name && user.name.includes('@')) ? user.name : (user.email || '');
+  if (rawEmail.includes('@')) {
+    const username = rawEmail.split('@')[0];
+    const cleaned = username.replace(/[._-]+/g, ' ').trim();
+    if (cleaned) {
+      return cleaned
+        .split(' ')
+        .filter(Boolean)
+        .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+        .join(' ');
+    }
+  }
+  return user.name || 'My Profile';
+};
+
 export default function App() {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -304,8 +325,12 @@ export default function App() {
   }, [isAnyModalActive]);
 
   // customer dashboard sub-navigation tab state
-  const [customerTab, setCustomerTab] = React.useState<'inquiries' | 'following' | 'profile'>('inquiries');
+  const [customerTab, setCustomerTab] = React.useState<'inquiries' | 'following' | 'profile' | 'wishlist'>('inquiries');
   const [followedShops, setFollowedShops] = React.useState<Shop[]>([]);
+
+  // Wishlist states
+  const [wishlistProductIds, setWishlistProductIds] = React.useState<string[]>([]);
+  const [wishlistItems, setWishlistItems] = React.useState<Array<Product & { shop?: Shop; wishlistedAt?: string }>>([]);
 
   // customer profile editor form inputs state
   const [custProfileForm, setCustProfileForm] = React.useState({
@@ -339,7 +364,28 @@ export default function App() {
     setCustInquiriesPage(1);
   }, [customerTab]);
 
-  // Sync profile editor fields & load customer dashboard data when logged in
+  const normalizeWishlistItems = (rawList: any[]): Array<Product & { shop?: Shop; wishlistedAt?: string }> => {
+    if (!Array.isArray(rawList)) return [];
+    return rawList.map((item: any) => {
+      if (item && item.product) {
+        return {
+          ...item.product,
+          shop: item.product.shop || item.shop || shops.find((s: Shop) => s.id === item.product.shopId),
+          wishlistedAt: item.createdAt || item.wishlistedAt,
+          wishlistRecordId: item.id
+        };
+      }
+      if (item && item.id) {
+        return {
+          ...item,
+          shop: item.shop || shops.find((s: Shop) => s.id === item.shopId),
+        };
+      }
+      return item;
+    }).filter(Boolean);
+  };
+
+  // Sync profile editor fields & load customer dashboard data & wishlist when logged in
   React.useEffect(() => {
     if (activeUser) {
       setCustProfileForm({
@@ -358,10 +404,71 @@ export default function App() {
         } catch (err) {
           console.warn('Failed to load followed shops:', err);
         }
+
+        try {
+          const [res, ids] = await Promise.all([
+            getUserWishlist(token),
+            getWishlistIds(token).catch(() => [] as string[])
+          ]);
+          const rawItems = res.items || res.products || [];
+          const normalized = normalizeWishlistItems(rawItems);
+          setWishlistItems(normalized);
+          const computedIds = ids && ids.length > 0 ? ids : normalized.map((i: any) => i.id);
+          setWishlistProductIds(computedIds);
+        } catch (err) {
+          console.warn('Failed to load user wishlist:', err);
+        }
+      } else {
+        setWishlistItems([]);
+        setWishlistProductIds([]);
       }
     }
     loadCustomerData();
   }, [activeUser, customerTab]);
+
+  const handleToggleWishlist = async (product: Product) => {
+    const token = localStorage.getItem('mlx_token');
+    if (!activeUser || !token) {
+      dispatch(setAuthRole('customer'));
+      dispatch(setAuthTab('login'));
+      dispatch(setShowAuthModal(true));
+      triggerToast("Please log in to add to your wishlist", "info");
+      return;
+    }
+
+    const isCurrentlyWishlisted = wishlistProductIds.includes(product.id);
+
+    // Optimistic UI state update
+    if (isCurrentlyWishlisted) {
+      setWishlistProductIds(prev => prev.filter(id => id !== product.id));
+      setWishlistItems(prev => prev.filter(item => item.id !== product.id));
+      triggerToast(`Removed "${product.name}" from wishlist`, "info");
+    } else {
+      setWishlistProductIds(prev => [...prev, product.id]);
+      const shop = getSellerShop(product.shopId);
+      setWishlistItems(prev => [{ ...product, shop, wishlistedAt: new Date().toISOString() }, ...prev]);
+      triggerToast(`Added "${product.name}" to wishlist ❤️`, "success");
+    }
+
+    try {
+      await toggleWishlist(product.id, token);
+      const freshRes = await getUserWishlist(token);
+      const rawItems = freshRes.items || freshRes.products || [];
+      const normalized = normalizeWishlistItems(rawItems);
+      setWishlistItems(normalized);
+      const freshIds = normalized.map((i: any) => i.id);
+      setWishlistProductIds(freshIds);
+    } catch (err: any) {
+      triggerToast(err.message || "Failed to update wishlist", "warning");
+      const freshRes = await getUserWishlist(token).catch(() => null);
+      if (freshRes) {
+        const rawItems = freshRes.items || freshRes.products || [];
+        const normalized = normalizeWishlistItems(rawItems);
+        setWishlistItems(normalized);
+        setWishlistProductIds(normalized.map((i: any) => i.id));
+      }
+    }
+  };
 
   const handleUnfollowShopInDash = async (shopId: string) => {
     const token = localStorage.getItem('mlx_token');
@@ -1194,6 +1301,47 @@ export default function App() {
 
           {/* Header Action Buttons for standard Users and Seller Shop Portal */}
           <div className="header-actions">
+            {/* Wishlist Header Action Button */}
+            <button
+              className={`action-btn ${location.pathname === '/wishlist' ? 'active' : ''}`}
+              onClick={() => {
+                if (!activeUser) {
+                  dispatch(setAuthRole('customer'));
+                  dispatch(setAuthTab('login'));
+                  dispatch(setShowAuthModal(true));
+                  triggerToast("Please log in to access your wishlist", "info");
+                } else {
+                  navigate('/wishlist');
+                }
+              }}
+              title="My Wishlist"
+              style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0.55rem 0.65rem' }}
+            >
+              <Heart size={18} fill={wishlistProductIds.length > 0 ? '#ef4444' : 'transparent'} color={wishlistProductIds.length > 0 ? '#ef4444' : 'currentColor'} />
+              {wishlistProductIds.length > 0 && (
+                <span
+                  style={{
+                    position: 'absolute',
+                    top: '-4px',
+                    right: '-4px',
+                    background: '#ef4444',
+                    color: '#ffffff',
+                    borderRadius: '50%',
+                    minWidth: '18px',
+                    height: '18px',
+                    fontSize: '0.7rem',
+                    fontWeight: 700,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '0 4px',
+                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                  }}
+                >
+                  {wishlistProductIds.length}
+                </span>
+              )}
+            </button>
 
             {activeShop ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1211,7 +1359,16 @@ export default function App() {
                     <span className="user-badge-role"> (Seller)</span>
                   </span>
                 </span>
-                <button className="action-btn" onClick={() => { dispatch(setActiveShop(null)); triggerToast("Seller logged out."); navigate('/'); }} title="Logout Shop">
+                <button 
+                  className="action-btn" 
+                  onClick={() => { 
+                    localStorage.removeItem('mlx_token');
+                    dispatch(setActiveShop(null)); 
+                    triggerToast("Seller logged out."); 
+                    navigate('/'); 
+                  }} 
+                  title="Logout Shop"
+                >
                   <LogOut size={16} />
                 </button>
               </div>
@@ -1220,18 +1377,26 @@ export default function App() {
                 <button 
                   className={`action-btn sell-btn ${location.pathname === '/customer-dashboard' ? 'active' : ''}`}
                   onClick={() => navigate('/customer-dashboard')}
+                  title="My Profile & Dashboard"
+                  style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem', cursor: 'pointer' }}
                 >
-                  <Layers size={15} />
-                  <span className="nav-btn-text">My Dashboard</span>
-                </button>
-                <span className="user-indicator">
-                  <User size={14} />
-                  <span className="user-badge-text-container">
-                    <span className="user-badge-name">{activeUser.name}</span>
-                    <span className="user-badge-role"> (Buyer)</span>
+                  <User size={15} />
+                  <span className="nav-btn-text" style={{ fontWeight: 600 }}>
+                    {getFormattedUserName(activeUser)}
                   </span>
-                </span>
-                <button className="action-btn" onClick={() => { dispatch(setActiveUser(null)); triggerToast("Logged out successfully."); navigate('/'); }} title="Logout User">
+                </button>
+                <button 
+                  className="action-btn" 
+                  onClick={() => { 
+                    localStorage.removeItem('mlx_token');
+                    setWishlistItems([]);
+                    setWishlistProductIds([]);
+                    dispatch(setActiveUser(null)); 
+                    triggerToast("Logged out successfully."); 
+                    navigate('/'); 
+                  }} 
+                  title="Logout User"
+                >
                   <LogOut size={16} />
                 </button>
               </div>
@@ -1503,7 +1668,36 @@ export default function App() {
                         navigate(`/product/${product.id}`);
                       }}
                     >
-                      <div className="card-img-wrapper">
+                      <div className="card-img-wrapper" style={{ position: 'relative' }}>
+                        {/* Wishlist Overlay Button */}
+                        <button
+                          type="button"
+                          title={wishlistProductIds.includes(product.id) ? "Remove from Wishlist" : "Add to Wishlist"}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleToggleWishlist(product);
+                          }}
+                          style={{
+                            position: 'absolute',
+                            top: '12px',
+                            right: '12px',
+                            zIndex: 11,
+                            width: '34px',
+                            height: '34px',
+                            borderRadius: '50%',
+                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                            border: '1px solid #e2e8f0',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            color: wishlistProductIds.includes(product.id) ? '#ef4444' : '#64748b',
+                            cursor: 'pointer',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <Heart size={18} fill={wishlistProductIds.includes(product.id) ? '#ef4444' : 'transparent'} />
+                        </button>
                         {product.images && product.images.length > 0 ? (
                           <img src={product.images[0]} alt={product.name} className="product-card-img" />
                         ) : (
@@ -1770,6 +1964,14 @@ export default function App() {
                 <UserCheck size={16} />
                 <span>Stores I Follow ({followedShops.length})</span>
               </button>
+
+              <button 
+                className={`dash-menu-btn ${customerTab === 'wishlist' ? 'active' : ''}`}
+                onClick={() => setCustomerTab('wishlist')}
+              >
+                <Heart size={16} fill={customerTab === 'wishlist' ? '#ef4444' : 'transparent'} color={customerTab === 'wishlist' ? '#ef4444' : 'currentColor'} />
+                <span>My Wishlist ({wishlistProductIds.length})</span>
+              </button>
               
               <button 
                 className={`dash-menu-btn ${customerTab === 'profile' ? 'active' : ''}`}
@@ -2029,6 +2231,34 @@ export default function App() {
                     </div>
                   )}
                 </div>
+              </div>
+            ) : customerTab === 'wishlist' ? (
+              /* Customer Wishlist Tab */
+              <div className="dashboard-panel">
+                <WishlistPage
+                  wishlistProducts={wishlistItems}
+                  onRemoveWishlist={(id) => {
+                    const prod = products.find(p => p.id === id) || wishlistItems.find(i => i.id === id || (i as any).productId === id || (i as any).wishlistRecordId === id);
+                    const targetProd = (prod as any)?.product || prod;
+                    if (targetProd) {
+                      handleToggleWishlist(targetProd as Product);
+                    } else {
+                      handleToggleWishlist({ id, name: 'Item', price: 0 } as Product);
+                    }
+                  }}
+                  onCallSeller={handleCallSeller}
+                  onWhatsAppSeller={handleWhatsAppSeller}
+                  onSelectProduct={(product) => {
+                    dispatch(setSelectedProduct(product));
+                    navigate(`/product/${product.id}`);
+                  }}
+                  activeUser={activeUser}
+                  onOpenLogin={() => {
+                    dispatch(setAuthRole('customer'));
+                    dispatch(setAuthTab('login'));
+                    dispatch(setShowAuthModal(true));
+                  }}
+                />
               </div>
             ) : (
               /* Customer Profile Edit */
@@ -3237,6 +3467,33 @@ export default function App() {
         </main>
       } />
 
+      <Route path="/wishlist" element={
+        <WishlistPage
+          wishlistProducts={wishlistItems}
+          onRemoveWishlist={(id) => {
+            const prod = products.find(p => p.id === id) || wishlistItems.find(i => i.id === id || (i as any).productId === id || (i as any).wishlistRecordId === id);
+            const targetProd = (prod as any)?.product || prod;
+            if (targetProd) {
+              handleToggleWishlist(targetProd as Product);
+            } else {
+              handleToggleWishlist({ id, name: 'Item', price: 0 } as Product);
+            }
+          }}
+          onCallSeller={handleCallSeller}
+          onWhatsAppSeller={handleWhatsAppSeller}
+          onSelectProduct={(product) => {
+            dispatch(setSelectedProduct(product));
+            navigate(`/product/${product.id}`);
+          }}
+          activeUser={activeUser}
+          onOpenLogin={() => {
+            dispatch(setAuthRole('customer'));
+            dispatch(setAuthTab('login'));
+            dispatch(setShowAuthModal(true));
+          }}
+        />
+      } />
+
       <Route path="/product/:id" element={
         <ProductDetailPage
           getSellerShop={getSellerShop}
@@ -3244,9 +3501,24 @@ export default function App() {
           onWhatsAppSeller={handleWhatsAppSeller}
           onGetDirections={handleGetDirections}
           onToast={triggerToast}
+          isWishlisted={(id) => wishlistProductIds.includes(id)}
+          onToggleWishlist={handleToggleWishlist}
         />
       } />
       </Routes>
+
+      {/* --- PRODUCT DETAIL MODAL --- */}
+      {selectedProduct && (
+        <ProductDetailModal
+          getSellerShop={getSellerShop}
+          onCallSeller={handleCallSeller}
+          onWhatsAppSeller={handleWhatsAppSeller}
+          onGetDirections={handleGetDirections}
+          onToast={triggerToast}
+          isWishlisted={wishlistProductIds.includes(selectedProduct.id)}
+          onToggleWishlist={handleToggleWishlist}
+        />
+      )}
 
       <Footer />
 

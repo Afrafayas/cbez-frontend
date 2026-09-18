@@ -51,6 +51,24 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
     }
   };
 
+  const getFormattedUserName = (user: { name?: string; email?: string } | null): string => {
+    if (!user) return '';
+    if (user.name && !user.name.includes('@')) return user.name;
+    const rawEmail = (user.name && user.name.includes('@')) ? user.name : (user.email || '');
+    if (rawEmail.includes('@')) {
+      const username = rawEmail.split('@')[0];
+      const cleaned = username.replace(/[._-]+/g, ' ').trim();
+      if (cleaned) {
+        return cleaned
+          .split(' ')
+          .filter(Boolean)
+          .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1).toLowerCase())
+          .join(' ');
+      }
+    }
+    return user.name || 'My Profile';
+  };
+
   return (
     <header className="site-header">
       <div className="header-container">
@@ -254,14 +272,8 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
                     title="Go to My Dashboard"
                   >
                     <User size={15} />
-                    <span className="nav-btn-text">
-                      {activeUser.name && !activeUser.name.includes('@')
-                        ? activeUser.name
-                        : activeUser.name && activeUser.name.includes('@')
-                          ? activeUser.name.split('@')[0].charAt(0).toUpperCase() + activeUser.name.split('@')[0].slice(1)
-                          : activeUser.email
-                            ? activeUser.email.split('@')[0].charAt(0).toUpperCase() + activeUser.email.split('@')[0].slice(1)
-                            : 'My Dashboard'}
+                    <span className="nav-btn-text" style={{ fontWeight: 600 }}>
+                      {getFormattedUserName(activeUser)}
                     </span>
                   </button>
                   <button className="action-btn" onClick={() => { dispatch(setActiveUser(null)); onToast("Customer logged out."); navigate('/'); }} title="Sign Out">

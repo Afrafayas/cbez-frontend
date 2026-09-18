@@ -161,17 +161,22 @@ export const WishlistPage: React.FC<WishlistPageProps> = ({
               }
             }
           `}</style>
-          {wishlistProducts.map((product) => {
-            const isSoldOut = product.stock <= 0 || product.isSoldOut;
+          {wishlistProducts.map((rawItem: any, idx) => {
+            const product: Product & { shop?: Shop; wishlistedAt?: string } = rawItem?.product 
+              ? { ...rawItem.product, shop: rawItem.product.shop || rawItem.shop, wishlistedAt: rawItem.createdAt }
+              : rawItem;
+            if (!product) return null;
+            const productId = product.id || rawItem?.productId || rawItem?.id || String(idx);
+            const isSoldOut = (product.stock !== undefined && product.stock <= 0) || Boolean(product.isSoldOut);
             const seller: Shop = product.shop || {
-              id: product.shopId,
+              id: product.shopId || '',
               name: 'Store Partner',
               ownerName: 'Dealer',
               phone: '',
               whatsapp: '',
               address: '',
               city: 'Kochi',
-              category: product.category,
+              category: product.category || 'Smartphones',
               verified: true,
               rating: 4.8,
               joinedDate: '2024-01-01'
@@ -191,7 +196,7 @@ export const WishlistPage: React.FC<WishlistPageProps> = ({
 
             return (
               <div
-                key={product.id}
+                key={productId}
                 className="product-card"
                 onClick={() => onSelectProduct(product)}
                 style={{
@@ -212,7 +217,7 @@ export const WishlistPage: React.FC<WishlistPageProps> = ({
                   title="Remove from Wishlist"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onRemoveWishlist(product.id);
+                    onRemoveWishlist(productId);
                   }}
                   style={{
                     position: 'absolute',
@@ -274,10 +279,10 @@ export const WishlistPage: React.FC<WishlistPageProps> = ({
                 <div className="product-details" style={{ padding: '1rem', display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
                   <div className="product-header" style={{ marginBottom: '0.5rem' }}>
                     <span className="product-category-tag" style={{ fontSize: '0.72rem', color: '#2563eb', fontWeight: 700, textTransform: 'uppercase' }}>
-                      {product.category}
+                      {product.category || 'Gadgets'}
                     </span>
                     <h3 className="product-title" style={{ fontSize: '1rem', fontWeight: 700, color: '#0f172a', marginTop: '0.2rem', lineHeight: 1.3 }}>
-                      {product.name}
+                      {product.name || 'Used Device'}
                     </h3>
                   </div>
 
@@ -289,11 +294,11 @@ export const WishlistPage: React.FC<WishlistPageProps> = ({
 
                   <div className="product-pricing" style={{ marginBottom: '0.75rem', display: 'flex', alignItems: 'baseline', gap: '0.5rem' }}>
                     <span className="product-price" style={{ fontSize: '1.2rem', fontWeight: 800, color: '#0f172a' }}>
-                      ₹{(product.offerPrice || product.price).toLocaleString('en-IN')}
+                      ₹{Number(product.offerPrice != null ? product.offerPrice : (product.price ?? 0)).toLocaleString('en-IN')}
                     </span>
-                    {product.offerPrice && product.offerPrice < product.price && (
+                    {product.offerPrice != null && product.price != null && product.offerPrice < product.price && (
                       <span style={{ fontSize: '0.8rem', color: '#94a3b8', textDecoration: 'line-through' }}>
-                        ₹{product.price.toLocaleString('en-IN')}
+                        ₹{Number(product.price).toLocaleString('en-IN')}
                       </span>
                     )}
                   </div>

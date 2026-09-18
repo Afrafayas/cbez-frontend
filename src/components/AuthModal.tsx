@@ -20,13 +20,8 @@ interface AuthModalProps {
 
 export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const dispatch = useAppDispatch();
-  const { showAuthModal, authTab, authRole, shops, subscriptionPlans } = useAppSelector(state => ({
-    showAuthModal: state.auth.showAuthModal,
-    authTab: state.auth.authTab,
-    authRole: state.auth.authRole,
-    shops: state.products.shops,
-    subscriptionPlans: state.products.subscriptionPlans
-  }));
+  const { showAuthModal, authTab, authRole } = useAppSelector(state => state.auth);
+  const { shops, subscriptionPlans } = useAppSelector(state => state.products);
 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
