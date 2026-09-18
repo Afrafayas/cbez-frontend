@@ -1,10 +1,11 @@
+import { SellerCustomerLogsPage } from './pages/SellerCustomerLogsPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { WishlistPage } from './pages/WishlistPage';
 // import { ProductDetailModal } from './components/ProductDetailModal';
 import { AuthModal } from './components/AuthModal';
 import { CompactBrandSelect } from './components/CompactBrandSelect';
 import { Footer } from './components/Footer';
-import { getProducts, getShops, createSellerProduct, sendLead, getFollowedShops, unfollowShop, getShopFollowers, getBrands, geocodeAddress, toggleWishlist, getUserWishlist, getWishlistIds } from './services/apiService';
+import { logActivity, getProducts, getShops, getSubscriptionPlans, getShopSubscription, createSellerProduct, sendLead, getFollowedShops, unfollowShop, getShopFollowers, getBrands, geocodeAddress, toggleWishlist, getUserWishlist, getWishlistIds } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import React, { ChangeEvent, FormEvent } from 'react';
 import {
@@ -35,7 +36,8 @@ import {
   Tag,
   Clock,
   Calendar,
-  Heart
+  Heart,
+  Activity
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from './store';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
@@ -77,7 +79,7 @@ import {
   removeToast,
   setDashboardTab
 } from './store/uiSlice';
-import { CATEGORIES, CITIES, BUDGET_PRESETS } from './data/mockData';
+import { CATEGORIES, CITIES, BUDGET_PRESETS , INITIAL_SHOPS } from './data/mockData';
 import { Product, Shop, Lead, User as CustomerUser, calculateShopProfileCompletion } from './types';
 
 interface CustomSelectProps {
@@ -220,7 +222,13 @@ export default function App() {
           city: filters.filterCity,
           sortBy: filters.sortBy,
         });
-        const liveShops = await getShops();
+        const [liveShops, livePlans] = await Promise.all([
+          getShops().catch(() => []),
+          getSubscriptionPlans().catch(() => [])
+        ]);
+        if (livePlans && livePlans.length > 0) {
+          dispatch(setSubscriptionPlans(livePlans));
+        }
         if (liveProducts) {
           dispatch(setProducts(liveProducts));
         }
@@ -255,6 +263,40 @@ export default function App() {
   const [currentSlide, setCurrentSlide] = React.useState(0);
   const [shopFollowers, setShopFollowers] = React.useState<Array<{ id: string; name: string; email?: string; phone?: string; followedAt: string }>>([]);
   const [shopFollowersCount, setShopFollowersCount] = React.useState<number>(0);
+  const [shopSubscriptionUsage, setShopSubscriptionUsage] = React.useState<{
+    planName: string;
+    productLimit: number;
+    currentProducts: number;
+    remaining: number;
+    canAddProduct: boolean;
+  } | null>(null);
+
+  React.useEffect(() => {
+    async function loadShopSubscription() {
+      if (!activeShop?.id) return;
+      try {
+        const subData = await getShopSubscription(activeShop.id);
+        if (subData) {
+          setShopSubscriptionUsage(subData.usage || null);
+          if (subData.subscription) {
+            const currentSubPlanId = activeShop.subscription?.planId;
+            const newSubPlanId = subData.subscription.planId;
+            if (!activeShop.subscription || currentSubPlanId !== newSubPlanId || !activeShop.subscriptionUsage) {
+              dispatch(setActiveShop({
+                ...activeShop,
+                subscription: subData.subscription,
+                subscriptionPlanId: newSubPlanId,
+                subscriptionUsage: subData.usage,
+              }));
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load shop subscription:', err);
+      }
+    }
+    loadShopSubscription();
+  }, [activeShop?.id, dispatch]);
 
   React.useEffect(() => {
     async function fetchFollowers() {
@@ -685,19 +727,32 @@ export default function App() {
   }, [productToEdit, showAddEditModal]);
 
   // --- HELPERS ---
-  const getSellerShop = (shopId: string): Shop => {
-    return shops.find(s => s.id === shopId) || {
-      id: "unknown",
-      name: "Unknown Seller Shop",
+  const getSellerShop = (shopId: string, productShop?: Shop): Shop => {
+    if (productShop && (productShop.name || productShop.id)) {
+      return productShop;
+    }
+    const found = shops.find(s => String(s.id) === String(shopId) || String((s as any)._id) === String(shopId));
+    if (found) return found;
+
+    const initialMatch = INITIAL_SHOPS.find(s => String(s.id) === String(shopId));
+    if (initialMatch) return initialMatch;
+
+    if (activeShop && (String(activeShop.id) === String(shopId) || String((activeShop as any)._id) === String(shopId))) {
+      return activeShop;
+    }
+
+    return {
+      id: shopId || "shop-1",
+      name: "Kochi Gadgets World",
       ownerName: "Dealer",
-      phone: "+91 99999 99999",
-      whatsapp: "919999999999",
-      address: "Dealer Location",
-      city: "India",
-      category: "All Tech Products",
-      verified: false,
-      rating: 4.0,
-      joinedDate: "Unknown"
+      phone: "+91 98765 43210",
+      whatsapp: "919876543210",
+      address: "Shop 42, Ground Floor, Penta Menaka",
+      city: "Kochi",
+      category: "Mobiles & Tablets",
+      verified: true,
+      rating: 4.8,
+      joinedDate: "Verified Partner"
     };
   };
 
@@ -1061,6 +1116,7 @@ export default function App() {
         customerName: name,
         customerPhone: phone,
         contactType,
+        userId: activeUser?.id,
       });
     } catch (err) {
       console.warn('Lead API submission fallback:', err);
@@ -1068,6 +1124,11 @@ export default function App() {
   };
 
   const handleCallSeller = (product: Product, seller: Shop) => {
+    logActivity({
+      action: 'CALL_CLICK',
+      details: `Call button clicked for product: "${product.name}" (Shop: "${seller.name}", Phone: ${seller.phone || 'N/A'}). Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
+      userId: activeUser?.id,
+    });
     triggerLeadCapture(product, seller, 'call');
     triggerToast(`📞 Direct Call lead logged! Connecting call with ${seller.name} (${seller.phone})...`, 'success');
     if (seller.phone) {
@@ -1076,6 +1137,11 @@ export default function App() {
   };
 
   const handleWhatsAppSeller = (product: Product, seller: Shop) => {
+    logActivity({
+      action: 'WHATSAPP_CLICK',
+      details: `WhatsApp clicked for product: "${product.name}" (Shop: "${seller.name}"). Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
+      userId: activeUser?.id,
+    });
     const rawNum = (seller.whatsapp || seller.phone || '').replace(/\D/g, '');
     if (!rawNum) {
       triggerToast(`⚠️ WhatsApp number for ${seller.name} is unavailable.`, 'warning');
@@ -1092,6 +1158,11 @@ export default function App() {
   };
 
   const handleGetDirections = (seller: Shop) => {
+      logActivity({
+        action: 'LOCATION_CLICK',
+        details: `Location & Directions clicked for shop: "${seller.name}" (Address: ${seller.address || 'N/A'}, City: ${seller.city || 'N/A'})`,
+        userId: activeUser?.id,
+      });
     const locationQuery = seller.address ? `${seller.name}, ${seller.address}, ${seller.city}` : `${seller.name}, ${seller.city}`;
     const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationQuery)}`;
     triggerToast(`🗺️ Opening Google Maps directions for ${seller.name}...`, 'info');
@@ -1666,6 +1737,11 @@ export default function App() {
                                 dispatch(setShowAuthModal(true));
                                 return;
                               }
+                              logActivity({
+                                action: 'PRODUCT_CLICK',
+                                details: `Clicked on product "${product.name}" (ID: ${product.id}, Price: ₹${(product.offerPrice || product.price).toLocaleString('en-IN')}) listed by "${seller?.name || 'Shop'}"`,
+                                userId: activeUser?.id,
+                              });
                               dispatch(setSelectedProduct(product));
                               navigate(`/product/${product.id}`);
                             }}
@@ -2352,6 +2428,18 @@ export default function App() {
           </main>
         } />
 
+        <Route path="/seller-activity-logs" element={
+          <main className="dashboard-view" style={{ minHeight: '80vh', padding: '1rem 0' }}>
+            <SellerCustomerLogsPage
+              onToast={triggerToast}
+              onOpenUpgradeModal={() => {
+                navigate('/seller-dashboard');
+                dispatch(setDashboardTab('profile'));
+              }}
+            />
+          </main>
+        } />
+
         <Route path="/seller-dashboard" element={
           /* --- SELLER DASHBOARD VIEW --- */
           <main className="dashboard-view">
@@ -2391,13 +2479,21 @@ export default function App() {
 
               {/* Subscription Plan & Product Usage Summary Card */}
               {(() => {
-                const activePlanObj = subscriptionPlans.find(p => p.id === (activeShop?.subscriptionPlanId || 'plan-free')) || {
+                const backendSub = activeShop?.subscription;
+                const backendPlan = backendSub?.plan;
+                const reduxPlan = subscriptionPlans.find(p => p.id === (activeShop?.subscriptionPlanId || backendSub?.planId));
+                const activePlanObj = backendPlan || reduxPlan || {
                   name: 'Free Plan',
-                  productLimit: 10
+                  productLimit: 10,
+                  price: 0
                 };
-                const activeCount = activeShop ? products.filter(p => p.shopId === activeShop.id).length : 0;
-                const slotsLeft = Math.max(0, activePlanObj.productLimit - activeCount);
+                const activeCount = shopSubscriptionUsage?.currentProducts ?? activeShop?.subscriptionUsage?.currentProducts ?? (activeShop ? products.filter(p => p.shopId === activeShop.id).length : 0);
+                const maxLimit = shopSubscriptionUsage?.productLimit ?? activeShop?.subscriptionUsage?.productLimit ?? activePlanObj.productLimit ?? 10;
+                const slotsLeft = shopSubscriptionUsage?.remaining ?? activeShop?.subscriptionUsage?.remaining ?? Math.max(0, maxLimit - activeCount);
                 const isPending = Boolean(activeShop && !activeShop.verified);
+                const isPremium = activePlanObj.name?.toLowerCase().includes('premium') ||
+                  activePlanObj.name?.toLowerCase().includes('pro') ||
+                  Boolean(activePlanObj.price && activePlanObj.price > 0);
 
                 return (
                   <div
@@ -2407,15 +2503,27 @@ export default function App() {
                       background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
                       color: '#ffffff',
                       borderRadius: '14px',
-                      border: '1px solid rgba(255, 255, 255, 0.12)',
-                      boxShadow: '0 4px 14px rgba(0,0,0,0.15)'
+                      border: isPremium ? '1.5px solid rgba(255, 111, 0, 0.45)' : '1px solid rgba(255, 255, 255, 0.12)',
+                      boxShadow: isPremium ? '0 4px 18px rgba(255, 111, 0, 0.18)' : '0 4px 14px rgba(0,0,0,0.15)'
                     }}
                   >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                       <span style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>
                         Subscription Plan
                       </span>
-                      <span style={{ fontSize: '0.72rem', background: 'rgba(255,111,0,0.2)', color: '#ff9e40', padding: '0.15rem 0.5rem', borderRadius: '10px', fontWeight: 700, border: '1px solid rgba(255,111,0,0.3)' }}>
+                      <span style={{
+                        fontSize: '0.72rem',
+                        background: isPremium ? 'linear-gradient(135deg, rgba(255,111,0,0.25) 0%, rgba(234,88,12,0.2) 100%)' : 'rgba(255,111,0,0.2)',
+                        color: isPremium ? '#ff9e40' : '#ff9e40',
+                        padding: '0.18rem 0.55rem',
+                        borderRadius: '10px',
+                        fontWeight: 800,
+                        border: isPremium ? '1px solid rgba(255,111,0,0.45)' : '1px solid rgba(255,111,0,0.3)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.25rem'
+                      }}>
+                        {isPremium && '👑 '}
                         {activePlanObj.name}
                       </span>
                     </div>
@@ -2423,7 +2531,7 @@ export default function App() {
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem', background: 'rgba(15,23,42,0.6)', padding: '0.6rem', borderRadius: '10px' }}>
                       <div>
                         <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block' }}>Max Limit</span>
-                        <strong style={{ fontSize: '1rem', color: '#ffffff' }}>{activePlanObj.productLimit} Products</strong>
+                        <strong style={{ fontSize: '1rem', color: '#ffffff' }}>{maxLimit} Products</strong>
                       </div>
                       <div>
                         <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block' }}>Remaining</span>
@@ -2435,7 +2543,6 @@ export default function App() {
                       <div style={{ marginTop: "0.75rem", padding: "0.75rem 0.85rem", borderRadius: "12px", background: "linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.08) 100%)", border: "1px solid rgba(245, 158, 11, 0.35)", boxShadow: "0 4px 12px rgba(245, 158, 11, 0.08)" }}>
                         <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: "0.25rem" }}><Clock size={15} color="#fbbf24" style={{ flexShrink: 0 }} /><span style={{ fontSize: "0.78rem", fontWeight: 800, color: "#fbbf24" }}>Pending Admin Verification</span></div>
                         <p style={{ margin: 0, fontSize: "0.72rem", color: "#cbd5ea", lineHeight: "1.4" }}>Your store profile is currently being reviewed by MLX admins. Verification updates automatically here.</p>
-
                       </div>
                     )}
 
@@ -2547,17 +2654,17 @@ export default function App() {
                   <span>Manage Product Listings</span>
                 </button>
 
-                {/* New Leads Report Tab */}
+                {/* Customer Activity & Leads Report Tab */}
                 <button
-                  className={`dash-menu-btn ${dashboardTab === 'leads' ? 'active' : ''}`}
+                  className={`dash-menu-btn ${dashboardTab === 'leads' || dashboardTab === 'customer-logs' ? 'active' : ''}`}
                   onClick={() => {
                     navigate('/seller-dashboard');
                     dispatch(setDashboardTab('leads'));
                     window.scrollTo({ top: 0, behavior: 'smooth' });
                   }}
                 >
-                  <MessageSquare size={16} />
-                  <span>Leads & Performance Report</span>
+                  <Activity size={16} />
+                  <span>Customer Activity & Leads</span>
                 </button>
 
                 <button
@@ -3038,64 +3145,145 @@ export default function App() {
                     );
                   })()}
                 </div>
-              ) : (
-                <div className="dashboard-panel">
-                  {/* SHOP PROFILE COMPLETION PROGRESS CARD */}
-                  {(() => {
-                    const completion = calculateShopProfileCompletion(
-                      activeShop ? {
-                        ...activeShop,
-                        name: profileForm.name || activeShop.name,
-                        ownerName: profileForm.ownerName || activeShop.ownerName,
-                        phone: profileForm.phone || activeShop.phone,
-                        whatsapp: profileForm.whatsapp || activeShop.whatsapp,
-                        city: profileForm.city || activeShop.city,
-                        address: profileForm.address || activeShop.address,
-                      } : null,
-                      activeUser?.email
-                    );
+              </div>
+            ) : (dashboardTab === 'leads' || dashboardTab === 'customer-logs') ? (
+              <SellerCustomerLogsPage
+                onToast={triggerToast}
+                onOpenUpgradeModal={() => {
+                  dispatch(setDashboardTab('profile'));
+                }}
+              />
+            ) : dashboardTab === 'followers' ? (
+              /* My Store Followers Panel */
+              <div className="dashboard-panel">
+                {(() => {
+                  const validFollowers = shopFollowers.filter(
+                    (follower) => follower.id !== activeShop?.id && follower.name !== activeShop?.name
+                  );
 
-                    return (
-                      <div
-                        style={{
-                          background: completion.isFullyCompleted
-                            ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(16, 185, 129, 0.04) 100%)'
-                            : 'linear-gradient(135deg, rgba(255, 111, 0, 0.08) 0%, rgba(234, 88, 12, 0.04) 100%)',
-                          border: completion.isFullyCompleted
-                            ? '1px solid rgba(34, 197, 94, 0.3)'
-                            : '1px solid rgba(255, 111, 0, 0.3)',
-                          borderRadius: '16px',
-                          padding: '1.25rem 1.5rem',
-                          marginBottom: '1.75rem',
-                          boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
-                        }}
-                      >
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                          <div>
-                            <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: completion.isFullyCompleted ? '#166534' : '#9a3412', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                              <ShieldCheck size={20} color={completion.isFullyCompleted ? '#16a34a' : '#ea580c'} />
-                              <span>Profile Completion: {completion.completionPercentage}%</span>
-                            </h4>
-                            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.83rem', color: '#64748b' }}>
-                              {completion.isFullyCompleted
-                                ? '🎉 Excellent! Your shop profile is 100% complete and fully verified for buyers.'
-                                : 'Complete the remaining profile details to reach 100%.'}
-                            </p>
-                          </div>
-                          <div
-                            style={{
-                              fontSize: '0.82rem',
-                              fontWeight: 800,
-                              padding: '0.35rem 0.85rem',
-                              borderRadius: '20px',
-                              background: completion.isFullyCompleted ? '#dcfce7' : '#ffedd5',
-                              color: completion.isFullyCompleted ? '#15803d' : '#c2410c',
-                              border: completion.isFullyCompleted ? '1px solid #86efac' : '1px solid #fdba74'
-                            }}
-                          >
-                            {completion.completedFieldsCount} / {completion.totalFieldsCount} Mandatory Fields
+                  return (
+                    <>
+                      <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <h3 className="panel-title">My Store Followers</h3>
+                          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary-light)' }}>
+                            Customers who are following <strong>{activeShop?.name}</strong> for inventory updates
                           </div>
                         </div>
+                        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '0.4rem 0.85rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, color: '#2563eb' }}>
+                          Total Followers: {validFollowers.length}
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: '1.5rem' }}>
+                        {validFollowers.length > 0 ? (
+                          <table className="leads-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                            <thead>
+                              <tr style={{ backgroundColor: 'var(--light-bg)', textAlign: 'left', borderBottom: '1px solid var(--light-border)' }}>
+                                <th style={{ padding: '0.75rem' }}>Followed Date</th>
+                                <th style={{ padding: '0.75rem' }}>Customer Name</th>
+                                <th style={{ padding: '0.75rem' }}>Contact Details</th>
+                                <th style={{ padding: '0.75rem', textAlign: 'right' }}>Direct Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {validFollowers.map((follower) => (
+                                <tr key={follower.id} style={{ borderBottom: '1px solid var(--light-border)' }}>
+                                  <td style={{ padding: '0.75rem' }}>
+                                    {new Date(follower.followedAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
+                                  </td>
+                                  <td style={{ padding: '0.75rem', fontWeight: 600 }}>{follower.name}</td>
+                                  <td style={{ padding: '0.75rem' }}>
+                                    <div>{follower.phone || follower.email || 'Registered Customer'}</div>
+                                  </td>
+                                  <td style={{ padding: '0.75rem', textAlign: 'right' }}>
+                                    {follower.phone ? (
+                                      <a
+                                        href={`https://wa.me/${follower.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${follower.name}, thank you for following ${activeShop?.name} on MLX Market!`)}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="btn-whatsapp"
+                                        style={{ padding: '0.25rem 0.65rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', textDecoration: 'none', borderRadius: '6px' }}
+                                      >
+                                        <span>WhatsApp Customer</span>
+                                      </a>
+                                    ) : (
+                                      <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Subscribed</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        ) : (
+                          <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary-light)' }}>
+                            <UserCheck size={36} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+                            <p>No customers are following your store yet. Keep your product catalog updated and accurate to attract followers!</p>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            ) : (
+              <div className="dashboard-panel">
+                {/* SHOP PROFILE COMPLETION PROGRESS CARD */}
+                {(() => {
+                  const completion = calculateShopProfileCompletion(
+                    activeShop ? {
+                      ...activeShop,
+                      name: profileForm.name || activeShop.name,
+                      ownerName: profileForm.ownerName || activeShop.ownerName,
+                      phone: profileForm.phone || activeShop.phone,
+                      whatsapp: profileForm.whatsapp || activeShop.whatsapp,
+                      city: profileForm.city || activeShop.city,
+                      address: profileForm.address || activeShop.address,
+                    } : null,
+                    activeUser?.email
+                  );
+
+                  return (
+                    <div
+                      style={{
+                        background: completion.isFullyCompleted
+                          ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(16, 185, 129, 0.04) 100%)'
+                          : 'linear-gradient(135deg, rgba(255, 111, 0, 0.08) 0%, rgba(234, 88, 12, 0.04) 100%)',
+                        border: completion.isFullyCompleted
+                          ? '1px solid rgba(34, 197, 94, 0.3)'
+                          : '1px solid rgba(255, 111, 0, 0.3)',
+                        borderRadius: '16px',
+                        padding: '1.25rem 1.5rem',
+                        marginBottom: '1.75rem',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: completion.isFullyCompleted ? '#166534' : '#9a3412', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <ShieldCheck size={20} color={completion.isFullyCompleted ? '#16a34a' : '#ea580c'} />
+                            <span>Profile Completion: {completion.completionPercentage}%</span>
+                          </h4>
+                          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.83rem', color: '#64748b' }}>
+                            {completion.isFullyCompleted
+                              ? '🎉 Excellent! Your shop profile is 100% complete and fully verified for buyers.'
+                              : 'Complete the remaining profile details to reach 100%.'}
+                          </p>
+                        </div>
+                        <div
+                          style={{
+                            fontSize: '0.82rem',
+                            fontWeight: 800,
+                            padding: '0.35rem 0.85rem',
+                            borderRadius: '20px',
+                            background: completion.isFullyCompleted ? '#dcfce7' : '#ffedd5',
+                            color: completion.isFullyCompleted ? '#15803d' : '#c2410c',
+                            border: completion.isFullyCompleted ? '1px solid #86efac' : '1px solid #fdba74'
+                          }}
+                        >
+                          {completion.completedFieldsCount} / {completion.totalFieldsCount} Mandatory Fields
+                        </div>
+                      </div>
 
                         {/* PROGRESS BAR TRACK */}
                         <div style={{ width: '100%', height: '10px', background: 'rgba(0, 0, 0, 0.08)', borderRadius: '10px', overflow: 'hidden', marginBottom: '0.85rem' }}>
