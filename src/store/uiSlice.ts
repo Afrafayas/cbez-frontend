@@ -4,7 +4,7 @@ import { SourcingToast } from '../types';
 interface UiState {
   toasts: SourcingToast[];
   activeView: 'marketplace' | 'seller-dashboard' | 'customer-dashboard';
-  dashboardTab: 'listings' | 'profile' | 'leads' | 'followers';
+  dashboardTab: 'listings' | 'profile' | 'leads' | 'followers' | 'customer-logs';
 }
 
 const initialState: UiState = {
@@ -31,7 +31,7 @@ const uiSlice = createSlice({
     setActiveView(state, action: PayloadAction<'marketplace' | 'seller-dashboard' | 'customer-dashboard'>) {
       state.activeView = action.payload;
     },
-    setDashboardTab(state, action: PayloadAction<'listings' | 'profile' | 'leads' | 'followers'>) {
+    setDashboardTab(state, action: PayloadAction<'listings' | 'profile' | 'leads' | 'followers' | 'customer-logs'>) {
       state.dashboardTab = action.payload;
     },
   },

@@ -113,7 +113,10 @@ const productsSlice = createSlice({
       state.items = action.payload;
     },
     setShops(state, action: PayloadAction<Shop[]>) {
-      state.shops = action.payload;
+      const shopMap = new Map<string, Shop>();
+      INITIAL_SHOPS.forEach(s => shopMap.set(String(s.id), s));
+      (action.payload || []).forEach(s => shopMap.set(String(s.id), s));
+      state.shops = Array.from(shopMap.values());
     },
     setLeads(state, action: PayloadAction<Lead[]>) {
       state.leads = action.payload;

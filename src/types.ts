@@ -36,6 +36,13 @@ export interface Shop {
   rating: number;
   joinedDate: string;
   subscriptionPlanId?: string;
+  subscriptionUsage?: {
+    planName: string;
+    productLimit: number;
+    currentProducts: number;
+    remaining: number;
+    isLimitReached: boolean;
+  };
   district?: string;
   country?: string;
   aadhaarNumber?: string;
@@ -84,7 +91,7 @@ export function calculateShopProfileCompletion(shop?: Partial<Shop> | null, owne
     { key: 'email', label: 'Email Address', isCompleted: Boolean(emailVal && emailVal.trim()) },
     { key: 'aadhaarNumber', label: 'Aadhaar Number', isCompleted: Boolean(shop.aadhaarNumber && shop.aadhaarNumber.trim()) },
     { key: 'panNumber', label: 'PAN Number', isCompleted: Boolean(shop.panNumber && shop.panNumber.trim()) },
-    { key: 'subscriptionPlanId', label: 'Subscription Plan', isCompleted: Boolean(shop.subscriptionPlanId && shop.subscriptionPlanId.trim()) },
+    { key: 'subscriptionPlanId', label: 'Subscription Plan', isCompleted: Boolean((shop.subscriptionPlanId && shop.subscriptionPlanId.trim()) || shop.subscription?.planId || shop.subscription?.plan || (shop.subscriptionUsage && shop.subscriptionUsage.planName && shop.subscriptionUsage.planName !== 'None')) },
     { key: 'latitude', label: 'Latitude', isCompleted: shop.latitude !== null && shop.latitude !== undefined && !isNaN(Number(shop.latitude)) },
     { key: 'longitude', label: 'Longitude', isCompleted: shop.longitude !== null && shop.longitude !== undefined && !isNaN(Number(shop.longitude)) },
   ];
@@ -252,4 +259,52 @@ export interface ReduxState {
     activeView: 'marketplace' | 'seller-dashboard' | 'customer-dashboard';
     dashboardTab: 'listings' | 'profile' | 'leads';
   };
+}
+
+export interface SellerCustomerLog {
+  id: string;
+  action: 'WHATSAPP_CLICK' | 'CALL_CLICK' | 'LOCATION_CLICK' | 'DIRECTIONS_CLICK' | 'WISHLIST' | 'PRODUCT_CLICK';
+  createdAt: string;
+  details: string;
+  ipAddress?: string | null;
+  userAgent?: string | null;
+  isLocked: boolean;
+  requiresPremium: boolean;
+  customer: {
+    id?: string | null;
+    name: string;
+    email?: string | null;
+    phone?: string | null;
+    isMasked?: boolean;
+  };
+  product: {
+    id: string;
+    name: string;
+    price: number;
+    category?: string;
+    brand?: string;
+    image?: string | null;
+  };
+}
+
+export interface SellerCustomerLogsResponse {
+  shop: {
+    id: string;
+    name: string;
+    ownerName: string;
+    city: string;
+  };
+  subscription: {
+    planName: string;
+    isPremium: boolean;
+  };
+  stats: {
+    total: number;
+    whatsappCount: number;
+    callCount: number;
+    locationCount: number;
+    wishlistCount: number;
+    productClicksCount: number;
+  };
+  logs: SellerCustomerLog[];
 }

@@ -1,10 +1,11 @@
+import { SellerCustomerLogsPage } from './pages/SellerCustomerLogsPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { WishlistPage } from './pages/WishlistPage';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { AuthModal } from './components/AuthModal';
 import { CompactBrandSelect } from './components/CompactBrandSelect';
 import { Footer } from './components/Footer';
-import { getProducts, getShops, createSellerProduct, sendLead, getFollowedShops, unfollowShop, getShopFollowers, getBrands, geocodeAddress, toggleWishlist, getUserWishlist, getWishlistIds } from './services/apiService';
+import { logActivity, getProducts, getShops, getSubscriptionPlans, getShopSubscription, createSellerProduct, sendLead, getFollowedShops, unfollowShop, getShopFollowers, getBrands, geocodeAddress, toggleWishlist, getUserWishlist, getWishlistIds } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import React, { ChangeEvent, FormEvent } from 'react';
 import { 
@@ -35,7 +36,8 @@ import {
   Tag,
   Clock,
   Calendar,
-  Heart
+  Heart,
+  Activity
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from './store';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
@@ -77,7 +79,7 @@ import {
   removeToast, 
   setDashboardTab 
 } from './store/uiSlice';
-import { CATEGORIES, CITIES, BUDGET_PRESETS } from './data/mockData';
+import { CATEGORIES, CITIES, BUDGET_PRESETS , INITIAL_SHOPS } from './data/mockData';
 import { Product, Shop, Lead, User as CustomerUser, calculateShopProfileCompletion } from './types';
 
 interface CustomSelectProps {
@@ -220,7 +222,13 @@ export default function App() {
           city: filters.filterCity,
           sortBy: filters.sortBy,
         });
-        const liveShops = await getShops();
+        const [liveShops, livePlans] = await Promise.all([
+          getShops().catch(() => []),
+          getSubscriptionPlans().catch(() => [])
+        ]);
+        if (livePlans && livePlans.length > 0) {
+          dispatch(setSubscriptionPlans(livePlans));
+        }
         if (liveProducts) {
           dispatch(setProducts(liveProducts));
         }
@@ -255,6 +263,40 @@ export default function App() {
   const [currentSlide, setCurrentSlide] = React.useState(0);
   const [shopFollowers, setShopFollowers] = React.useState<Array<{ id: string; name: string; email?: string; phone?: string; followedAt: string }>>([]);
   const [shopFollowersCount, setShopFollowersCount] = React.useState<number>(0);
+  const [shopSubscriptionUsage, setShopSubscriptionUsage] = React.useState<{
+    planName: string;
+    productLimit: number;
+    currentProducts: number;
+    remaining: number;
+    canAddProduct: boolean;
+  } | null>(null);
+
+  React.useEffect(() => {
+    async function loadShopSubscription() {
+      if (!activeShop?.id) return;
+      try {
+        const subData = await getShopSubscription(activeShop.id);
+        if (subData) {
+          setShopSubscriptionUsage(subData.usage || null);
+          if (subData.subscription) {
+            const currentSubPlanId = activeShop.subscription?.planId;
+            const newSubPlanId = subData.subscription.planId;
+            if (!activeShop.subscription || currentSubPlanId !== newSubPlanId || !activeShop.subscriptionUsage) {
+              dispatch(setActiveShop({
+                ...activeShop,
+                subscription: subData.subscription,
+                subscriptionPlanId: newSubPlanId,
+                subscriptionUsage: subData.usage,
+              }));
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Failed to load shop subscription:', err);
+      }
+    }
+    loadShopSubscription();
+  }, [activeShop?.id, dispatch]);
 
   React.useEffect(() => {
     async function fetchFollowers() {
@@ -685,19 +727,32 @@ export default function App() {
   }, [productToEdit, showAddEditModal]);
 
   // --- HELPERS ---
-  const getSellerShop = (shopId: string): Shop => {
-    return shops.find(s => s.id === shopId) || {
-      id: "unknown",
-      name: "Unknown Seller Shop",
+  const getSellerShop = (shopId: string, productShop?: Shop): Shop => {
+    if (productShop && (productShop.name || productShop.id)) {
+      return productShop;
+    }
+    const found = shops.find(s => String(s.id) === String(shopId) || String((s as any)._id) === String(shopId));
+    if (found) return found;
+
+    const initialMatch = INITIAL_SHOPS.find(s => String(s.id) === String(shopId));
+    if (initialMatch) return initialMatch;
+
+    if (activeShop && (String(activeShop.id) === String(shopId) || String((activeShop as any)._id) === String(shopId))) {
+      return activeShop;
+    }
+
+    return {
+      id: shopId || "shop-1",
+      name: "Kochi Gadgets World",
       ownerName: "Dealer",
-      phone: "+91 99999 99999",
-      whatsapp: "919999999999",
-      address: "Dealer Location",
-      city: "India",
-      category: "All Tech Products",
-      verified: false,
-      rating: 4.0,
-      joinedDate: "Unknown"
+      phone: "+91 98765 43210",
+      whatsapp: "919876543210",
+      address: "Shop 42, Ground Floor, Penta Menaka",
+      city: "Kochi",
+      category: "Mobiles & Tablets",
+      verified: true,
+      rating: 4.8,
+      joinedDate: "Verified Partner"
     };
   };
 
@@ -1061,6 +1116,7 @@ export default function App() {
         customerName: name,
         customerPhone: phone,
         contactType,
+        userId: activeUser?.id,
       });
     } catch (err) {
       console.warn('Lead API submission fallback:', err);
@@ -1068,6 +1124,11 @@ export default function App() {
   };
 
   const handleCallSeller = (product: Product, seller: Shop) => {
+    logActivity({
+      action: 'CALL_CLICK',
+      details: `Call button clicked for product: "${product.name}" (Shop: "${seller.name}", Phone: ${seller.phone || 'N/A'}). Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
+      userId: activeUser?.id,
+    });
     triggerLeadCapture(product, seller, 'call');
     triggerToast(`📞 Direct Call lead logged! Connecting call with ${seller.name} (${seller.phone})...`, 'success');
     if (seller.phone) {
@@ -1076,6 +1137,11 @@ export default function App() {
   };
 
   const handleWhatsAppSeller = (product: Product, seller: Shop) => {
+    logActivity({
+      action: 'WHATSAPP_CLICK',
+      details: `WhatsApp clicked for product: "${product.name}" (Shop: "${seller.name}"). Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
+      userId: activeUser?.id,
+    });
     const rawNum = (seller.whatsapp || seller.phone || '').replace(/\D/g, '');
     if (!rawNum) {
       triggerToast(`⚠️ WhatsApp number for ${seller.name} is unavailable.`, 'warning');
@@ -1092,6 +1158,11 @@ export default function App() {
   };
 
   const handleGetDirections = (seller: Shop) => {
+      logActivity({
+        action: 'LOCATION_CLICK',
+        details: `Location & Directions clicked for shop: "${seller.name}" (Address: ${seller.address || 'N/A'}, City: ${seller.city || 'N/A'})`,
+        userId: activeUser?.id,
+      });
     const locationQuery = seller.address ? `${seller.name}, ${seller.address}, ${seller.city}` : `${seller.name}, ${seller.city}`;
     const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationQuery)}`;
     triggerToast(`🗺️ Opening Google Maps directions for ${seller.name}...`, 'info');
@@ -1664,6 +1735,11 @@ export default function App() {
                           dispatch(setShowAuthModal(true));
                           return;
                         }
+                        logActivity({
+                          action: 'PRODUCT_CLICK',
+                          details: `Clicked on product "${product.name}" (ID: ${product.id}, Price: ₹${(product.offerPrice || product.price).toLocaleString('en-IN')}) listed by "${seller?.name || 'Shop'}"`,
+                          userId: activeUser?.id,
+                        });
                         dispatch(setSelectedProduct(product));
                         navigate(`/product/${product.id}`);
                       }}
@@ -2350,7 +2426,18 @@ export default function App() {
         </main>
       } />
       
-      <Route path="/seller-dashboard" element={
+      <Route path="/seller-activity-logs" element={
+          <main className="dashboard-view" style={{ minHeight: '80vh', padding: '1rem 0' }}>
+            <SellerCustomerLogsPage
+              onToast={triggerToast}
+              onOpenUpgradeModal={() => {
+                navigate('/seller-dashboard');
+                dispatch(setDashboardTab('profile'));
+              }}
+            />
+          </main>
+        } />
+        <Route path="/seller-dashboard" element={
         /* --- SELLER DASHBOARD VIEW --- */
         <main className="dashboard-view">
           <aside className="dashboard-sidebar">
@@ -2389,13 +2476,21 @@ export default function App() {
 
             {/* Subscription Plan & Product Usage Summary Card */}
             {(() => {
-              const activePlanObj = subscriptionPlans.find(p => p.id === (activeShop?.subscriptionPlanId || 'plan-free')) || {
+              const backendSub = activeShop?.subscription;
+              const backendPlan = backendSub?.plan;
+              const reduxPlan = subscriptionPlans.find(p => p.id === (activeShop?.subscriptionPlanId || backendSub?.planId));
+              const activePlanObj = backendPlan || reduxPlan || {
                 name: 'Free Plan',
-                productLimit: 10
+                productLimit: 10,
+                price: 0
               };
-              const activeCount = activeShop ? products.filter(p => p.shopId === activeShop.id).length : 0;
-              const slotsLeft = Math.max(0, activePlanObj.productLimit - activeCount);
+              const activeCount = shopSubscriptionUsage?.currentProducts ?? activeShop?.subscriptionUsage?.currentProducts ?? (activeShop ? products.filter(p => p.shopId === activeShop.id).length : 0);
+              const maxLimit = shopSubscriptionUsage?.productLimit ?? activeShop?.subscriptionUsage?.productLimit ?? activePlanObj.productLimit ?? 10;
+              const slotsLeft = shopSubscriptionUsage?.remaining ?? activeShop?.subscriptionUsage?.remaining ?? Math.max(0, maxLimit - activeCount);
               const isPending = Boolean(activeShop && !activeShop.verified);
+              const isPremium = activePlanObj.name?.toLowerCase().includes('premium') ||
+                activePlanObj.name?.toLowerCase().includes('pro') ||
+                Boolean(activePlanObj.price && activePlanObj.price > 0);
 
               return (
                 <div
@@ -2405,15 +2500,27 @@ export default function App() {
                     background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
                     color: '#ffffff',
                     borderRadius: '14px',
-                    border: '1px solid rgba(255, 255, 255, 0.12)',
-                    boxShadow: '0 4px 14px rgba(0,0,0,0.15)'
+                    border: isPremium ? '1.5px solid rgba(255, 111, 0, 0.45)' : '1px solid rgba(255, 255, 255, 0.12)',
+                    boxShadow: isPremium ? '0 4px 18px rgba(255, 111, 0, 0.18)' : '0 4px 14px rgba(0,0,0,0.15)'
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.5rem' }}>
                     <span style={{ fontSize: '0.75rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>
                       Subscription Plan
                     </span>
-                    <span style={{ fontSize: '0.72rem', background: 'rgba(255,111,0,0.2)', color: '#ff9e40', padding: '0.15rem 0.5rem', borderRadius: '10px', fontWeight: 700, border: '1px solid rgba(255,111,0,0.3)' }}>
+                    <span style={{
+                      fontSize: '0.72rem',
+                      background: isPremium ? 'linear-gradient(135deg, rgba(255,111,0,0.25) 0%, rgba(234,88,12,0.2) 100%)' : 'rgba(255,111,0,0.2)',
+                      color: isPremium ? '#ff9e40' : '#ff9e40',
+                      padding: '0.18rem 0.55rem',
+                      borderRadius: '10px',
+                      fontWeight: 800,
+                      border: isPremium ? '1px solid rgba(255,111,0,0.45)' : '1px solid rgba(255,111,0,0.3)',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.25rem'
+                    }}>
+                      {isPremium && '👑 '}
                       {activePlanObj.name}
                     </span>
                   </div>
@@ -2421,7 +2528,7 @@ export default function App() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem', background: 'rgba(15,23,42,0.6)', padding: '0.6rem', borderRadius: '10px' }}>
                     <div>
                       <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block' }}>Max Limit</span>
-                      <strong style={{ fontSize: '1rem', color: '#ffffff' }}>{activePlanObj.productLimit} Products</strong>
+                      <strong style={{ fontSize: '1rem', color: '#ffffff' }}>{maxLimit} Products</strong>
                     </div>
                     <div>
                       <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block' }}>Remaining</span>
@@ -2547,15 +2654,15 @@ export default function App() {
               
               {/* New Leads Report Tab */}
               <button 
-                className={`dash-menu-btn ${dashboardTab === 'leads' ? 'active' : ''}`}
+                className={`dash-menu-btn ${dashboardTab === 'leads' || dashboardTab === 'customer-logs' ? 'active' : ''}`}
                 onClick={() => {
                   navigate('/seller-dashboard');
                   dispatch(setDashboardTab('leads'));
                   window.scrollTo({ top: 0, behavior: 'smooth' });
                 }}
               >
-                <MessageSquare size={16} />
-                <span>Leads & Performance Report</span>
+                <Activity size={16} />
+                <span>Customer Activity & Leads</span>
               </button>
 
               <button 
@@ -2589,7 +2696,7 @@ export default function App() {
             </div>
           </aside>
 
-          <section style={{ flex: 1 }}>
+          <section style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
             {dashboardTab === 'listings' ? (
               <div className="dashboard-panel">
                 {/* Clean Unified Section Header */}
@@ -2897,72 +3004,13 @@ export default function App() {
                   })()}
                 </div>
               </div>
-            ) : dashboardTab === 'leads' ? (
-              /* Leads Report Panel */
-              <div className="dashboard-panel">
-                <div className="panel-header">
-                  <h3 className="panel-title">Customer Lead Inquiries Report</h3>
-                  <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary-light)' }}>
-                    Subscription Billing: <strong>Active (Per Lead Model)</strong>
-                  </div>
-                </div>
-
-                <div className="leads-metric-cards">
-                  <div className="metric-card">
-                    <span className="metric-num">{leads.filter(l => l.shopId === activeShop?.id).length}</span>
-                    <span className="metric-lbl">Total Sourced Leads</span>
-                  </div>
-                  <div className="metric-card">
-                    <span className="metric-num">{leads.filter(l => l.shopId === activeShop?.id && l.contactType === 'whatsapp').length}</span>
-                    <span className="metric-lbl">WhatsApp Inquiries</span>
-                  </div>
-                  <div className="metric-card">
-                    <span className="metric-num">{leads.filter(l => l.shopId === activeShop?.id && l.contactType === 'call').length}</span>
-                    <span className="metric-lbl">Direct Calls Logged</span>
-                  </div>
-                </div>
-
-                <div className="leads-list-container" style={{ marginTop: '2rem' }}>
-                  <h4 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem' }}>Inquiry Log History</h4>
-                  
-                  {leads.filter(l => l.shopId === activeShop?.id).length > 0 ? (
-                    <table className="leads-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                      <thead>
-                        <tr style={{ backgroundColor: 'var(--light-bg)', textAlign: 'left', borderBottom: '1px solid var(--light-border)' }}>
-                          <th style={{ padding: '0.75rem' }}>Date & Time</th>
-                          <th style={{ padding: '0.75rem' }}>Product Device</th>
-                          <th style={{ padding: '0.75rem' }}>Customer (Buyer)</th>
-                          <th style={{ padding: '0.75rem' }}>Phone Details</th>
-                          <th style={{ padding: '0.75rem' }}>Inquiry Channel</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {leads.filter(l => l.shopId === activeShop?.id).map((lead) => (
-                          <tr key={lead.id} style={{ borderBottom: '1px solid var(--light-border)' }}>
-                            <td style={{ padding: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                              <Calendar size={14} style={{ color: 'var(--text-secondary-light)' }} />
-                              <span>{new Date(lead.createdAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</span>
-                            </td>
-                            <td style={{ padding: '0.75rem', fontWeight: 600 }}>{lead.productName}</td>
-                            <td style={{ padding: '0.75rem' }}>{lead.customerName}</td>
-                            <td style={{ padding: '0.75rem', fontFamily: 'monospace' }}>{lead.customerPhone}</td>
-                            <td style={{ padding: '0.75rem' }}>
-                              <span className={`lead-badge ${lead.contactType}`}>
-                                {lead.contactType === 'whatsapp' ? 'WhatsApp Clicks' : 'Direct Call Clicks'}
-                              </span>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary-light)' }}>
-                      <MessageSquare size={36} style={{ opacity: 0.3, marginBottom: '1rem' }} />
-                      <p>No customer contacts recorded yet. Make sure your shop location and contact info are accurate to attract clicks!</p>
-                    </div>
-                  )}
-                </div>
-              </div>
+            ) : (dashboardTab === 'leads' || dashboardTab === 'customer-logs') ? (
+              <SellerCustomerLogsPage
+                onToast={triggerToast}
+                onOpenUpgradeModal={() => {
+                  dispatch(setDashboardTab('profile'));
+                }}
+              />
             ) : dashboardTab === 'followers' ? (
               /* My Store Followers Panel */
               <div className="dashboard-panel">
