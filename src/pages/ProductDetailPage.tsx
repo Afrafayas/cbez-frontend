@@ -90,6 +90,9 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
     if (product) {
       dispatch(setSelectedProduct(product));
     }
+    return () => {
+      dispatch(setSelectedProduct(null));
+    };
   }, [id, product, dispatch]);
 
   // Load Follow status for shop
@@ -192,9 +195,13 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
         {/* Breadcrumb Navigation & Back Button */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '0.75rem', marginBottom: '1.5rem' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.83rem', color: '#64748b' }}>
-            <Link to="/" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>Home</Link>
+            <Link to={activeShop ? "/seller-dashboard" : "/"} style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>
+              {activeShop ? "Dashboard" : "Home"}
+            </Link>
             <ChevronRight size={14} />
-            <Link to="/" style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>Marketplace</Link>
+            <Link to={activeShop ? "/seller-dashboard" : "/"} style={{ color: '#2563eb', textDecoration: 'none', fontWeight: 600 }}>
+              {activeShop ? "Seller Portal" : "Marketplace"}
+            </Link>
             <ChevronRight size={14} />
             <span>{product.category}</span>
             <ChevronRight size={14} />
@@ -205,7 +212,13 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
 
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={() => {
+              if (activeShop) {
+                navigate('/seller-dashboard');
+              } else {
+                navigate(-1);
+              }
+            }}
             style={{
               background: '#ffffff',
               border: '1px solid #cbd5e1',
@@ -222,7 +235,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
             }}
           >
             <ArrowLeft size={16} />
-            <span>Back to Marketplace</span>
+            <span>{activeShop ? 'Back to Dashboard' : 'Back to Marketplace'}</span>
           </button>
         </div>
 

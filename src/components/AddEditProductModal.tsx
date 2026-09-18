@@ -486,6 +486,8 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
     }
   };
 
+  if (!showAddEditModal) return null;
+
   return (
     <div className="modal-overlay" onClick={() => dispatch(setShowAddEditModal(false))}>
       <div
@@ -611,7 +613,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
                     const tempImg = new Image();
                     tempImg.onload = () => {
                       const canvas = document.createElement('canvas');
-                      const MAX_DIM = 1200;
+                      const MAX_DIM = 960;
                       let w = tempImg.width;
                       let h = tempImg.height;
 
@@ -632,7 +634,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
                       const ctx = canvas.getContext('2d');
                       ctx?.drawImage(tempImg, 0, 0, w, h);
 
-                      const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+                      const compressedBase64 = canvas.toDataURL('image/jpeg', 0.75);
                       const updated = [...formImages];
                       updated[idx] = compressedBase64;
                       setFormImages(updated);
@@ -745,7 +747,6 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
                           <input
                             type="file"
                             accept="image/*"
-                            required={isRequired && !hasImage}
                             onChange={handleFileSelect}
                             style={{ display: 'none' }}
                           />

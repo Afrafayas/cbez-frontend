@@ -19,11 +19,9 @@ import {
   Check,
   Activity,
   Layers,
-  ArrowUpDown,
   Mail,
   LayoutGrid,
-  List,
-  ChevronRight
+  List
 } from 'lucide-react';
 import { useAppSelector, useAppDispatch } from '../store';
 import { setSelectedProduct } from '../store/productsSlice';
@@ -49,7 +47,7 @@ export const SellerCustomerLogsPage: React.FC<SellerCustomerLogsPageProps> = ({
   const [logsData, setLogsData] = useState<SellerCustomerLogsResponse | null>(null);
   const [activeFilter, setActiveFilter] = useState<'ALL' | 'WHATSAPP' | 'CALL' | 'LOCATION' | 'WISHLIST' | 'CLICKS'>('ALL');
   const [searchQuery, setSearchQuery] = useState<string>('');
-  const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [sortOrder] = useState<'desc' | 'asc'>('desc');
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 

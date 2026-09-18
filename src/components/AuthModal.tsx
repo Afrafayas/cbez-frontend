@@ -13,6 +13,8 @@ import { Shop, User as CustomerUser, SubscriptionPlan } from '../types';
 import { CITIES } from '../data/mockData';
 import { registerUser, loginUser, getActiveSubscriptionPlans, geocodeAddress, reverseGeocodeCoords } from '../services/apiService';
 import { PhoneInputWithCountry } from './PhoneInputWithCountry';
+import { useNavigate } from 'react-router-dom';
+import { setDashboardTab } from '../store/uiSlice';
 
 interface AuthModalProps {
   onToast: (msg: string, type?: 'success' | 'info') => void;
@@ -20,6 +22,7 @@ interface AuthModalProps {
 
 export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const { showAuthModal, authTab, authRole } = useAppSelector(state => state.auth);
   const { shops, subscriptionPlans } = useAppSelector(state => state.products);
 
@@ -227,7 +230,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           status: resData.user?.shop?.verified ? 'APPROVED' : 'PENDING'
         };
         dispatch(setActiveShop(shop));
+        dispatch(setDashboardTab('listings'));
         onToast(`Merchant Shop Signed In: ${shop.name}`, 'success');
+        navigate('/seller-dashboard');
       } else {
         const user: CustomerUser = {
           id: resData.user?.id || `user-${Date.now()}`,
@@ -352,7 +357,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         };
         dispatch(addShop(newShop));
         dispatch(setActiveShop(newShop));
+        dispatch(setDashboardTab('listings'));
         onToast(`Merchant Shop Registered: ${newShop.name} (Status: PENDING Admin Approval)`, 'success');
+        navigate('/seller-dashboard');
       }
       dispatch(setShowAuthModal(false));
     } catch (err: any) {

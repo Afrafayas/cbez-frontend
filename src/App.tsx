@@ -1,11 +1,10 @@
 import { SellerCustomerLogsPage } from './pages/SellerCustomerLogsPage';
 import { ProductDetailPage } from './pages/ProductDetailPage';
 import { WishlistPage } from './pages/WishlistPage';
-// import { ProductDetailModal } from './components/ProductDetailModal';
 import { AuthModal } from './components/AuthModal';
-import { CompactBrandSelect } from './components/CompactBrandSelect';
+import { AddEditProductModal } from './components/AddEditProductModal';
 import { Footer } from './components/Footer';
-import { logActivity, getProducts, getShops, getSubscriptionPlans, getShopSubscription, createSellerProduct, sendLead, getFollowedShops, unfollowShop, getShopFollowers, getBrands, geocodeAddress, toggleWishlist, getUserWishlist, getWishlistIds } from './services/apiService';
+import { logActivity, getProducts, getShops, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, toggleWishlist, getUserWishlist, getWishlistIds } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import React, { ChangeEvent, FormEvent } from 'react';
 import {
@@ -26,7 +25,6 @@ import {
   LogOut,
   LogIn,
   Store,
-  X,
   CheckCircle,
   HelpCircle,
   Info,
@@ -40,7 +38,7 @@ import {
   Activity
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from './store';
-import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
+import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
 import {
   setActiveShop,
   setActiveUser,
@@ -50,14 +48,14 @@ import {
 } from './store/authSlice';
 import {
   updateShop,
-  addProduct,
   editProduct,
   setSelectedProduct,
   setShowAddEditModal,
   setProductToEdit,
   addLead,
   setProducts,
-  setShops
+  setShops,
+  setSubscriptionPlans
 } from './store/productsSlice';
 import {
   setSearchQuery,
@@ -205,7 +203,7 @@ export default function App() {
 
   // --- REDUX SELECTORS ---
   const { activeShop, activeUser, showAuthModal } = useAppSelector(state => state.auth);
-  const { items: products, shops, leads, selectedProduct, showAddEditModal, productToEdit, subscriptionPlans } = useAppSelector(state => state.products);
+  const { items: products, shops, leads, selectedProduct, showAddEditModal, subscriptionPlans } = useAppSelector(state => state.products);
   const { toasts, dashboardTab } = useAppSelector(state => state.ui);
   const filters = useAppSelector(state => state.filters);
 
@@ -351,7 +349,6 @@ export default function App() {
 
   const isAnyModalActive = Boolean(
     showAuthModal ||
-    selectedProduct ||
     showAddEditModal
   );
 
@@ -365,6 +362,13 @@ export default function App() {
       document.body.classList.remove('modal-open');
     };
   }, [isAnyModalActive]);
+
+  // Redirect shop owners from marketplace or customer views to seller dashboard
+  React.useEffect(() => {
+    if (activeShop && (location.pathname === '/' || location.pathname === '/customer-dashboard' || location.pathname === '/wishlist')) {
+      navigate('/seller-dashboard', { replace: true });
+    }
+  }, [activeShop, location.pathname, navigate]);
 
   // customer dashboard sub-navigation tab state
   const [customerTab, setCustomerTab] = React.useState<'inquiries' | 'following' | 'profile' | 'wishlist'>('inquiries');
@@ -524,52 +528,6 @@ export default function App() {
     }
   };
 
-  const [productForm, setProductForm] = React.useState<{
-    name: string;
-    brand: string;
-    category: string;
-    description: string;
-    price: string;
-    offerPrice: string;
-    stock: string;
-    storage: string;
-    ram: string;
-    batteryHealth: string;
-    condition: string;
-    warranty: string;
-    color: string;
-    simType: string;
-    network: string;
-    originalBill: boolean;
-    accessories: string[];
-    purchasedFromAmazon: boolean;
-    isAmazonRefurbished: boolean;
-    images: string[];
-  }>({
-    name: '',
-    brand: 'Apple',
-    category: 'Mobiles',
-    description: '',
-    price: '',
-    offerPrice: '',
-    stock: '1',
-    storage: '128GB',
-    ram: '8GB',
-    batteryHealth: '85% Health',
-    condition: 'Grade A (Like New)',
-    warranty: '3 Months Shop Warranty',
-    color: 'Black',
-    simType: 'Dual SIM',
-    network: '5G',
-    originalBill: true,
-    accessories: ['Box', 'Charger', 'Cable'],
-    purchasedFromAmazon: false,
-    isAmazonRefurbished: false,
-    images: ['', '', '', '', '', '', '']
-  });
-
-  const [isSubmittingProduct, setIsSubmittingProduct] = React.useState(false);
-
   const [profileForm, setProfileForm] = React.useState({
     name: '',
     ownerName: '',
@@ -672,59 +630,6 @@ export default function App() {
   React.useEffect(() => {
 
   }, [selectedProduct]);
-
-  // Sync edit product form
-  React.useEffect(() => {
-    if (productToEdit) {
-      const existingImgs = [...(productToEdit.images || [])];
-      while (existingImgs.length < 7) existingImgs.push('');
-      setProductForm({
-        name: productToEdit.name,
-        brand: productToEdit.brand,
-        category: productToEdit.category,
-        description: productToEdit.description,
-        price: productToEdit.price.toString(),
-        offerPrice: productToEdit.offerPrice ? productToEdit.offerPrice.toString() : '',
-        stock: productToEdit.stock.toString(),
-        storage: productToEdit.storage || productToEdit.specs?.['Storage'] || '128GB',
-        ram: productToEdit.ram || productToEdit.specs?.['RAM'] || '8GB',
-        batteryHealth: productToEdit.batteryHealth || productToEdit.specs?.['Battery'] || '85% Health',
-        condition: productToEdit.condition || productToEdit.specs?.['Condition'] || 'Grade A (Like New)',
-        warranty: productToEdit.warranty || productToEdit.specs?.['Warranty'] || '3 Months Shop Warranty',
-        color: productToEdit.color || 'Black',
-        simType: productToEdit.simType || 'Dual SIM',
-        network: productToEdit.network || '5G',
-        originalBill: productToEdit.originalBill !== undefined ? productToEdit.originalBill : true,
-        accessories: productToEdit.accessories || ['Box', 'Charger', 'Cable'],
-        purchasedFromAmazon: !!productToEdit.purchasedFromAmazon,
-        isAmazonRefurbished: !!productToEdit.isAmazonRefurbished,
-        images: existingImgs.slice(0, 7)
-      });
-    } else {
-      setProductForm({
-        name: '',
-        brand: '',
-        category: 'Mobiles',
-        description: '',
-        price: '',
-        offerPrice: '',
-        stock: '1',
-        storage: '128GB',
-        ram: '8GB',
-        batteryHealth: '85% Health',
-        condition: 'Grade A (Like New)',
-        warranty: '3 Months Shop Warranty',
-        color: 'Black',
-        simType: 'Dual SIM',
-        network: '5G',
-        originalBill: true,
-        accessories: ['Box', 'Charger', 'Cable'],
-        purchasedFromAmazon: false,
-        isAmazonRefurbished: false,
-        images: ['', '', '', '', '', '', '']
-      });
-    }
-  }, [productToEdit, showAddEditModal]);
 
   // --- HELPERS ---
   const getSellerShop = (shopId: string, productShop?: Shop): Shop => {
@@ -845,32 +750,8 @@ export default function App() {
     return 0; // Default Featured
   });
 
-  // Fetch brands from database
-  const [dbBrands, setDbBrands] = React.useState<string[]>([]);
-  React.useEffect(() => {
-    async function fetchDbBrands() {
-      try {
-        const fetched = await getBrands();
-        if (fetched && Array.isArray(fetched) && fetched.length > 0) {
-          setDbBrands(fetched.map(b => b.name));
-        }
-      } catch (err) {
-        console.warn('Failed to load DB brands:', err);
-      }
-    }
-    fetchDbBrands();
-  }, []);
-
-  // Extract unique brands for sidebar filters and product creation dropdown
+  // Extract unique brands for sidebar filters
   const uniqueBrands = Array.from(new Set(products.map(p => p.brand)));
-
-  const availableBrandsList = Array.from(
-    new Set([
-      'Apple', 'Samsung', 'OnePlus', 'Google', 'Xiaomi', 'Realme', 'Vivo', 'Oppo', 'Motorola', 'Asus', 'Lenovo', 'HP', 'Dell', 'Acer', 'Sony', 'Nothing',
-      ...dbBrands,
-      ...uniqueBrands
-    ])
-  ).filter(Boolean).sort();
 
   // --- HANDLERS ---
   const triggerToast = (message: string, type: 'info' | 'success' | 'warning' = 'info') => {
@@ -926,136 +807,6 @@ export default function App() {
     dispatch(setShowAddEditModal(true));
   };
 
-  const handleProductSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!activeShop || isSubmittingProduct) return;
-
-    // Validate min 4 photos
-    const validImages = productForm.images.filter(img => img.trim() !== '');
-    if (validImages.length < 4) {
-      triggerToast("Please provide photos from at least 4 angles (Front side, Back side, and Side angles)!", "info");
-      return;
-    }
-
-    const specs: Record<string, string> = {
-      Storage: productForm.storage,
-      RAM: productForm.ram,
-      Battery: productForm.batteryHealth,
-      Condition: productForm.condition,
-      Warranty: productForm.warranty,
-      Color: productForm.color,
-      SIM: productForm.simType,
-      Network: productForm.network
-    };
-
-    const offerPriceNum = productForm.offerPrice ? parseFloat(productForm.offerPrice) : undefined;
-
-    setIsSubmittingProduct(true);
-    try {
-      if (productToEdit) {
-        const updated: Product = {
-          ...productToEdit,
-          name: productForm.name,
-          brand: productForm.brand,
-          category: productForm.category,
-          description: productForm.description,
-          price: parseFloat(productForm.price),
-          offerPrice: offerPriceNum,
-          stock: parseInt(productForm.stock),
-          storage: productForm.storage,
-          ram: productForm.ram,
-          batteryHealth: productForm.batteryHealth,
-          condition: productForm.condition,
-          warranty: productForm.warranty,
-          color: productForm.color,
-          simType: productForm.simType,
-          network: productForm.network,
-          originalBill: productForm.originalBill,
-          accessories: productForm.accessories,
-          specs,
-          images: validImages
-        };
-        dispatch(editProduct(updated));
-        triggerToast("Listing updated successfully!", "success");
-        dispatch(setShowAddEditModal(false));
-      } else {
-        const token = localStorage.getItem('mlx_token');
-        if (token) {
-          try {
-            const savedProd = await createSellerProduct({
-              name: productForm.name,
-              brand: productForm.brand,
-              category: productForm.category,
-              description: productForm.description,
-              price: parseFloat(productForm.price),
-              stock: parseInt(productForm.stock),
-              specs,
-              images: validImages
-            }, token);
-
-            const newProduct: Product = {
-              id: savedProd.id || `prod-${Date.now()}`,
-              name: savedProd.name || productForm.name,
-              brand: savedProd.brand || productForm.brand,
-              category: savedProd.category || productForm.category,
-              description: savedProd.description || productForm.description,
-              price: savedProd.price || parseFloat(productForm.price),
-              offerPrice: offerPriceNum,
-              stock: savedProd.stock || parseInt(productForm.stock),
-              shopId: savedProd.shopId || activeShop.id,
-              storage: productForm.storage,
-              ram: productForm.ram,
-              batteryHealth: productForm.batteryHealth,
-              condition: productForm.condition,
-              warranty: productForm.warranty,
-              color: productForm.color,
-              simType: productForm.simType,
-              network: productForm.network,
-              originalBill: productForm.originalBill,
-              accessories: productForm.accessories,
-              specs: savedProd.specs || specs,
-              images: savedProd.images || validImages
-            };
-            dispatch(addProduct(newProduct));
-            triggerToast("New used gadget listed in database successfully!", "success");
-            dispatch(setShowAddEditModal(false));
-          } catch (err: any) {
-            triggerToast(err.message || 'Failed to list product in database', 'warning');
-            return;
-          }
-        } else {
-          const newProduct: Product = {
-            id: `prod-${Date.now()}`,
-            name: productForm.name,
-            brand: productForm.brand,
-            category: productForm.category,
-            description: productForm.description,
-            price: parseFloat(productForm.price),
-            offerPrice: offerPriceNum,
-            stock: parseInt(productForm.stock),
-            shopId: activeShop.id,
-            storage: productForm.storage,
-            ram: productForm.ram,
-            batteryHealth: productForm.batteryHealth,
-            condition: productForm.condition,
-            warranty: productForm.warranty,
-            color: productForm.color,
-            simType: productForm.simType,
-            network: productForm.network,
-            originalBill: productForm.originalBill,
-            accessories: productForm.accessories,
-            specs,
-            images: validImages
-          };
-          dispatch(addProduct(newProduct));
-          triggerToast("New used gadget listed successfully!", "success");
-          dispatch(setShowAddEditModal(false));
-        }
-      }
-    } finally {
-      setIsSubmittingProduct(false);
-    }
-  };
 
   const handleToggleSoldOut = (product: Product) => {
     const isCurrentlySoldOut = product.isSoldOut || product.stock <= 0;
@@ -1218,7 +969,7 @@ export default function App() {
       <header className="site-header">
         <div className="header-container">
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-            {location.pathname !== '/' && (
+            {location.pathname !== '/' && location.pathname !== '/seller-dashboard' && (
               <button
                 type="button"
                 className="header-back-btn"
@@ -1246,7 +997,15 @@ export default function App() {
               </button>
             )}
 
-            <div className="logo-section" onClick={() => { navigate('/'); dispatch(clearFilters()); }}>
+            <div className="logo-section" onClick={() => { 
+              if (activeShop) {
+                navigate('/seller-dashboard');
+                dispatch(setDashboardTab('listings'));
+              } else {
+                navigate('/'); 
+                dispatch(clearFilters()); 
+              }
+            }}>
               <img src="/logo.png" alt="MLX Market Logo" className="logo-img" />
               <div className="logo-text">
                 <span className="logo-title">MLX <span>DIRECT</span></span>
@@ -1255,179 +1014,225 @@ export default function App() {
             </div>
           </div>
 
-          {/* Search bar inside header with Instagram-Style dropdown overlay */}
-          <div className="header-search-container" style={{ position: 'relative', flex: 1, maxWidth: '550px', zIndex: isSearchFocused ? 102 : 1 }}>
-            <div className="header-search" style={{ position: 'relative', zIndex: isSearchFocused ? 105 : 1 }}>
-              <input
-                type="text"
-                className="search-input"
-                placeholder="Search used iPhones, OnePlus, budget..."
-                value={filters.searchQuery}
-                onFocus={() => setIsSearchFocused(true)}
-                onChange={(e: ChangeEvent<HTMLInputElement>) => dispatch(setSearchQuery(e.target.value))}
-                autoComplete="off"
-                spellCheck={false}
-                style={{ color: '#ffffff' }}
-              />
-              <button className="search-btn" onClick={() => { setIsSearchFocused(false); navigate('/'); }}>
-                <Search size={16} />
-                <span>Search</span>
-              </button>
-            </div>
+          {/* Search bar inside header with Instagram-Style dropdown overlay (Customers only) */}
+          {!activeShop ? (
+            <div className="header-search-container" style={{ position: 'relative', flex: 1, maxWidth: '550px', zIndex: isSearchFocused ? 102 : 1 }}>
+              <div className="header-search" style={{ position: 'relative', zIndex: isSearchFocused ? 105 : 1 }}>
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Search used iPhones, OnePlus, budget..."
+                  value={filters.searchQuery}
+                  onFocus={() => setIsSearchFocused(true)}
+                  onChange={(e: ChangeEvent<HTMLInputElement>) => dispatch(setSearchQuery(e.target.value))}
+                  autoComplete="off"
+                  spellCheck={false}
+                  style={{ color: '#ffffff' }}
+                />
+                <button className="search-btn" onClick={() => { setIsSearchFocused(false); navigate('/'); }}>
+                  <Search size={16} />
+                  <span>Search</span>
+                </button>
+              </div>
 
-            {/* Instagram Style Search Overlay Panel */}
-            {isSearchFocused && (
-              <>
-                <div className="search-overlay-backdrop" onClick={() => setIsSearchFocused(false)}></div>
-                <div className="search-explore-overlay minimal-search-overlay">
-                  {/* Row 1: Detect Location & Cities */}
-                  <div className="overlay-minimal-row">
-                    <button
-                      type="button"
-                      className="detect-location-btn"
-                      onClick={() => {
-                        dispatch(setFilterCity('Kochi'));
-                        triggerToast("📍 Geolocation active: Selected Kochi as nearest city!", "success");
-                        setIsSearchFocused(false);
-                        navigate('/');
-                      }}
-                    >
-                      <MapPin size={13} style={{ flexShrink: 0 }} />
-                      <span>Near Me</span>
-                    </button>
-                    <div className="minimal-tags">
-                      {CITIES.filter(c => c !== "All Cities").map(city => (
-                        <button key={city} className="min-tag city" onClick={() => handleTagClick('city', city)}>{city}</button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Row 2: Budgets & Categories */}
-                  <div className="overlay-minimal-row">
-                    <span className="min-row-lbl">Budgets:</span>
-                    <div className="minimal-tags">
-                      <button className="min-tag budget" onClick={() => handleTagClick('budget', 'Under ₹5,000')}>&lt; 5k</button>
-                      <button className="min-tag budget" onClick={() => handleTagClick('budget', 'Under ₹10,000')}>&lt; 10k</button>
-                      <button className="min-tag budget" onClick={() => handleTagClick('budget', 'Under ₹25,000')}>&lt; 25k</button>
-                    </div>
-                    <span className="min-row-lbl" style={{ marginLeft: '0.5rem' }}>Categories:</span>
-                    <div className="minimal-tags">
-                      <button className="min-tag cat" onClick={() => handleTagClick('category', 'Mobiles')}>Mobiles</button>
-                      <button className="min-tag cat" onClick={() => handleTagClick('category', 'Laptops')}>Laptops</button>
-                      <button className="min-tag cat" onClick={() => handleTagClick('category', 'Smart Watches')}>Watches</button>
-                    </div>
-                  </div>
-
-                  {/* Row 3: Trending Models */}
-                  <div className="overlay-minimal-row" style={{ borderTop: '1px solid var(--light-border)', paddingTop: '0.5rem', marginTop: '0.25rem', width: '100%' }}>
-                    <span className="min-row-lbl">Trending:</span>
-                    <div className="minimal-tags">
-                      <button className="min-tag model" onClick={() => handleTagClick('query', 'iPhone 13')}>iPhone 13</button>
-                      <button className="min-tag model" onClick={() => handleTagClick('query', 'Samsung S22')}>Samsung S22</button>
-                      <button className="min-tag model" onClick={() => handleTagClick('query', 'MacBook Air')}>MacBook Air</button>
-                      <button className="min-tag model" onClick={() => handleTagClick('query', 'OnePlus')}>OnePlus</button>
-                    </div>
-                  </div>
-
-                  {/* Real-Time Autocomplete Suggestions Section */}
-                  {filters.searchQuery.trim() !== '' && (
-                    <div className="search-autocomplete-section" style={{ borderTop: '1px solid var(--light-border)', paddingTop: '0.6rem', marginTop: '0.4rem', width: '100%' }}>
-                      <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', marginBottom: '0.4rem' }}>
-                        Matching Products ({filteredProducts.length})
+              {/* Instagram Style Search Overlay Panel */}
+              {isSearchFocused && (
+                <>
+                  <div className="search-overlay-backdrop" onClick={() => setIsSearchFocused(false)}></div>
+                  <div className="search-explore-overlay minimal-search-overlay">
+                    {/* Row 1: Detect Location & Cities */}
+                    <div className="overlay-minimal-row">
+                      <button
+                        type="button"
+                        className="detect-location-btn"
+                        onClick={() => {
+                          dispatch(setFilterCity('Kochi'));
+                          triggerToast("📍 Geolocation active: Selected Kochi as nearest city!", "success");
+                          setIsSearchFocused(false);
+                          navigate('/');
+                        }}
+                      >
+                        <MapPin size={13} style={{ flexShrink: 0 }} />
+                        <span>Near Me</span>
+                      </button>
+                      <div className="minimal-tags">
+                        {CITIES.filter(c => c !== "All Cities").map(city => (
+                          <button key={city} className="min-tag city" onClick={() => handleTagClick('city', city)}>{city}</button>
+                        ))}
                       </div>
-                      {filteredProducts.length === 0 ? (
-                        <div style={{ fontSize: '0.8rem', color: '#64748b', padding: '0.4rem 0' }}>
-                          No matching products found for "{filters.searchQuery}"
-                        </div>
-                      ) : (
-                        <div className="autocomplete-suggestions-list" style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                          {filteredProducts.slice(0, 5).map(prod => (
-                            <div
-                              key={prod.id}
-                              className="suggestion-item"
-                              style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', borderRadius: '8px', cursor: 'pointer', background: '#f8f9fa' }}
-                              onClick={() => {
-                                dispatch(setSearchQuery(prod.name));
-                                setIsSearchFocused(false);
-                                navigate('/');
-                              }}
-                            >
-                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
-                                <Smartphone size={14} style={{ color: '#2563eb', flexShrink: 0 }} />
-                                <span style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>{prod.name}</span>
-                              </div>
-                              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#2563eb' }}>
-                                ₹{prod.price.toLocaleString('en-IN')}
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      )}
                     </div>
-                  )}
+
+                    {/* Row 2: Budgets & Categories */}
+                    <div className="overlay-minimal-row">
+                      <span className="min-row-lbl">Budgets:</span>
+                      <div className="minimal-tags">
+                        <button className="min-tag budget" onClick={() => handleTagClick('budget', 'Under ₹5,000')}>&lt; 5k</button>
+                        <button className="min-tag budget" onClick={() => handleTagClick('budget', 'Under ₹10,000')}>&lt; 10k</button>
+                        <button className="min-tag budget" onClick={() => handleTagClick('budget', 'Under ₹25,000')}>&lt; 25k</button>
+                      </div>
+                      <span className="min-row-lbl" style={{ marginLeft: '0.5rem' }}>Categories:</span>
+                      <div className="minimal-tags">
+                        <button className="min-tag cat" onClick={() => handleTagClick('category', 'Mobiles')}>Mobiles</button>
+                        <button className="min-tag cat" onClick={() => handleTagClick('category', 'Laptops')}>Laptops</button>
+                        <button className="min-tag cat" onClick={() => handleTagClick('category', 'Smart Watches')}>Watches</button>
+                      </div>
+                    </div>
+
+                    {/* Row 3: Trending Models */}
+                    <div className="overlay-minimal-row" style={{ borderTop: '1px solid var(--light-border)', paddingTop: '0.5rem', marginTop: '0.25rem', width: '100%' }}>
+                      <span className="min-row-lbl">Trending:</span>
+                      <div className="minimal-tags">
+                        <button className="min-tag model" onClick={() => handleTagClick('query', 'iPhone 13')}>iPhone 13</button>
+                        <button className="min-tag model" onClick={() => handleTagClick('query', 'Samsung S22')}>Samsung S22</button>
+                        <button className="min-tag model" onClick={() => handleTagClick('query', 'MacBook Air')}>MacBook Air</button>
+                        <button className="min-tag model" onClick={() => handleTagClick('query', 'OnePlus')}>OnePlus</button>
+                      </div>
+                    </div>
+
+                    {/* Real-Time Autocomplete Suggestions Section */}
+                    {filters.searchQuery.trim() !== '' && (
+                      <div className="search-autocomplete-section" style={{ borderTop: '1px solid var(--light-border)', paddingTop: '0.6rem', marginTop: '0.4rem', width: '100%' }}>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 600, color: '#64748b', marginBottom: '0.4rem' }}>
+                          Matching Products ({filteredProducts.length})
+                        </div>
+                        {filteredProducts.length === 0 ? (
+                          <div style={{ fontSize: '0.8rem', color: '#64748b', padding: '0.4rem 0' }}>
+                            No matching products found for "{filters.searchQuery}"
+                          </div>
+                        ) : (
+                          <div className="autocomplete-suggestions-list" style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                            {filteredProducts.slice(0, 5).map(prod => (
+                              <div
+                                key={prod.id}
+                                className="suggestion-item"
+                                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0.5rem 0.75rem', borderRadius: '8px', cursor: 'pointer', background: '#f8f9fa' }}
+                                onClick={() => {
+                                  dispatch(setSearchQuery(prod.name));
+                                  setIsSearchFocused(false);
+                                  navigate('/');
+                                }}
+                              >
+                                <div style={{ display: 'flex', alignItems: 'center', gap: '0.55rem' }}>
+                                  <Smartphone size={14} style={{ color: '#2563eb', flexShrink: 0 }} />
+                                  <span style={{ fontSize: '0.84rem', fontWeight: 600, color: '#0f172a' }}>{prod.name}</span>
+                                </div>
+                                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#2563eb' }}>
+                                  ₹{prod.price.toLocaleString('en-IN')}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+              <div style={{
+                background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.03) 100%)',
+                border: '1px solid rgba(255, 158, 64, 0.4)',
+                padding: '0.42rem 1.15rem 0.42rem 0.65rem',
+                borderRadius: '9999px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.75rem',
+                backdropFilter: 'blur(12px)',
+                boxShadow: '0 4px 18px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15)'
+              }}>
+                <div style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '50%',
+                  background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 8px rgba(234, 88, 12, 0.45)',
+                  flexShrink: 0
+                }}>
+                  <Store size={15} color="#ffffff" strokeWidth={2.4} />
                 </div>
-              </>
-            )}
-          </div>
+                <div style={{ display: 'flex', alignItems: 'center' }}>
+                  <span style={{
+                    color: '#ffffff',
+                    fontSize: '0.88rem',
+                    fontWeight: 700,
+                    letterSpacing: '0.3px',
+                    whiteSpace: 'nowrap'
+                  }}>
+                    Seller Store Management Portal
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Header Action Buttons for standard Users and Seller Shop Portal */}
           <div className="header-actions">
-            {/* Wishlist Header Action Button */}
-            <button
-              className={`action-btn ${location.pathname === '/wishlist' ? 'active' : ''}`}
-              onClick={() => {
-                if (!activeUser) {
-                  dispatch(setAuthRole('customer'));
-                  dispatch(setAuthTab('login'));
-                  dispatch(setShowAuthModal(true));
-                  triggerToast("Please log in to access your wishlist", "info");
-                } else {
-                  navigate('/wishlist');
-                }
-              }}
-              title="My Wishlist"
-              style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0.55rem 0.65rem' }}
-            >
-              <Heart size={18} fill={wishlistProductIds.length > 0 ? '#ef4444' : 'transparent'} color={wishlistProductIds.length > 0 ? '#ef4444' : 'currentColor'} />
-              {wishlistProductIds.length > 0 && (
-                <span
-                  style={{
-                    position: 'absolute',
-                    top: '-4px',
-                    right: '-4px',
-                    background: '#ef4444',
-                    color: '#ffffff',
-                    borderRadius: '50%',
-                    minWidth: '18px',
-                    height: '18px',
-                    fontSize: '0.7rem',
-                    fontWeight: 700,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    padding: '0 4px',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                  }}
-                >
-                  {wishlistProductIds.length}
-                </span>
-              )}
-            </button>
+            {/* Wishlist Header Action Button (Customer only) */}
+            {!activeShop && (
+              <button
+                className={`action-btn ${location.pathname === '/wishlist' ? 'active' : ''}`}
+                onClick={() => {
+                  if (!activeUser) {
+                    dispatch(setAuthRole('customer'));
+                    dispatch(setAuthTab('login'));
+                    dispatch(setShowAuthModal(true));
+                    triggerToast("Please log in to access your wishlist", "info");
+                  } else {
+                    navigate('/wishlist');
+                  }
+                }}
+                title="My Wishlist"
+                style={{ position: 'relative', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', padding: '0.55rem 0.65rem' }}
+              >
+                <Heart size={18} fill={wishlistProductIds.length > 0 ? '#ef4444' : 'transparent'} color={wishlistProductIds.length > 0 ? '#ef4444' : 'currentColor'} />
+                {wishlistProductIds.length > 0 && (
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: '-4px',
+                      right: '-4px',
+                      background: '#ef4444',
+                      color: '#ffffff',
+                      borderRadius: '50%',
+                      minWidth: '18px',
+                      height: '18px',
+                      fontSize: '0.7rem',
+                      fontWeight: 700,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      padding: '0 4px',
+                      boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+                    }}
+                  >
+                    {wishlistProductIds.length}
+                  </span>
+                )}
+              </button>
+            )}
 
             {activeShop ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                <button
-                  className={`action-btn sell-btn ${location.pathname === '/seller-dashboard' ? 'active' : ''}`}
-                  onClick={() => { navigate('/seller-dashboard'); dispatch(setDashboardTab('listings')); }}
-                >
-                  <Store size={16} />
-                  <span className="nav-btn-text">Shop Dashboard</span>
-                </button>
-                <span className="user-indicator">
-                  <Store size={14} />
-                  <span className="user-badge-text-container">
-                    <span className="user-badge-name">{activeShop.name}</span>
-                    <span className="user-badge-role"> (Seller)</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <span className="user-indicator" style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  padding: '0.45rem 0.95rem',
+                  borderRadius: '24px',
+                  background: 'rgba(255, 111, 0, 0.12)',
+                  border: '1px solid rgba(255, 158, 64, 0.38)',
+                  color: '#ffffff',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.1)'
+                }}>
+                  <Store size={15} style={{ color: '#ff9e40' }} />
+                  <span className="user-badge-text-container" style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                    <span className="user-badge-name" style={{ fontWeight: 700, fontSize: '0.85rem' }}>{activeShop.name}</span>
+                    <span className="user-badge-role" style={{ fontSize: '0.72rem', color: '#fed7aa', fontWeight: 600 }}> (Seller)</span>
                   </span>
                 </span>
                 <button
@@ -1439,6 +1244,18 @@ export default function App() {
                     navigate('/');
                   }}
                   title="Logout Shop"
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    padding: '0.5rem',
+                    borderRadius: '10px',
+                    background: 'rgba(255, 255, 255, 0.1)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    color: '#ffffff',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s'
+                  }}
                 >
                   <LogOut size={16} />
                 </button>
@@ -1484,7 +1301,7 @@ export default function App() {
       </header>
 
       {/* Category Sub-navigation (Only on Marketplace Catalog Home) */}
-      {location.pathname === '/' && (
+      {location.pathname === '/' && !activeShop && (
         <div className="category-bar">
           <div className="category-container">
             {CATEGORIES.map(cat => (
@@ -1504,7 +1321,7 @@ export default function App() {
       )}
 
       {/* --- TOP DYNAMIC SLIDER (Marketplace Main View Only) --- */}
-      {location.pathname === '/' && (
+      {location.pathname === '/' && !activeShop && (
         <section className="slider-banner-section" style={{ background: slides[currentSlide].bgColor }}>
           <div className="slider-banner-container">
             <div className="slider-content-pane">
@@ -1541,7 +1358,10 @@ export default function App() {
       {/* --- MAIN MARKETPLACE / DASHBOARD VIEWS --- */}
       <Routes>
         <Route path="/" element={
-          <main className="main-content" id="marketplace-grid">
+          activeShop ? (
+            <Navigate to="/seller-dashboard" replace />
+          ) : (
+            <main className="main-content" id="marketplace-grid">
             {/* Mobile Filter Toggle Bar (Visible on screens < 992px) */}
             <div className="mobile-filter-bar">
               <button
@@ -2000,9 +1820,13 @@ export default function App() {
               )}
             </section>
           </main>
+          )
         } />
 
         <Route path="/customer-dashboard" element={
+          activeShop ? (
+            <Navigate to="/seller-dashboard" replace />
+          ) : (
           /* --- CUSTOMER DASHBOARD VIEW --- */
           <main className="dashboard-view customer-dashboard-view">
             <aside className="dashboard-sidebar">
@@ -2426,6 +2250,7 @@ export default function App() {
               )}
             </section>
           </main>
+          )
         } />
 
         <Route path="/seller-activity-logs" element={
@@ -2689,11 +2514,6 @@ export default function App() {
                 >
                   <User size={16} />
                   <span>Edit Shop Profile ({calculateShopProfileCompletion(activeShop, activeUser?.email).completionPercentage}%)</span>
-                </button>
-
-                <button className="dash-menu-btn" onClick={() => navigate('/')} style={{ borderTop: '1px solid var(--light-border)', marginTop: '0.5rem', paddingTop: '1rem' }}>
-                  <Store size={16} />
-                  <span>Back to Marketplace Directory</span>
                 </button>
               </div>
             </aside>
@@ -3006,147 +2826,7 @@ export default function App() {
                     })()}
                   </div>
                 </div>
-              ) : dashboardTab === 'leads' ? (
-                /* Leads Report Panel */
-                <div className="dashboard-panel">
-                  <div className="panel-header">
-                    <h3 className="panel-title">Customer Lead Inquiries Report</h3>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary-light)' }}>
-                      Subscription Billing: <strong>Active (Per Lead Model)</strong>
-                    </div>
-                  </div>
-
-                  <div className="leads-metric-cards">
-                    <div className="metric-card">
-                      <span className="metric-num">{leads.filter(l => l.shopId === activeShop?.id).length}</span>
-                      <span className="metric-lbl">Total Sourced Leads</span>
-                    </div>
-                    <div className="metric-card">
-                      <span className="metric-num">{leads.filter(l => l.shopId === activeShop?.id && l.contactType === 'whatsapp').length}</span>
-                      <span className="metric-lbl">WhatsApp Inquiries</span>
-                    </div>
-                    <div className="metric-card">
-                      <span className="metric-num">{leads.filter(l => l.shopId === activeShop?.id && l.contactType === 'call').length}</span>
-                      <span className="metric-lbl">Direct Calls Logged</span>
-                    </div>
-                  </div>
-
-                  <div className="leads-list-container" style={{ marginTop: '2rem' }}>
-                    <h4 style={{ fontSize: '1.1rem', fontWeight: 600, marginBottom: '1rem' }}>Inquiry Log History</h4>
-
-                    {leads.filter(l => l.shopId === activeShop?.id).length > 0 ? (
-                      <table className="leads-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                        <thead>
-                          <tr style={{ backgroundColor: 'var(--light-bg)', textAlign: 'left', borderBottom: '1px solid var(--light-border)' }}>
-                            <th style={{ padding: '0.75rem' }}>Date & Time</th>
-                            <th style={{ padding: '0.75rem' }}>Product Device</th>
-                            <th style={{ padding: '0.75rem' }}>Customer (Buyer)</th>
-                            <th style={{ padding: '0.75rem' }}>Phone Details</th>
-                            <th style={{ padding: '0.75rem' }}>Inquiry Channel</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {leads.filter(l => l.shopId === activeShop?.id).map((lead) => (
-                            <tr key={lead.id} style={{ borderBottom: '1px solid var(--light-border)' }}>
-                              <td style={{ padding: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                                <Calendar size={14} style={{ color: 'var(--text-secondary-light)' }} />
-                                <span>{new Date(lead.createdAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}</span>
-                              </td>
-                              <td style={{ padding: '0.75rem', fontWeight: 600 }}>{lead.productName}</td>
-                              <td style={{ padding: '0.75rem' }}>{lead.customerName}</td>
-                              <td style={{ padding: '0.75rem', fontFamily: 'monospace' }}>{lead.customerPhone}</td>
-                              <td style={{ padding: '0.75rem' }}>
-                                <span className={`lead-badge ${lead.contactType}`}>
-                                  {lead.contactType === 'whatsapp' ? 'WhatsApp Clicks' : 'Direct Call Clicks'}
-                                </span>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    ) : (
-                      <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary-light)' }}>
-                        <MessageSquare size={36} style={{ opacity: 0.3, marginBottom: '1rem' }} />
-                        <p>No customer contacts recorded yet. Make sure your shop location and contact info are accurate to attract clicks!</p>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : dashboardTab === 'followers' ? (
-                /* My Store Followers Panel */
-                <div className="dashboard-panel">
-                  {(() => {
-                    const validFollowers = shopFollowers.filter(
-                      (follower) => follower.id !== activeShop?.id && follower.name !== activeShop?.name
-                    );
-
-                    return (
-                      <>
-                        <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div>
-                            <h3 className="panel-title">My Store Followers</h3>
-                            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary-light)' }}>
-                              Customers who are following <strong>{activeShop?.name}</strong> for inventory updates
-                            </div>
-                          </div>
-                          <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '0.4rem 0.85rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, color: '#2563eb' }}>
-                            Total Followers: {validFollowers.length}
-                          </div>
-                        </div>
-
-                        <div style={{ marginTop: '1.5rem' }}>
-                          {validFollowers.length > 0 ? (
-                            <table className="leads-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                              <thead>
-                                <tr style={{ backgroundColor: 'var(--light-bg)', textAlign: 'left', borderBottom: '1px solid var(--light-border)' }}>
-                                  <th style={{ padding: '0.75rem' }}>Followed Date</th>
-                                  <th style={{ padding: '0.75rem' }}>Customer Name</th>
-                                  <th style={{ padding: '0.75rem' }}>Contact Details</th>
-                                  <th style={{ padding: '0.75rem', textAlign: 'right' }}>Direct Action</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {validFollowers.map((follower) => (
-                                  <tr key={follower.id} style={{ borderBottom: '1px solid var(--light-border)' }}>
-                                    <td style={{ padding: '0.75rem' }}>
-                                      {new Date(follower.followedAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
-                                    </td>
-                                    <td style={{ padding: '0.75rem', fontWeight: 600 }}>{follower.name}</td>
-                                    <td style={{ padding: '0.75rem' }}>
-                                      <div>{follower.phone || follower.email || 'Registered Customer'}</div>
-                                    </td>
-                                    <td style={{ padding: '0.75rem', textAlign: 'right' }}>
-                                      {follower.phone ? (
-                                        <a
-                                          href={`https://wa.me/${follower.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${follower.name}, thank you for following ${activeShop?.name} on MLX Market!`)}`}
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          className="btn-whatsapp"
-                                          style={{ padding: '0.25rem 0.65rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', textDecoration: 'none', borderRadius: '6px' }}
-                                        >
-                                          <span>WhatsApp Customer</span>
-                                        </a>
-                                      ) : (
-                                        <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Subscribed</span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          ) : (
-                            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary-light)' }}>
-                              <UserCheck size={36} style={{ opacity: 0.3, marginBottom: '1rem' }} />
-                              <p>No customers are following your store yet. Keep your product catalog updated and accurate to attract followers!</p>
-                            </div>
-                          )}
-                        </div>
-                      </>
-                    );
-                  })()}
-                </div>
-              </div>
-            ) : (dashboardTab === 'leads' || dashboardTab === 'customer-logs') ? (
+              ) : (dashboardTab === 'leads' || dashboardTab === 'customer-logs') ? (
               <SellerCustomerLogsPage
                 onToast={triggerToast}
                 onOpenUpgradeModal={() => {
@@ -3658,30 +3338,34 @@ export default function App() {
         } />
 
         <Route path="/wishlist" element={
-          <WishlistPage
-            wishlistProducts={wishlistItems}
-            onRemoveWishlist={(id) => {
-              const prod = products.find(p => p.id === id) || wishlistItems.find(i => i.id === id || (i as any).productId === id || (i as any).wishlistRecordId === id);
-              const targetProd = (prod as any)?.product || prod;
-              if (targetProd) {
-                handleToggleWishlist(targetProd as Product);
-              } else {
-                handleToggleWishlist({ id, name: 'Item', price: 0 } as Product);
-              }
-            }}
-            onCallSeller={handleCallSeller}
-            onWhatsAppSeller={handleWhatsAppSeller}
-            onSelectProduct={(product) => {
-              dispatch(setSelectedProduct(product));
-              navigate(`/product/${product.id}`);
-            }}
-            activeUser={activeUser}
-            onOpenLogin={() => {
-              dispatch(setAuthRole('customer'));
-              dispatch(setAuthTab('login'));
-              dispatch(setShowAuthModal(true));
-            }}
-          />
+          activeShop ? (
+            <Navigate to="/seller-dashboard" replace />
+          ) : (
+            <WishlistPage
+              wishlistProducts={wishlistItems}
+              onRemoveWishlist={(id) => {
+                const prod = products.find(p => p.id === id) || wishlistItems.find(i => i.id === id || (i as any).productId === id || (i as any).wishlistRecordId === id);
+                const targetProd = (prod as any)?.product || prod;
+                if (targetProd) {
+                  handleToggleWishlist(targetProd as Product);
+                } else {
+                  handleToggleWishlist({ id, name: 'Item', price: 0 } as Product);
+                }
+              }}
+              onCallSeller={handleCallSeller}
+              onWhatsAppSeller={handleWhatsAppSeller}
+              onSelectProduct={(product) => {
+                dispatch(setSelectedProduct(product));
+                navigate(`/product/${product.id}`);
+              }}
+              activeUser={activeUser}
+              onOpenLogin={() => {
+                dispatch(setAuthRole('customer'));
+                dispatch(setAuthTab('login'));
+                dispatch(setShowAuthModal(true));
+              }}
+            />
+          )
         } />
 
         <Route path="/product/:id" element={
@@ -3703,473 +3387,7 @@ export default function App() {
       <Footer />
 
       {/* --- ADD / EDIT PRODUCT MODAL --- */}
-      {showAddEditModal && (
-        <div className="modal-overlay" onClick={() => dispatch(setShowAddEditModal(false))}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '650px' }}>
-            <button className="modal-close-btn" onClick={() => dispatch(setShowAddEditModal(false))}>
-              <X size={18} />
-            </button>
-
-            <div style={{ padding: '2.5rem' }}>
-              <h3 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '1.5rem', borderBottom: '1px solid var(--light-border)', paddingBottom: '0.75rem' }}>
-                {productToEdit ? 'Edit Used Device Details' : 'List Used Gadget for Selling'}
-              </h3>
-
-              <form onSubmit={handleProductSubmit} className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
-                {/* 1. Multi-Angle Image Uploads (File Upload Only) */}
-                <div className="form-group full-width" style={{ gridColumn: 'span 2', background: 'var(--card-bg, #f8f9fa)', padding: '1rem', borderRadius: '10px', border: '1px dashed #cbd5e1' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
-                    <label className="form-label" style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 0 }}>
-                      📷 Multi-Angle Photos (Required: Min 4, Max 7) *
-                    </label>
-                    <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 500 }}>
-                      Select image files directly from device storage
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.75rem' }}>
-                    {[
-                      '1. Front Side (Required) *',
-                      '2. Back Side (Required) *',
-                      '3. Left Side (Required) *',
-                      '4. Right Side (Required) *',
-                      '5. Additional Angle 1 (Optional)',
-                      '6. Additional Angle 2 (Optional)',
-                      '7. Additional Angle 3 (Optional)'
-                    ].map((label, idx) => {
-                      const isRequired = idx < 4;
-                      const img = productForm.images[idx] || '';
-                      const hasImage = Boolean(img && img.trim());
-
-                      const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-                        const file = e.target.files?.[0];
-                        if (!file) return;
-
-                        if (!file.type.startsWith('image/')) {
-                          triggerToast('Please select a valid image file (JPG, PNG, WEBP, etc.)', 'info');
-                          return;
-                        }
-
-                        const reader = new FileReader();
-                        reader.onload = (event) => {
-                          const result = event.target?.result as string;
-                          if (!result) return;
-
-                          // Compress high-res camera photos using HTML5 Canvas
-                          const tempImg = new Image();
-                          tempImg.onload = () => {
-                            const canvas = document.createElement('canvas');
-                            const MAX_DIM = 1200;
-                            let w = tempImg.width;
-                            let h = tempImg.height;
-
-                            if (w > h) {
-                              if (w > MAX_DIM) {
-                                h = Math.round((h * MAX_DIM) / w);
-                                w = MAX_DIM;
-                              }
-                            } else {
-                              if (h > MAX_DIM) {
-                                w = Math.round((w * MAX_DIM) / h);
-                                h = MAX_DIM;
-                              }
-                            }
-
-                            canvas.width = w;
-                            canvas.height = h;
-                            const ctx = canvas.getContext('2d');
-                            ctx?.drawImage(tempImg, 0, 0, w, h);
-
-                            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
-                            const updatedImgs = [...productForm.images];
-                            updatedImgs[idx] = compressedBase64;
-                            setProductForm({ ...productForm, images: updatedImgs });
-                          };
-                          tempImg.src = result;
-                        };
-                        reader.readAsDataURL(file);
-                      };
-
-                      return (
-                        <div
-                          key={idx}
-                          style={{
-                            border: hasImage ? '1.5px solid #10b981' : isRequired ? '1.5px dashed #cbd5e1' : '1px dashed #e2e8f0',
-                            borderRadius: '10px',
-                            padding: '0.6rem',
-                            background: hasImage ? '#f0fdf4' : '#ffffff',
-                            display: 'flex',
-                            flexDirection: 'column',
-                            gap: '0.4rem',
-                            position: 'relative'
-                          }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                            <span style={{ fontSize: '0.74rem', fontWeight: 700, color: isRequired ? '#0f172a' : '#475569' }}>
-                              {label}
-                            </span>
-                            {hasImage && (
-                              <span style={{ fontSize: '0.65rem', background: '#dcfce7', color: '#15803d', padding: '0.15rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
-                                ✓ Loaded
-                              </span>
-                            )}
-                          </div>
-
-                          {hasImage ? (
-                            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
-                              <img
-                                src={img}
-                                alt={label}
-                                style={{
-                                  width: '52px',
-                                  height: '52px',
-                                  objectFit: 'cover',
-                                  borderRadius: '8px',
-                                  border: '1px solid #cbd5e1'
-                                }}
-                              />
-                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1 }}>
-                                <label
-                                  style={{
-                                    fontSize: '0.7rem',
-                                    fontWeight: 600,
-                                    color: '#2563eb',
-                                    background: '#eff6ff',
-                                    border: '1px solid #bfdbfe',
-                                    borderRadius: '6px',
-                                    padding: '0.25rem 0.5rem',
-                                    textAlign: 'center',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  Change File
-                                  <input type="file" accept="image/*" onChange={handleFileSelect} style={{ display: 'none' }} />
-                                </label>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    const updatedImgs = [...productForm.images];
-                                    updatedImgs[idx] = '';
-                                    setProductForm({ ...productForm, images: updatedImgs });
-                                  }}
-                                  style={{
-                                    fontSize: '0.68rem',
-                                    fontWeight: 600,
-                                    color: '#dc2626',
-                                    background: '#fef2f2',
-                                    border: '1px solid #fecaca',
-                                    borderRadius: '6px',
-                                    padding: '0.2rem 0.5rem',
-                                    cursor: 'pointer'
-                                  }}
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
-                              <label
-                                style={{
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  gap: '0.3rem',
-                                  padding: '0.8rem 0.4rem',
-                                  background: '#ffffff',
-                                  border: '1px solid #cbd5e1',
-                                  borderRadius: '8px',
-                                  cursor: 'pointer',
-                                  textAlign: 'center'
-                                }}
-                              >
-                                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#2563eb' }}>
-                                  📁 Choose File
-                                </span>
-                                <span style={{ fontSize: '0.65rem', color: '#64748b' }}>
-                                  Select image (PNG, JPG, WEBP)
-                                </span>
-                                <input
-                                  type="file"
-                                  accept="image/*"
-                                  required={isRequired && !hasImage}
-                                  onChange={handleFileSelect}
-                                  style={{ display: 'none' }}
-                                />
-                              </label>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* 2. Basic Info */}
-                <div className="form-group">
-                  <label className="form-label">Category *</label>
-                  <select
-                    className="form-select-box"
-                    required
-                    value={productForm.category}
-                    onChange={(e: ChangeEvent<HTMLSelectElement>) => setProductForm({ ...productForm, category: e.target.value })}
-                  >
-                    {CATEGORIES.filter(c => c !== "All Categories").map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Brand *</label>
-                  <CompactBrandSelect
-                    value={productForm.brand}
-                    onChange={(val) => setProductForm({ ...productForm, brand: val })}
-                    brands={availableBrandsList}
-                  />
-                </div>
-
-                <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="form-label">Product Name / Model *</label>
-                  <input
-                    type="text"
-                    className="form-input-text"
-                    required
-                    placeholder="e.g. iPhone 15 Pro Max 256GB Natural Titanium"
-                    value={productForm.name}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setProductForm({ ...productForm, name: e.target.value })}
-                  />
-                </div>
-
-                {/* 3. Specs & Pricing */}
-                <div className="form-group">
-                  <label className="form-label">Storage Capacity *</label>
-                  <select
-                    className="form-select-box"
-                    value={productForm.storage}
-                    onChange={(e: ChangeEvent<HTMLSelectElement>) => setProductForm({ ...productForm, storage: e.target.value })}
-                  >
-                    <option value="64GB">64GB</option>
-                    <option value="128GB">128GB</option>
-                    <option value="256GB">256GB</option>
-                    <option value="512GB">512GB</option>
-                    <option value="1TB">1TB</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">RAM *</label>
-                  <select
-                    className="form-select-box"
-                    value={productForm.ram}
-                    onChange={(e: ChangeEvent<HTMLSelectElement>) => setProductForm({ ...productForm, ram: e.target.value })}
-                  >
-                    <option value="4GB">4GB</option>
-                    <option value="6GB">6GB</option>
-                    <option value="8GB">8GB</option>
-                    <option value="12GB">12GB</option>
-                    <option value="16GB">16GB</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Regular Listing Price (₹) *</label>
-                  <input
-                    type="number"
-                    className="form-input-text"
-                    required
-                    placeholder="Regular price in INR"
-                    value={productForm.price}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setProductForm({ ...productForm, price: e.target.value })}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Discounted Offer Price (₹)</label>
-                  <input
-                    type="number"
-                    className="form-input-text"
-                    placeholder="Offer price (optional)"
-                    value={productForm.offerPrice}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setProductForm({ ...productForm, offerPrice: e.target.value })}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Available Stock Quantity (Units) *</label>
-                  <input
-                    type="number"
-                    className="form-input-text"
-                    required
-                    min="1"
-                    placeholder="e.g. 1, 2, 5 units"
-                    value={productForm.stock}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setProductForm({ ...productForm, stock: e.target.value })}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Battery Health / Capacity *</label>
-                  <input
-                    type="text"
-                    className="form-input-text"
-                    required
-                    placeholder="e.g. 88% Health or 5000mAh"
-                    value={productForm.batteryHealth}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setProductForm({ ...productForm, batteryHealth: e.target.value })}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Device Physical Condition *</label>
-                  <select
-                    className="form-select-box"
-                    value={productForm.condition}
-                    onChange={(e: ChangeEvent<HTMLSelectElement>) => setProductForm({ ...productForm, condition: e.target.value })}
-                  >
-                    <option value="Grade A (Like New)">Grade A (Like New)</option>
-                    <option value="Grade B (Superb)">Grade B (Superb)</option>
-                    <option value="Grade C (Good)">Grade C (Good)</option>
-                    <option value="Fair Condition">Fair Condition</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Shop Warranty *</label>
-                  <select
-                    className="form-select-box"
-                    value={productForm.warranty}
-                    onChange={(e: ChangeEvent<HTMLSelectElement>) => setProductForm({ ...productForm, warranty: e.target.value })}
-                  >
-                    <option value="None">None</option>
-                    <option value="7 Days Shop Warranty">7 Days Shop Warranty</option>
-                    <option value="1 Month Shop Warranty">1 Month Shop Warranty</option>
-                    <option value="3 Months Shop Warranty">3 Months Shop Warranty</option>
-                    <option value="6 Months Shop Warranty">6 Months Shop Warranty</option>
-                    <option value="1 Year Shop Warranty">1 Year Shop Warranty</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Color *</label>
-                  <input
-                    type="text"
-                    className="form-input-text"
-                    required
-                    placeholder="e.g. Space Black, Natural Titanium"
-                    value={productForm.color}
-                    onChange={(e: ChangeEvent<HTMLInputElement>) => setProductForm({ ...productForm, color: e.target.value })}
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">SIM Type *</label>
-                  <select
-                    className="form-select-box"
-                    value={productForm.simType}
-                    onChange={(e: ChangeEvent<HTMLSelectElement>) => setProductForm({ ...productForm, simType: e.target.value })}
-                  >
-                    <option value="Dual SIM">Dual SIM</option>
-                    <option value="Single SIM + eSIM">Single SIM + eSIM</option>
-                    <option value="Dual eSIM">Dual eSIM</option>
-                  </select>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Network *</label>
-                  <select
-                    className="form-select-box"
-                    value={productForm.network}
-                    onChange={(e: ChangeEvent<HTMLSelectElement>) => setProductForm({ ...productForm, network: e.target.value })}
-                  >
-                    <option value="5G">5G</option>
-                    <option value="4G">4G</option>
-                  </select>
-                </div>
-
-                <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="form-label">Original Bill Available?</label>
-                  <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.4rem' }}>
-                    <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
-                      <input
-                        type="radio"
-                        name="originalBill"
-                        checked={productForm.originalBill === true}
-                        onChange={() => setProductForm({ ...productForm, originalBill: true })}
-                      />
-                      <span>Yes (Original Bill Included)</span>
-                    </label>
-                    <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
-                      <input
-                        type="radio"
-                        name="originalBill"
-                        checked={productForm.originalBill === false}
-                        onChange={() => setProductForm({ ...productForm, originalBill: false })}
-                      />
-                      <span>No</span>
-                    </label>
-                  </div>
-                </div>
-
-                <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="form-label">Included Accessories</label>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.4rem' }}>
-                    {['Box', 'Charger', 'Cable', 'Case', 'Screen Guard'].map(acc => (
-                      <label key={acc} style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
-                        <input
-                          type="checkbox"
-                          checked={productForm.accessories.includes(acc)}
-                          onChange={(e) => {
-                            let updatedAcc = [...productForm.accessories];
-                            if (e.target.checked) updatedAcc.push(acc);
-                            else updatedAcc = updatedAcc.filter(a => a !== acc);
-                            setProductForm({ ...productForm, accessories: updatedAcc });
-                          }}
-                        />
-                        <span>{acc}</span>
-                      </label>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="form-group" style={{ gridColumn: 'span 2' }}>
-                  <label className="form-label">Detailed Device Description *</label>
-                  <textarea
-                    className="form-textarea"
-                    required
-                    rows={3}
-                    placeholder="Include scuff details, warranty info, charger status..."
-                    value={productForm.description}
-                    onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setProductForm({ ...productForm, description: e.target.value })}
-                  ></textarea>
-                </div>
-
-                <div className="form-actions-row" style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
-                  <button
-                    type="button"
-                    style={{
-                      padding: '0.6rem 1.4rem',
-                      borderRadius: '8px',
-                      border: '1px solid #cbd5e1',
-                      background: '#f1f5f9',
-                      color: '#0f172a',
-                      fontWeight: 600,
-                      cursor: 'pointer'
-                    }}
-                    onClick={() => dispatch(setShowAddEditModal(false))}
-                  >
-                    Cancel
-                  </button>
-                  <button type="submit" className="btn-primary" style={{ padding: '0.6rem 1.2rem' }}>
-                    {productToEdit ? 'Save Changes' : 'Submit Device Listing'}
-                  </button>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
+      <AddEditProductModal onToast={triggerToast} />
 
       {/* --- AUTHENTICATION MODAL (LOGIN & REGISTRATION) --- */}
       <AuthModal onToast={triggerToast} />
