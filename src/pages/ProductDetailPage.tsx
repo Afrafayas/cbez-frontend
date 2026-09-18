@@ -54,16 +54,22 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   const [isFollowing, setIsFollowing] = useState<boolean>(false);
   const [isFollowLoading, setIsFollowLoading] = useState<boolean>(false);
 
+  const isLoggedIn = Boolean(activeUser || activeShop);
+
   // Enforce customer/seller login requirement
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('mlx_token') : null;
-    if (!activeUser && !activeShop && !token) {
+    if (!isLoggedIn) {
+      dispatch(setSelectedProduct(null));
       dispatch(setAuthRole('customer'));
       dispatch(setAuthTab('login'));
       dispatch(setShowAuthModal(true));
       navigate('/', { replace: true });
     }
-  }, [activeUser, activeShop, dispatch, navigate]);
+  }, [isLoggedIn, dispatch, navigate]);
+
+  if (!isLoggedIn) {
+    return null;
+  }
 
   // Scroll to top on page mount or ID change
   useEffect(() => {

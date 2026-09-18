@@ -32,8 +32,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     <div
       className="product-card"
       onClick={() => {
-        const token = typeof window !== 'undefined' ? localStorage.getItem('mlx_token') : null;
-        if (!activeUser && !activeShop && !token) {
+        if (!activeUser && !activeShop) {
+          dispatch(setSelectedProduct(null));
           dispatch(setAuthRole('customer'));
           dispatch(setAuthTab('login'));
           dispatch(setShowAuthModal(true));
