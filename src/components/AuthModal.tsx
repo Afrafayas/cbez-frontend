@@ -277,22 +277,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         dispatch(setActiveUser(user));
         onToast(`Customer account created! Welcome ${user.name}`, 'success');
       } else {
-        // Enforce all mandatory fields for Shop Registration
+        // Enforce only Name, Shop Name, Phone, Email, Address, Password as required
+        const sellerName = regForm.ownerName || regForm.name;
         if (
-          !regForm.ownerName ||
-          !regForm.profileImage ||
+          !sellerName ||
           !regForm.shopName ||
-          !regForm.address ||
-          !regForm.city ||
-          !regForm.district ||
-          !regForm.country ||
+          !regForm.phone ||
           !regForm.email ||
-          !regForm.aadhaarNumber ||
-          !regForm.panNumber ||
-          regForm.latitude === undefined ||
-          regForm.longitude === undefined
+          !regForm.address ||
+          !regForm.password
         ) {
-          onToast('Please fill out all mandatory fields and select your shop location (GPS coordinates required)', 'info');
+          onToast('Please fill out all required fields: Name, Shop Name, Phone, Email, Address, and Password.', 'info');
           setIsSubmitting(false);
           return;
         }
@@ -562,7 +557,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                   <input type="text" className="form-input-text" required placeholder="e.g. Afraf Fayas" value={regForm.ownerName} onChange={(e) => setRegForm({ ...regForm, ownerName: e.target.value })} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Profile / Logo Image *</label>
+                  <label className="form-label">Profile / Logo Image (Optional)</label>
                   <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(255, 255, 255, 0.04)', padding: '0.85rem', borderRadius: '14px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
                     {regForm.profileImage ? (
                       <div style={{ position: 'relative', width: '64px', height: '64px', borderRadius: '16px', overflow: 'hidden', border: '2px solid #ff9e40', flexShrink: 0 }}>
@@ -618,30 +613,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                   <PhoneInputWithCountry required value={regForm.phone} onChange={(val) => setRegForm({ ...regForm, phone: val })} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">WhatsApp Number *</label>
-                  <PhoneInputWithCountry required value={regForm.whatsapp} onChange={(val) => setRegForm({ ...regForm, whatsapp: val })} />
+                  <label className="form-label">WhatsApp Number (Optional)</label>
+                  <PhoneInputWithCountry value={regForm.whatsapp} onChange={(val) => setRegForm({ ...regForm, whatsapp: val })} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">City *</label>
+                  <label className="form-label">City (Optional)</label>
                   <select className="form-select-box" value={regForm.city} onChange={(e) => setRegForm({ ...regForm, city: e.target.value })}>
                     {CITIES.filter(c => c !== "All Cities").map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
-                  <label className="form-label">District *</label>
-                  <input type="text" className="form-input-text" required placeholder="e.g. Ernakulam" value={regForm.district} onChange={(e) => setRegForm({ ...regForm, district: e.target.value })} />
+                  <label className="form-label">District (Optional)</label>
+                  <input type="text" className="form-input-text" placeholder="e.g. Ernakulam" value={regForm.district} onChange={(e) => setRegForm({ ...regForm, district: e.target.value })} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Country *</label>
-                  <input type="text" className="form-input-text" required placeholder="India" value={regForm.country} onChange={(e) => setRegForm({ ...regForm, country: e.target.value })} />
+                  <label className="form-label">Country (Optional)</label>
+                  <input type="text" className="form-input-text" placeholder="India" value={regForm.country} onChange={(e) => setRegForm({ ...regForm, country: e.target.value })} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Aadhaar Card Number *</label>
-                  <input type="text" className="form-input-text" required placeholder="12-digit Aadhaar Number" value={regForm.aadhaarNumber} onChange={(e) => setRegForm({ ...regForm, aadhaarNumber: e.target.value })} />
+                  <label className="form-label">Aadhaar Card Number (Optional)</label>
+                  <input type="text" className="form-input-text" placeholder="12-digit Aadhaar Number" value={regForm.aadhaarNumber} onChange={(e) => setRegForm({ ...regForm, aadhaarNumber: e.target.value })} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">PAN Card Number *</label>
-                  <input type="text" className="form-input-text" required placeholder="10-character PAN Number" value={regForm.panNumber} onChange={(e) => setRegForm({ ...regForm, panNumber: e.target.value })} />
+                  <label className="form-label">PAN Card Number (Optional)</label>
+                  <input type="text" className="form-input-text" placeholder="10-character PAN Number" value={regForm.panNumber} onChange={(e) => setRegForm({ ...regForm, panNumber: e.target.value })} />
                 </div>
 
                 {/* MANDATORY LOCATION SELECTION SECTION */}
@@ -649,7 +644,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                   <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
                     <label className="form-label" style={{ fontWeight: 700, color: '#ff9e40', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                       <MapPin size={16} />
-                      <span>Shop Map Coordinates (Mandatory) *</span>
+                      <span>Shop Map Coordinates (Optional)</span>
                     </label>
                     {regForm.latitude !== undefined && regForm.longitude !== undefined && (
                       <span style={{ fontSize: '0.72rem', background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', padding: '0.2rem 0.6rem', borderRadius: '12px', fontWeight: 700 }}>
@@ -721,7 +716,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                     </div>
                   ) : (
                     <div style={{ fontSize: '0.76rem', color: '#f87171', fontStyle: 'italic' }}>
-                      ⚠️ Location coordinates required. Click "Use Current GPS Location" or "Search Map Address".
+                      ℹ️ Optional: GPS coordinates can be selected now or added later in your Shop Profile.
                     </div>
                   )}
                 </div>
