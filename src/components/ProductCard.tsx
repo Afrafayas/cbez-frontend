@@ -1,8 +1,10 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Phone, Smartphone, MapPin, ShieldCheck, Clock, Heart } from 'lucide-react';
 import { Product, Shop } from '../types';
-import { useAppDispatch } from '../store';
+import { useAppDispatch, useAppSelector } from '../store';
 import { setSelectedProduct } from '../store/productsSlice';
+import { setShowAuthModal, setAuthTab, setAuthRole } from '../store/authSlice';
 
 interface ProductCardProps {
   product: Product;
@@ -22,12 +24,24 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onToggleWishlist
 }) => {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
+  const { activeUser, activeShop } = useAppSelector((state) => state.auth);
   const isSoldOut = product.stock <= 0 || product.isSoldOut;
 
   return (
-    <div 
+    <div
       className="product-card"
-      onClick={() => dispatch(setSelectedProduct(product))}
+      onClick={() => {
+        const token = typeof window !== 'undefined' ? localStorage.getItem('mlx_token') : null;
+        if (!activeUser && !activeShop && !token) {
+          dispatch(setAuthRole('customer'));
+          dispatch(setAuthTab('login'));
+          dispatch(setShowAuthModal(true));
+          return;
+        }
+        dispatch(setSelectedProduct(product));
+        navigate(`/product/${product.id}`);
+      }}
       style={{ cursor: 'pointer', opacity: isSoldOut ? 0.8 : 1, position: 'relative' }}
     >
       {/* Wishlist Heart Icon Overlay */}

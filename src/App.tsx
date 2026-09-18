@@ -1,10 +1,8 @@
-import { ProductDetailModal } from './components/ProductDetailModal';
-import { ManageCategoriesBrandsModal } from './components/ManageCategoriesBrandsModal';
+import { ProductDetailPage } from './pages/ProductDetailPage';
 import { AuthModal } from './components/AuthModal';
-import { AddEditProductModal } from './components/AddEditProductModal';
+import { CompactBrandSelect } from './components/CompactBrandSelect';
 import { Footer } from './components/Footer';
-import { getProducts, getShops, sendLead, getFollowedShops, unfollowShop, getShopFollowers, getBrands, getUserWishlist, toggleWishlist } from './services/apiService';
-import { WishlistPage } from './pages/WishlistPage';
+import { getProducts, getShops, createSellerProduct, sendLead, getFollowedShops, unfollowShop, getShopFollowers, getBrands, geocodeAddress } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import React, { ChangeEvent, FormEvent } from 'react';
 import { 
@@ -25,6 +23,7 @@ import {
   LogOut, 
   LogIn,
   Store,
+  X,
   CheckCircle,
   HelpCircle,
   Info,
@@ -32,8 +31,8 @@ import {
   Tablet as TabletIcon,
   MessageSquare,
   Tag,
-  Calendar,
-  Heart
+  Clock,
+  Calendar
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from './store';
 import { Routes, Route, useNavigate, useLocation } from 'react-router-dom';
@@ -46,6 +45,7 @@ import {
 } from './store/authSlice';
 import { 
   updateShop,
+  addProduct, 
   editProduct, 
   setSelectedProduct, 
   setShowAddEditModal, 
@@ -75,7 +75,7 @@ import {
   setDashboardTab 
 } from './store/uiSlice';
 import { CATEGORIES, CITIES, BUDGET_PRESETS } from './data/mockData';
-import { Product, Shop, Lead, User as CustomerUser } from './types';
+import { Product, Shop, Lead, User as CustomerUser, calculateShopProfileCompletion } from './types';
 
 interface CustomSelectProps {
   value: string;
@@ -182,7 +182,7 @@ export default function App() {
 
   // --- REDUX SELECTORS ---
   const { activeShop, activeUser, showAuthModal } = useAppSelector(state => state.auth);
-  const { items: products, shops, leads, selectedProduct, showAddEditModal, subscriptionPlans } = useAppSelector(state => state.products);
+  const { items: products, shops, leads, selectedProduct, showAddEditModal, productToEdit, subscriptionPlans } = useAppSelector(state => state.products);
   const { toasts, dashboardTab } = useAppSelector(state => state.ui);
   const filters = useAppSelector(state => state.filters);
 
@@ -205,6 +205,12 @@ export default function App() {
         }
         if (liveShops && liveShops.length > 0) {
           dispatch(setShops(liveShops));
+          if (activeShop) {
+            const currentLiveShop = liveShops.find(s => s.id === activeShop.id || (s.email && activeShop.email && s.email.toLowerCase() === activeShop.email.toLowerCase()) || (s.name && activeShop.name && s.name.toLowerCase() === activeShop.name.toLowerCase()));
+            if (currentLiveShop && (currentLiveShop.verified !== activeShop.verified || currentLiveShop.name !== activeShop.name)) {
+              dispatch(setActiveShop(currentLiveShop));
+            }
+          }
         }
       } catch (err) {
         console.warn('Backend load fallback:', err);
@@ -222,43 +228,10 @@ export default function App() {
     filters.sortBy,
   ]);
 
-  // --- LIVE SYNC ACTIVE SHOP WITH BACKEND SHOPS DATA ---
-  React.useEffect(() => {
-    if (activeShop && shops && shops.length > 0) {
-      const liveShop = shops.find(
-        s => s.id === activeShop.id || s.name.toLowerCase().trim() === activeShop.name.toLowerCase().trim()
-      );
-      if (liveShop) {
-        const isVerified = Boolean(liveShop.verified);
-        const subPlanId = liveShop.subscription?.planId || liveShop.subscriptionPlanId || activeShop.subscriptionPlanId;
-
-        const updatedActiveShop: Shop = {
-          ...activeShop,
-          ...liveShop,
-          verified: isVerified,
-          status: isVerified ? 'APPROVED' : (liveShop.status || activeShop.status || 'PENDING'),
-          subscriptionPlanId: subPlanId,
-          subscription: liveShop.subscription || activeShop.subscription
-        };
-
-        const isDifferent =
-          activeShop.verified !== updatedActiveShop.verified ||
-          activeShop.status !== updatedActiveShop.status ||
-          activeShop.subscriptionPlanId !== updatedActiveShop.subscriptionPlanId ||
-          JSON.stringify(activeShop.subscription) !== JSON.stringify(updatedActiveShop.subscription);
-
-        if (isDifferent) {
-          dispatch(setActiveShop(updatedActiveShop));
-        }
-      }
-    }
-  }, [shops, activeShop, dispatch]);
-
   // --- LOCAL COMPONENT STATES (FOR FORM INPUTS) ---
   const [isSearchFocused, setIsSearchFocused] = React.useState(false);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = React.useState(false);
   const [currentSlide, setCurrentSlide] = React.useState(0);
-  const [isCatBrandModalOpen, setIsCatBrandModalOpen] = React.useState(false);
   const [shopFollowers, setShopFollowers] = React.useState<Array<{ id: string; name: string; email?: string; phone?: string; followedAt: string }>>([]);
   const [shopFollowersCount, setShopFollowersCount] = React.useState<number>(0);
 
@@ -316,7 +289,6 @@ export default function App() {
   const isAnyModalActive = Boolean(
     showAuthModal || 
     selectedProduct || 
-    isCatBrandModalOpen || 
     showAddEditModal
   );
 
@@ -332,12 +304,8 @@ export default function App() {
   }, [isAnyModalActive]);
 
   // customer dashboard sub-navigation tab state
-  const [customerTab, setCustomerTab] = React.useState<'inquiries' | 'following' | 'profile' | 'wishlist'>('inquiries');
+  const [customerTab, setCustomerTab] = React.useState<'inquiries' | 'following' | 'profile'>('inquiries');
   const [followedShops, setFollowedShops] = React.useState<Shop[]>([]);
-
-  // Wishlist state
-  const [wishlistProductIds, setWishlistProductIds] = React.useState<string[]>([]);
-  const [wishlistItems, setWishlistItems] = React.useState<Array<Product & { shop?: Shop; wishlistedAt?: string }>>([]);
 
   // customer profile editor form inputs state
   const [custProfileForm, setCustProfileForm] = React.useState({
@@ -371,7 +339,7 @@ export default function App() {
     setCustInquiriesPage(1);
   }, [customerTab]);
 
-  // Sync profile editor fields & load customer dashboard data & wishlist when logged in
+  // Sync profile editor fields & load customer dashboard data when logged in
   React.useEffect(() => {
     if (activeUser) {
       setCustProfileForm({
@@ -390,56 +358,10 @@ export default function App() {
         } catch (err) {
           console.warn('Failed to load followed shops:', err);
         }
-
-        try {
-          const wishData = await getUserWishlist(token);
-          if (wishData && wishData.products) {
-            setWishlistItems(wishData.products);
-            setWishlistProductIds(wishData.products.map((p: any) => p.id));
-          }
-        } catch (err) {
-          console.warn('Failed to load wishlist:', err);
-        }
-      } else {
-        setWishlistItems([]);
-        setWishlistProductIds([]);
       }
     }
     loadCustomerData();
   }, [activeUser, customerTab]);
-
-  const handleToggleWishlist = async (product: Product) => {
-    if (!activeUser) {
-      triggerToast("Please log in to add to your wishlist", "info");
-      dispatch(setAuthRole('customer'));
-      dispatch(setAuthTab('login'));
-      dispatch(setShowAuthModal(true));
-      return;
-    }
-    const token = localStorage.getItem('mlx_token');
-    if (!token) {
-      triggerToast("Please log in to add to your wishlist", "info");
-      dispatch(setAuthRole('customer'));
-      dispatch(setAuthTab('login'));
-      dispatch(setShowAuthModal(true));
-      return;
-    }
-    try {
-      const res = await toggleWishlist(product.id, token);
-      if (res.isWishlisted) {
-        triggerToast(`Added "${product.name}" to wishlist`, "success");
-        setWishlistProductIds(prev => [...prev, product.id]);
-        const shop = shops.find(s => s.id === product.shopId);
-        setWishlistItems(prev => [{ ...product, shop }, ...prev]);
-      } else {
-        triggerToast(`Removed "${product.name}" from wishlist`, "info");
-        setWishlistProductIds(prev => prev.filter(id => id !== product.id));
-        setWishlistItems(prev => prev.filter(p => p.id !== product.id));
-      }
-    } catch (err: any) {
-      triggerToast(err.message || "Failed to update wishlist", "warning");
-    }
-  };
 
   const handleUnfollowShopInDash = async (shopId: string) => {
     const token = localStorage.getItem('mlx_token');
@@ -453,6 +375,52 @@ export default function App() {
     }
   };
 
+  const [productForm, setProductForm] = React.useState<{
+    name: string;
+    brand: string;
+    category: string;
+    description: string;
+    price: string;
+    offerPrice: string;
+    stock: string;
+    storage: string;
+    ram: string;
+    batteryHealth: string;
+    condition: string;
+    warranty: string;
+    color: string;
+    simType: string;
+    network: string;
+    originalBill: boolean;
+    accessories: string[];
+    purchasedFromAmazon: boolean;
+    isAmazonRefurbished: boolean;
+    images: string[];
+  }>({
+    name: '',
+    brand: 'Apple',
+    category: 'Mobiles',
+    description: '',
+    price: '',
+    offerPrice: '',
+    stock: '1',
+    storage: '128GB',
+    ram: '8GB',
+    batteryHealth: '85% Health',
+    condition: 'Grade A (Like New)',
+    warranty: '3 Months Shop Warranty',
+    color: 'Black',
+    simType: 'Dual SIM',
+    network: '5G',
+    originalBill: true,
+    accessories: ['Box', 'Charger', 'Cable'],
+    purchasedFromAmazon: false,
+    isAmazonRefurbished: false,
+    images: ['', '', '', '', '', '', '']
+  });
+
+  const [isSubmittingProduct, setIsSubmittingProduct] = React.useState(false);
+
   const [profileForm, setProfileForm] = React.useState({
     name: '',
     ownerName: '',
@@ -460,27 +428,154 @@ export default function App() {
     whatsapp: '',
     address: '',
     city: '',
-    category: ''
+    category: '',
+    profileImage: '',
+    district: '',
+    country: '',
+    email: '',
+    aadhaarNumber: '',
+    panNumber: '',
+    latitude: undefined as number | undefined,
+    longitude: undefined as number | undefined,
+    gstNumber: '',
+    websiteUrl: '',
+    businessHours: '',
+    businessDescription: '',
+    alternatePhone: ''
   });
+
+  const [isProfileLocating, setIsProfileLocating] = React.useState(false);
+
+  const handleProfileLogoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      triggerToast('Please select a valid image file (JPG, PNG, WEBP)', 'info');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (!result) return;
+
+      const tempImg = new Image();
+      tempImg.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_DIM = 800;
+        let w = tempImg.width;
+        let h = tempImg.height;
+
+        if (w > h) {
+          if (w > MAX_DIM) {
+            h = Math.round((h * MAX_DIM) / w);
+            w = MAX_DIM;
+          }
+        } else {
+          if (h > MAX_DIM) {
+            w = Math.round((w * MAX_DIM) / h);
+            h = MAX_DIM;
+          }
+        }
+
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(tempImg, 0, 0, w, h);
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        setProfileForm(prev => ({ ...prev, profileImage: compressedDataUrl }));
+        triggerToast('Shop Logo / Owner Photo updated successfully!', 'success');
+      };
+      tempImg.src = result;
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Sync profile form when dashboard tab loads or activeShop changes
   React.useEffect(() => {
     if (activeShop) {
       setProfileForm({
-        name: activeShop.name,
-        ownerName: activeShop.ownerName,
-        phone: activeShop.phone,
-        whatsapp: activeShop.whatsapp,
-        address: activeShop.address,
-        city: activeShop.city,
-        category: activeShop.category || 'Mobiles & Tablets'
+        name: activeShop.name || '',
+        ownerName: activeShop.ownerName || '',
+        phone: activeShop.phone || '',
+        whatsapp: activeShop.whatsapp || '',
+        address: activeShop.address || '',
+        city: activeShop.city || '',
+        category: activeShop.category || 'Mobiles & Tablets',
+        profileImage: activeShop.profileImage || '',
+        district: activeShop.district || 'Ernakulam',
+        country: activeShop.country || 'India',
+        email: activeShop.email || activeUser?.email || '',
+        aadhaarNumber: activeShop.aadhaarNumber || '',
+        panNumber: activeShop.panNumber || '',
+        latitude: activeShop.latitude,
+        longitude: activeShop.longitude,
+        gstNumber: activeShop.gstNumber || '',
+        websiteUrl: activeShop.websiteUrl || '',
+        businessHours: activeShop.businessHours || '',
+        businessDescription: activeShop.businessDescription || '',
+        alternatePhone: activeShop.alternatePhone || ''
       });
     }
-  }, [activeShop, dashboardTab]);
+  }, [activeShop, activeUser, dashboardTab]);
 
     React.useEffect(() => {
     
   }, [selectedProduct]);
+
+  // Sync edit product form
+  React.useEffect(() => {
+    if (productToEdit) {
+      const existingImgs = [...(productToEdit.images || [])];
+      while (existingImgs.length < 7) existingImgs.push('');
+      setProductForm({
+        name: productToEdit.name,
+        brand: productToEdit.brand,
+        category: productToEdit.category,
+        description: productToEdit.description,
+        price: productToEdit.price.toString(),
+        offerPrice: productToEdit.offerPrice ? productToEdit.offerPrice.toString() : '',
+        stock: productToEdit.stock.toString(),
+        storage: productToEdit.storage || productToEdit.specs?.['Storage'] || '128GB',
+        ram: productToEdit.ram || productToEdit.specs?.['RAM'] || '8GB',
+        batteryHealth: productToEdit.batteryHealth || productToEdit.specs?.['Battery'] || '85% Health',
+        condition: productToEdit.condition || productToEdit.specs?.['Condition'] || 'Grade A (Like New)',
+        warranty: productToEdit.warranty || productToEdit.specs?.['Warranty'] || '3 Months Shop Warranty',
+        color: productToEdit.color || 'Black',
+        simType: productToEdit.simType || 'Dual SIM',
+        network: productToEdit.network || '5G',
+        originalBill: productToEdit.originalBill !== undefined ? productToEdit.originalBill : true,
+        accessories: productToEdit.accessories || ['Box', 'Charger', 'Cable'],
+        purchasedFromAmazon: !!productToEdit.purchasedFromAmazon,
+        isAmazonRefurbished: !!productToEdit.isAmazonRefurbished,
+        images: existingImgs.slice(0, 7)
+      });
+    } else {
+      setProductForm({
+        name: '',
+        brand: '',
+        category: 'Mobiles',
+        description: '',
+        price: '',
+        offerPrice: '',
+        stock: '1',
+        storage: '128GB',
+        ram: '8GB',
+        batteryHealth: '85% Health',
+        condition: 'Grade A (Like New)',
+        warranty: '3 Months Shop Warranty',
+        color: 'Black',
+        simType: 'Dual SIM',
+        network: '5G',
+        originalBill: true,
+        accessories: ['Box', 'Charger', 'Cable'],
+        purchasedFromAmazon: false,
+        isAmazonRefurbished: false,
+        images: ['', '', '', '', '', '', '']
+      });
+    }
+  }, [productToEdit, showAddEditModal]);
 
   // --- HELPERS ---
   const getSellerShop = (shopId: string): Shop => {
@@ -604,7 +699,16 @@ export default function App() {
     fetchDbBrands();
   }, []);
 
-  const uniqueBrands = Array.from(new Set([...products.map(p => p.brand), ...dbBrands])).filter(Boolean).sort();
+  // Extract unique brands for sidebar filters and product creation dropdown
+  const uniqueBrands = Array.from(new Set(products.map(p => p.brand)));
+
+  const availableBrandsList = Array.from(
+    new Set([
+      'Apple', 'Samsung', 'OnePlus', 'Google', 'Xiaomi', 'Realme', 'Vivo', 'Oppo', 'Motorola', 'Asus', 'Lenovo', 'HP', 'Dell', 'Acer', 'Sony', 'Nothing',
+      ...dbBrands,
+      ...uniqueBrands
+    ])
+  ).filter(Boolean).sort();
 
   // --- HANDLERS ---
   const triggerToast = (message: string, type: 'info' | 'success' | 'warning' = 'info') => {
@@ -622,7 +726,20 @@ export default function App() {
       whatsapp: profileForm.whatsapp,
       address: profileForm.address,
       city: profileForm.city,
-      category: profileForm.category
+      category: profileForm.category,
+      profileImage: profileForm.profileImage,
+      district: profileForm.district,
+      country: profileForm.country,
+      email: profileForm.email,
+      aadhaarNumber: profileForm.aadhaarNumber,
+      panNumber: profileForm.panNumber,
+      latitude: profileForm.latitude,
+      longitude: profileForm.longitude,
+      gstNumber: profileForm.gstNumber,
+      websiteUrl: profileForm.websiteUrl,
+      businessHours: profileForm.businessHours,
+      businessDescription: profileForm.businessDescription,
+      alternatePhone: profileForm.alternatePhone,
     };
     
     dispatch(updateShop(updated));
@@ -645,6 +762,137 @@ export default function App() {
   const handleOpenEditProduct = (product: Product) => {
     dispatch(setProductToEdit(product));
     dispatch(setShowAddEditModal(true));
+  };
+
+  const handleProductSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!activeShop || isSubmittingProduct) return;
+
+    // Validate min 4 photos
+    const validImages = productForm.images.filter(img => img.trim() !== '');
+    if (validImages.length < 4) {
+      triggerToast("Please provide photos from at least 4 angles (Front side, Back side, and Side angles)!", "info");
+      return;
+    }
+
+    const specs: Record<string, string> = {
+      Storage: productForm.storage,
+      RAM: productForm.ram,
+      Battery: productForm.batteryHealth,
+      Condition: productForm.condition,
+      Warranty: productForm.warranty,
+      Color: productForm.color,
+      SIM: productForm.simType,
+      Network: productForm.network
+    };
+
+    const offerPriceNum = productForm.offerPrice ? parseFloat(productForm.offerPrice) : undefined;
+
+    setIsSubmittingProduct(true);
+    try {
+      if (productToEdit) {
+        const updated: Product = {
+          ...productToEdit,
+          name: productForm.name,
+          brand: productForm.brand,
+          category: productForm.category,
+          description: productForm.description,
+          price: parseFloat(productForm.price),
+          offerPrice: offerPriceNum,
+          stock: parseInt(productForm.stock),
+          storage: productForm.storage,
+          ram: productForm.ram,
+          batteryHealth: productForm.batteryHealth,
+          condition: productForm.condition,
+          warranty: productForm.warranty,
+          color: productForm.color,
+          simType: productForm.simType,
+          network: productForm.network,
+          originalBill: productForm.originalBill,
+          accessories: productForm.accessories,
+          specs,
+          images: validImages
+        };
+        dispatch(editProduct(updated));
+        triggerToast("Listing updated successfully!", "success");
+        dispatch(setShowAddEditModal(false));
+      } else {
+        const token = localStorage.getItem('mlx_token');
+        if (token) {
+          try {
+            const savedProd = await createSellerProduct({
+              name: productForm.name,
+              brand: productForm.brand,
+              category: productForm.category,
+              description: productForm.description,
+              price: parseFloat(productForm.price),
+              stock: parseInt(productForm.stock),
+              specs,
+              images: validImages
+            }, token);
+
+            const newProduct: Product = {
+              id: savedProd.id || `prod-${Date.now()}`,
+              name: savedProd.name || productForm.name,
+              brand: savedProd.brand || productForm.brand,
+              category: savedProd.category || productForm.category,
+              description: savedProd.description || productForm.description,
+              price: savedProd.price || parseFloat(productForm.price),
+              offerPrice: offerPriceNum,
+              stock: savedProd.stock || parseInt(productForm.stock),
+              shopId: savedProd.shopId || activeShop.id,
+              storage: productForm.storage,
+              ram: productForm.ram,
+              batteryHealth: productForm.batteryHealth,
+              condition: productForm.condition,
+              warranty: productForm.warranty,
+              color: productForm.color,
+              simType: productForm.simType,
+              network: productForm.network,
+              originalBill: productForm.originalBill,
+              accessories: productForm.accessories,
+              specs: savedProd.specs || specs,
+              images: savedProd.images || validImages
+            };
+            dispatch(addProduct(newProduct));
+            triggerToast("New used gadget listed in database successfully!", "success");
+            dispatch(setShowAddEditModal(false));
+          } catch (err: any) {
+            triggerToast(err.message || 'Failed to list product in database', 'warning');
+            return;
+          }
+        } else {
+          const newProduct: Product = {
+            id: `prod-${Date.now()}`,
+            name: productForm.name,
+            brand: productForm.brand,
+            category: productForm.category,
+            description: productForm.description,
+            price: parseFloat(productForm.price),
+            offerPrice: offerPriceNum,
+            stock: parseInt(productForm.stock),
+            shopId: activeShop.id,
+            storage: productForm.storage,
+            ram: productForm.ram,
+            batteryHealth: productForm.batteryHealth,
+            condition: productForm.condition,
+            warranty: productForm.warranty,
+            color: productForm.color,
+            simType: productForm.simType,
+            network: productForm.network,
+            originalBill: productForm.originalBill,
+            accessories: productForm.accessories,
+            specs,
+            images: validImages
+          };
+          dispatch(addProduct(newProduct));
+          triggerToast("New used gadget listed successfully!", "success");
+          dispatch(setShowAddEditModal(false));
+        }
+      }
+    } finally {
+      setIsSubmittingProduct(false);
+    }
   };
 
   const handleToggleSoldOut = (product: Product) => {
@@ -945,46 +1193,7 @@ export default function App() {
           </div>
 
           {/* Header Action Buttons for standard Users and Seller Shop Portal */}
-          <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-            {/* Wishlist Header Action */}
-            <button
-              type="button"
-              className={`action-btn ${location.pathname === '/wishlist' ? 'active' : ''}`}
-              onClick={() => {
-                if (activeUser) {
-                  navigate('/wishlist');
-                } else {
-                  triggerToast("Please log in to access your wishlist", "info");
-                  dispatch(setAuthRole('customer'));
-                  dispatch(setAuthTab('login'));
-                  dispatch(setShowAuthModal(true));
-                }
-              }}
-              title="My Wishlist"
-              style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.5rem 0.65rem' }}
-            >
-              <Heart size={18} fill={wishlistProductIds.length > 0 ? '#ef4444' : 'transparent'} color={wishlistProductIds.length > 0 ? '#ef4444' : 'currentColor'} />
-              {wishlistProductIds.length > 0 && (
-                <span style={{
-                  position: 'absolute',
-                  top: '-5px',
-                  right: '-5px',
-                  backgroundColor: '#ef4444',
-                  color: '#ffffff',
-                  fontSize: '0.65rem',
-                  fontWeight: 800,
-                  width: '18px',
-                  height: '18px',
-                  borderRadius: '50%',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
-                }}>
-                  {wishlistProductIds.length}
-                </span>
-              )}
-            </button>
+          <div className="header-actions">
 
             {activeShop ? (
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -1011,19 +1220,17 @@ export default function App() {
                 <button 
                   className={`action-btn sell-btn ${location.pathname === '/customer-dashboard' ? 'active' : ''}`}
                   onClick={() => navigate('/customer-dashboard')}
-                  title="Go to My Dashboard"
                 >
-                  <User size={15} />
-                  <span className="nav-btn-text">
-                    {activeUser.name && !activeUser.name.includes('@')
-                      ? activeUser.name
-                      : activeUser.name && activeUser.name.includes('@')
-                        ? activeUser.name.split('@')[0].charAt(0).toUpperCase() + activeUser.name.split('@')[0].slice(1)
-                        : activeUser.email
-                          ? activeUser.email.split('@')[0].charAt(0).toUpperCase() + activeUser.email.split('@')[0].slice(1)
-                          : 'My Dashboard'}
-                  </span>
+                  <Layers size={15} />
+                  <span className="nav-btn-text">My Dashboard</span>
                 </button>
+                <span className="user-indicator">
+                  <User size={14} />
+                  <span className="user-badge-text-container">
+                    <span className="user-badge-name">{activeUser.name}</span>
+                    <span className="user-badge-role"> (Buyer)</span>
+                  </span>
+                </span>
                 <button className="action-btn" onClick={() => { dispatch(setActiveUser(null)); triggerToast("Logged out successfully."); navigate('/'); }} title="Logout User">
                   <LogOut size={16} />
                 </button>
@@ -1284,38 +1491,19 @@ export default function App() {
                     <article 
                       key={product.id} 
                       className="product-card"
-                      onClick={() => dispatch(setSelectedProduct(product))}
+                      onClick={() => {
+                        const token = typeof window !== 'undefined' ? localStorage.getItem('mlx_token') : null;
+                        if (!activeUser && !activeShop && !token) {
+                          dispatch(setAuthRole('customer'));
+                          dispatch(setAuthTab('login'));
+                          dispatch(setShowAuthModal(true));
+                          return;
+                        }
+                        dispatch(setSelectedProduct(product));
+                        navigate(`/product/${product.id}`);
+                      }}
                     >
-                      <div className="card-img-wrapper" style={{ position: 'relative' }}>
-                        {/* Wishlist Heart Overlay */}
-                        <button
-                          type="button"
-                          title={wishlistProductIds.includes(product.id) ? "Remove from Wishlist" : "Add to Wishlist"}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleToggleWishlist(product);
-                          }}
-                          style={{
-                            position: 'absolute',
-                            top: '10px',
-                            right: '10px',
-                            zIndex: 11,
-                            width: '32px',
-                            height: '32px',
-                            borderRadius: '50%',
-                            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                            border: '1px solid #e2e8f0',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            color: wishlistProductIds.includes(product.id) ? '#ef4444' : '#64748b',
-                            cursor: 'pointer',
-                            boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-                            transition: 'all 0.2s ease'
-                          }}
-                        >
-                          <Heart size={16} fill={wishlistProductIds.includes(product.id) ? '#ef4444' : 'transparent'} />
-                        </button>
+                      <div className="card-img-wrapper">
                         {product.images && product.images.length > 0 ? (
                           <img src={product.images[0]} alt={product.name} className="product-card-img" />
                         ) : (
@@ -1576,14 +1764,6 @@ export default function App() {
               </button>
 
               <button 
-                className={`dash-menu-btn ${customerTab === 'wishlist' ? 'active' : ''}`}
-                onClick={() => setCustomerTab('wishlist')}
-              >
-                <Heart size={16} fill={customerTab === 'wishlist' ? '#ef4444' : 'transparent'} color={customerTab === 'wishlist' ? '#ef4444' : 'currentColor'} />
-                <span>My Wishlist ({wishlistProductIds.length})</span>
-              </button>
-
-              <button 
                 className={`dash-menu-btn ${customerTab === 'following' ? 'active' : ''}`}
                 onClick={() => setCustomerTab('following')}
               >
@@ -1611,24 +1791,7 @@ export default function App() {
           </aside>
 
           <section className="dashboard-content">
-            {customerTab === 'wishlist' ? (
-              <WishlistPage
-                wishlistProducts={wishlistItems}
-                onRemoveWishlist={(productId) => {
-                  const prod = products.find(p => p.id === productId) || wishlistItems.find(p => p.id === productId);
-                  if (prod) handleToggleWishlist(prod);
-                }}
-                onCallSeller={handleCallSeller}
-                onWhatsAppSeller={handleWhatsAppSeller}
-                onSelectProduct={(prod) => dispatch(setSelectedProduct(prod))}
-                activeUser={activeUser}
-                onOpenLogin={() => {
-                  dispatch(setAuthRole('customer'));
-                  dispatch(setAuthTab('login'));
-                  dispatch(setShowAuthModal(true));
-                }}
-              />
-            ) : customerTab === 'inquiries' ? (
+            {customerTab === 'inquiries' ? (
               /* Customer Inquiries Log */
               <div className="dashboard-panel">
                 <div className="panel-header">
@@ -1956,25 +2119,6 @@ export default function App() {
           </section>
         </main>
       } />
-
-      <Route path="/wishlist" element={
-        <WishlistPage
-          wishlistProducts={wishlistItems}
-          onRemoveWishlist={(productId) => {
-            const prod = products.find(p => p.id === productId) || wishlistItems.find(p => p.id === productId);
-            if (prod) handleToggleWishlist(prod);
-          }}
-          onCallSeller={handleCallSeller}
-          onWhatsAppSeller={handleWhatsAppSeller}
-          onSelectProduct={(prod) => dispatch(setSelectedProduct(prod))}
-          activeUser={activeUser}
-          onOpenLogin={() => {
-            dispatch(setAuthRole('customer'));
-            dispatch(setAuthTab('login'));
-            dispatch(setShowAuthModal(true));
-          }}
-        />
-      } />
       
       <Route path="/seller-dashboard" element={
         /* --- SELLER DASHBOARD VIEW --- */
@@ -1985,10 +2129,17 @@ export default function App() {
                 {activeShop ? activeShop.name.charAt(0) : 'D'}
               </div>
               <h2 className="profile-name">{activeShop?.name}</h2>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: activeShop?.verified ? 'var(--success)' : '#dc2626', fontWeight: 600, backgroundColor: activeShop?.verified ? 'var(--success-bg)' : '#fef2f2', padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-sm)', border: activeShop?.verified ? '1px solid #bbf7d0' : '1px solid #fecaca' }}>
-                <ShieldCheck size={12} />
-                <span>{activeShop?.verified ? 'Verified Seller Shop' : '⚠️ Pending Admin Approval'}</span>
-              </div>
+              {activeShop?.verified ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: '#16a34a', fontWeight: 600, backgroundColor: '#dcfce7', padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-sm)', border: '1px solid #86efac' }}>
+                  <ShieldCheck size={12} />
+                  <span>Verified Seller Shop</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: '#c2410c', fontWeight: 600, backgroundColor: '#ffedd5', padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-sm)', border: '1px solid #fdba74' }}>
+                  <Clock size={12} />
+                  <span>Pending Admin Verification</span>
+                </div>
+              )}
             </div>
 
             <div className="profile-stats-row">
@@ -2008,16 +2159,13 @@ export default function App() {
 
             {/* Subscription Plan & Product Usage Summary Card */}
             {(() => {
-              const activePlanObj = subscriptionPlans.find(
-                p => p.id === activeShop?.subscriptionPlanId || p.id === activeShop?.subscription?.planId
-              ) || activeShop?.subscription?.plan || {
+              const activePlanObj = subscriptionPlans.find(p => p.id === (activeShop?.subscriptionPlanId || 'plan-free')) || {
                 name: 'Free Plan',
-                productLimit: 10,
-                price: 0
+                productLimit: 10
               };
               const activeCount = activeShop ? products.filter(p => p.shopId === activeShop.id).length : 0;
-              const slotsLeft = Math.max(0, (activePlanObj.productLimit ?? 10) - activeCount);
-              const isPending = Boolean(activeShop && (!activeShop.verified || activeShop.status === 'PENDING'));
+              const slotsLeft = Math.max(0, activePlanObj.productLimit - activeCount);
+              const isPending = Boolean(activeShop && !activeShop.verified);
 
               return (
                 <div
@@ -2043,7 +2191,7 @@ export default function App() {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: '0.5rem', background: 'rgba(15,23,42,0.6)', padding: '0.6rem', borderRadius: '10px' }}>
                     <div>
                       <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block' }}>Max Limit</span>
-                      <strong style={{ fontSize: '1rem', color: '#ffffff' }}>{activePlanObj.productLimit ?? 10} Products</strong>
+                      <strong style={{ fontSize: '1rem', color: '#ffffff' }}>{activePlanObj.productLimit} Products</strong>
                     </div>
                     <div>
                       <span style={{ fontSize: '0.7rem', color: '#94a3b8', display: 'block' }}>Remaining</span>
@@ -2052,8 +2200,10 @@ export default function App() {
                   </div>
 
                   {isPending && (
-                    <div style={{ marginTop: '0.65rem', padding: '0.4rem 0.6rem', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#fca5a5', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>
-                      ⚠️ Shop Status: PENDING Admin Approval
+                    <div style={{ marginTop: "0.75rem", padding: "0.75rem 0.85rem", borderRadius: "12px", background: "linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.08) 100%)", border: "1px solid rgba(245, 158, 11, 0.35)", boxShadow: "0 4px 12px rgba(245, 158, 11, 0.08)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: "0.25rem" }}><Clock size={15} color="#fbbf24" style={{ flexShrink: 0 }} /><span style={{ fontSize: "0.78rem", fontWeight: 800, color: "#fbbf24" }}>Pending Admin Verification</span></div>
+                      <p style={{ margin: 0, fontSize: "0.72rem", color: "#cbd5ea", lineHeight: "1.4" }}>Your store profile is currently being reviewed by MLX admins. Verification updates automatically here.</p>
+
                     </div>
                   )}
 
@@ -2066,10 +2216,100 @@ export default function App() {
               );
             })()}
 
+            {/* Brief Shop Profile Completion Sidebar Widget */}
+            {(() => {
+              const completion = calculateShopProfileCompletion(activeShop, activeUser?.email);
+              return (
+                <div 
+                  onClick={() => {
+                    navigate('/seller-dashboard');
+                    dispatch(setDashboardTab('profile'));
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
+                  style={{
+                    margin: '0.75rem 0 1rem 0',
+                    padding: '0.85rem 0.95rem',
+                    background: completion.isFullyCompleted
+                      ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.12) 0%, rgba(16, 185, 129, 0.06) 100%)'
+                      : 'linear-gradient(135deg, rgba(255, 111, 0, 0.12) 0%, rgba(234, 88, 12, 0.06) 100%)',
+                    borderRadius: '14px',
+                    border: completion.isFullyCompleted
+                      ? '1px solid rgba(34, 197, 94, 0.3)'
+                      : '1px solid rgba(255, 111, 0, 0.3)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.04)',
+                    cursor: 'pointer'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: completion.isFullyCompleted ? '#166534' : '#9a3412', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <ShieldCheck size={16} color={completion.isFullyCompleted ? '#16a34a' : '#ea580c'} />
+                      <span>Profile Completion</span>
+                    </span>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 800, color: completion.isFullyCompleted ? '#15803d' : '#c2410c' }}>
+                      {completion.completionPercentage}%
+                    </span>
+                  </div>
+
+                  {/* Mini Progress Bar Track */}
+                  <div style={{ width: '100%', height: '7px', background: 'rgba(0, 0, 0, 0.08)', borderRadius: '10px', overflow: 'hidden', marginBottom: '0.45rem' }}>
+                    <div 
+                      style={{
+                        height: '100%',
+                        width: `${completion.completionPercentage}%`,
+                        background: completion.isFullyCompleted 
+                          ? 'linear-gradient(90deg, #22c55e 0%, #16a34a 100%)' 
+                          : 'linear-gradient(90deg, #ff6f00 0%, #ea580c 100%)',
+                        borderRadius: '10px',
+                        transition: 'width 0.4s ease-in-out'
+                      }}
+                    />
+                  </div>
+
+                  {!completion.isFullyCompleted ? (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
+                      <span style={{ fontSize: '0.72rem', color: '#c2410c', fontWeight: 600 }}>
+                        {completion.missingFields.length} field(s) missing
+                      </span>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          navigate('/seller-dashboard');
+                          dispatch(setDashboardTab('profile'));
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#ea580c',
+                          fontSize: '0.73rem',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          padding: 0
+                        }}
+                      >
+                        Complete Profile →
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '0.72rem', color: '#15803d', fontWeight: 700, textAlign: 'center', marginTop: '0.2rem' }}>
+                      ✓ 100% Profile Complete
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             <div className="dashboard-menu">
               <button 
                 className={`dash-menu-btn ${dashboardTab === 'listings' ? 'active' : ''}`}
-                onClick={() => dispatch(setDashboardTab('listings'))}
+                onClick={() => {
+                  navigate('/seller-dashboard');
+                  dispatch(setDashboardTab('listings'));
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
               >
                 <Layers size={16} />
                 <span>Manage Product Listings</span>
@@ -2078,7 +2318,11 @@ export default function App() {
               {/* New Leads Report Tab */}
               <button 
                 className={`dash-menu-btn ${dashboardTab === 'leads' ? 'active' : ''}`}
-                onClick={() => dispatch(setDashboardTab('leads'))}
+                onClick={() => {
+                  navigate('/seller-dashboard');
+                  dispatch(setDashboardTab('leads'));
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
               >
                 <MessageSquare size={16} />
                 <span>Leads & Performance Report</span>
@@ -2086,7 +2330,11 @@ export default function App() {
 
               <button 
                 className={`dash-menu-btn ${dashboardTab === 'followers' ? 'active' : ''}`}
-                onClick={() => dispatch(setDashboardTab('followers'))}
+                onClick={() => {
+                  navigate('/seller-dashboard');
+                  dispatch(setDashboardTab('followers'));
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
               >
                 <UserCheck size={16} />
                 <span>My Store Followers ({shopFollowersCount})</span>
@@ -2094,20 +2342,16 @@ export default function App() {
 
               <button 
                 className={`dash-menu-btn ${dashboardTab === 'profile' ? 'active' : ''}`}
-                onClick={() => dispatch(setDashboardTab('profile'))}
+                onClick={() => {
+                  navigate('/seller-dashboard');
+                  dispatch(setDashboardTab('profile'));
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
               >
                 <User size={16} />
-                <span>Edit Shop Profile</span>
+                <span>Edit Shop Profile ({calculateShopProfileCompletion(activeShop, activeUser?.email).completionPercentage}%)</span>
               </button>
 
-              <button 
-                className="dash-menu-btn"
-                onClick={() => setIsCatBrandModalOpen(true)}
-              >
-                <Tag size={16} />
-                <span>Manage Categories & Brands</span>
-              </button>
-              
               <button className="dash-menu-btn" onClick={() => navigate('/')} style={{ borderTop: '1px solid var(--light-border)', marginTop: '0.5rem', paddingTop: '1rem' }}>
                 <Store size={16} />
                 <span>Back to Marketplace Directory</span>
@@ -2492,68 +2736,183 @@ export default function App() {
             ) : dashboardTab === 'followers' ? (
               /* My Store Followers Panel */
               <div className="dashboard-panel">
-                <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <h3 className="panel-title">My Store Followers</h3>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary-light)' }}>
-                      Customers who are following <strong>{activeShop?.name}</strong> for inventory updates
-                    </div>
-                  </div>
-                  <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '0.4rem 0.85rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, color: '#2563eb' }}>
-                    Total Followers: {shopFollowersCount}
-                  </div>
-                </div>
+                {(() => {
+                  const validFollowers = shopFollowers.filter(
+                    (follower) => follower.id !== activeShop?.id && follower.name !== activeShop?.name
+                  );
 
-                <div style={{ marginTop: '1.5rem' }}>
-                  {shopFollowers.length > 0 ? (
-                    <table className="leads-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                      <thead>
-                        <tr style={{ backgroundColor: 'var(--light-bg)', textAlign: 'left', borderBottom: '1px solid var(--light-border)' }}>
-                          <th style={{ padding: '0.75rem' }}>Followed Date</th>
-                          <th style={{ padding: '0.75rem' }}>Customer Name</th>
-                          <th style={{ padding: '0.75rem' }}>Contact Details</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'right' }}>Direct Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {shopFollowers.map((follower) => (
-                          <tr key={follower.id} style={{ borderBottom: '1px solid var(--light-border)' }}>
-                            <td style={{ padding: '0.75rem' }}>
-                              {new Date(follower.followedAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
-                            </td>
-                            <td style={{ padding: '0.75rem', fontWeight: 600 }}>{follower.name}</td>
-                            <td style={{ padding: '0.75rem' }}>
-                              <div>{follower.phone || follower.email || 'Registered Customer'}</div>
-                            </td>
-                            <td style={{ padding: '0.75rem', textAlign: 'right' }}>
-                              {follower.phone ? (
-                                <a
-                                  href={`https://wa.me/${follower.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${follower.name}, thank you for following ${activeShop?.name} on MLX Market!`)}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="btn-whatsapp"
-                                  style={{ padding: '0.25rem 0.65rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', textDecoration: 'none', borderRadius: '6px' }}
-                                >
-                                  <span>WhatsApp Customer</span>
-                                </a>
-                              ) : (
-                                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Subscribed</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary-light)' }}>
-                      <UserCheck size={36} style={{ opacity: 0.3, marginBottom: '1rem' }} />
-                      <p>No customers are following your store yet. Keep your product catalog updated and accurate to attract followers!</p>
-                    </div>
-                  )}
-                </div>
+                  return (
+                    <>
+                      <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <h3 className="panel-title">My Store Followers</h3>
+                          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary-light)' }}>
+                            Customers who are following <strong>{activeShop?.name}</strong> for inventory updates
+                          </div>
+                        </div>
+                        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '0.4rem 0.85rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, color: '#2563eb' }}>
+                          Total Followers: {validFollowers.length}
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: '1.5rem' }}>
+                        {validFollowers.length > 0 ? (
+                          <table className="leads-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                            <thead>
+                              <tr style={{ backgroundColor: 'var(--light-bg)', textAlign: 'left', borderBottom: '1px solid var(--light-border)' }}>
+                                <th style={{ padding: '0.75rem' }}>Followed Date</th>
+                                <th style={{ padding: '0.75rem' }}>Customer Name</th>
+                                <th style={{ padding: '0.75rem' }}>Contact Details</th>
+                                <th style={{ padding: '0.75rem', textAlign: 'right' }}>Direct Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {validFollowers.map((follower) => (
+                                <tr key={follower.id} style={{ borderBottom: '1px solid var(--light-border)' }}>
+                                  <td style={{ padding: '0.75rem' }}>
+                                    {new Date(follower.followedAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
+                                  </td>
+                                  <td style={{ padding: '0.75rem', fontWeight: 600 }}>{follower.name}</td>
+                                  <td style={{ padding: '0.75rem' }}>
+                                    <div>{follower.phone || follower.email || 'Registered Customer'}</div>
+                                  </td>
+                                  <td style={{ padding: '0.75rem', textAlign: 'right' }}>
+                                    {follower.phone ? (
+                                      <a
+                                        href={`https://wa.me/${follower.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${follower.name}, thank you for following ${activeShop?.name} on MLX Market!`)}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="btn-whatsapp"
+                                        style={{ padding: '0.25rem 0.65rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', textDecoration: 'none', borderRadius: '6px' }}
+                                      >
+                                        <span>WhatsApp Customer</span>
+                                      </a>
+                                    ) : (
+                                      <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Subscribed</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        ) : (
+                          <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary-light)' }}>
+                            <UserCheck size={36} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+                            <p>No customers are following your store yet. Keep your product catalog updated and accurate to attract followers!</p>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             ) : (
               <div className="dashboard-panel">
+                {/* SHOP PROFILE COMPLETION PROGRESS CARD */}
+                {(() => {
+                  const completion = calculateShopProfileCompletion(
+                    activeShop ? {
+                      ...activeShop,
+                      name: profileForm.name || activeShop.name,
+                      ownerName: profileForm.ownerName || activeShop.ownerName,
+                      phone: profileForm.phone || activeShop.phone,
+                      whatsapp: profileForm.whatsapp || activeShop.whatsapp,
+                      city: profileForm.city || activeShop.city,
+                      address: profileForm.address || activeShop.address,
+                    } : null,
+                    activeUser?.email
+                  );
+
+                  return (
+                    <div 
+                      style={{
+                        background: completion.isFullyCompleted 
+                          ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(16, 185, 129, 0.04) 100%)' 
+                          : 'linear-gradient(135deg, rgba(255, 111, 0, 0.08) 0%, rgba(234, 88, 12, 0.04) 100%)',
+                        border: completion.isFullyCompleted 
+                          ? '1px solid rgba(34, 197, 94, 0.3)' 
+                          : '1px solid rgba(255, 111, 0, 0.3)',
+                        borderRadius: '16px',
+                        padding: '1.25rem 1.5rem',
+                        marginBottom: '1.75rem',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: completion.isFullyCompleted ? '#166534' : '#9a3412', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <ShieldCheck size={20} color={completion.isFullyCompleted ? '#16a34a' : '#ea580c'} />
+                            <span>Profile Completion: {completion.completionPercentage}%</span>
+                          </h4>
+                          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.83rem', color: '#64748b' }}>
+                            {completion.isFullyCompleted 
+                              ? '🎉 Excellent! Your shop profile is 100% complete and fully verified for buyers.' 
+                              : 'Complete the remaining profile details to reach 100%.'}
+                          </p>
+                        </div>
+                        <div 
+                          style={{
+                            fontSize: '0.82rem',
+                            fontWeight: 800,
+                            padding: '0.35rem 0.85rem',
+                            borderRadius: '20px',
+                            background: completion.isFullyCompleted ? '#dcfce7' : '#ffedd5',
+                            color: completion.isFullyCompleted ? '#15803d' : '#c2410c',
+                            border: completion.isFullyCompleted ? '1px solid #86efac' : '1px solid #fdba74'
+                          }}
+                        >
+                          {completion.completedFieldsCount} / {completion.totalFieldsCount} Mandatory Fields
+                        </div>
+                      </div>
+
+                      {/* PROGRESS BAR TRACK */}
+                      <div style={{ width: '100%', height: '10px', background: 'rgba(0, 0, 0, 0.08)', borderRadius: '10px', overflow: 'hidden', marginBottom: '0.85rem' }}>
+                        <div 
+                          style={{
+                            height: '100%',
+                            width: `${completion.completionPercentage}%`,
+                            background: completion.isFullyCompleted 
+                              ? 'linear-gradient(90deg, #22c55e 0%, #16a34a 100%)' 
+                              : 'linear-gradient(90deg, #ff6f00 0%, #ea580c 100%)',
+                            borderRadius: '10px',
+                            transition: 'width 0.4s ease-in-out'
+                          }}
+                        />
+                      </div>
+
+                      {/* MISSING FIELDS LIST */}
+                      {!completion.isFullyCompleted && completion.missingFields.length > 0 && (
+                        <div style={{ marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px dashed rgba(255, 111, 0, 0.2)' }}>
+                          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#c2410c', display: 'block', marginBottom: '0.4rem' }}>
+                            Remaining Incomplete Fields:
+                          </span>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                            {completion.missingFields.map((field) => (
+                              <span 
+                                key={field} 
+                                style={{
+                                  fontSize: '0.75rem',
+                                  background: '#fff',
+                                  border: '1px solid #fed7aa',
+                                  color: '#9a3412',
+                                  padding: '0.25rem 0.6rem',
+                                  borderRadius: '8px',
+                                  fontWeight: 600,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem'
+                                }}
+                              >
+                                ⚠️ {field}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 <div className="panel-header">
                   <h3 className="panel-title">Edit Shop Profile</h3>
                 </div>
@@ -2626,14 +2985,244 @@ export default function App() {
                     </select>
                   </div>
 
-                  <div className="form-group full-width">
-                    <label className="form-label">Market Business Address *</label>
-                    <textarea 
-                      className="form-textarea" 
+                  <div className="form-group full-width" style={{ background: 'rgba(255, 255, 255, 0.04)', padding: '1rem', borderRadius: '14px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                    <label className="form-label" style={{ fontWeight: 700, color: '#0f172a' }}>Shop Profile / Logo Image *</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', marginTop: '0.4rem' }}>
+                      {profileForm.profileImage ? (
+                        <div style={{ position: 'relative', width: '72px', height: '72px', borderRadius: '18px', overflow: 'hidden', border: '2px solid #ff6f00', flexShrink: 0 }}>
+                          <img src={profileForm.profileImage} alt="Shop Logo Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                      ) : (
+                        <div style={{ width: '72px', height: '72px', borderRadius: '18px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', flexShrink: 0, border: '2px dashed #cbd5e1' }}>
+                          <Store size={32} />
+                        </div>
+                      )}
+                      <div style={{ flex: 1 }}>
+                        <input
+                          type="file"
+                          id="editProfileLogoInput"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={handleProfileLogoFileSelect}
+                        />
+                        <label
+                          htmlFor="editProfileLogoInput"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
+                            color: '#ffffff',
+                            padding: '0.55rem 1rem',
+                            borderRadius: '10px',
+                            fontSize: '0.83rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            marginBottom: '0.35rem',
+                            boxShadow: '0 4px 12px rgba(255, 111, 0, 0.25)'
+                          }}
+                        >
+                          📷 {profileForm.profileImage ? 'Change Logo / Photo' : 'Upload Shop Logo / Photo'}
+                        </label>
+                        <p style={{ fontSize: '0.75rem', color: '#64748b', margin: 0 }}>
+                          Supports JPG, PNG, WEBP (Auto-compressed)
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Email Address *</label>
+                    <input 
+                      type="email" 
+                      className="form-input-text" 
                       required
-                      value={profileForm.address}
-                      onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setProfileForm({...profileForm, address: e.target.value})}
-                    ></textarea>
+                      placeholder="e.g. store@gmail.com"
+                      value={profileForm.email}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setProfileForm({...profileForm, email: e.target.value})}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">District *</label>
+                    <input 
+                      type="text" 
+                      className="form-input-text" 
+                      required
+                      placeholder="e.g. Ernakulam / Calicut"
+                      value={profileForm.district}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setProfileForm({...profileForm, district: e.target.value})}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Country *</label>
+                    <input 
+                      type="text" 
+                      className="form-input-text" 
+                      required
+                      placeholder="India"
+                      value={profileForm.country}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setProfileForm({...profileForm, country: e.target.value})}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Aadhaar Card Number *</label>
+                    <input 
+                      type="text" 
+                      className="form-input-text" 
+                      required
+                      placeholder="12-digit Aadhaar Number"
+                      value={profileForm.aadhaarNumber}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setProfileForm({...profileForm, aadhaarNumber: e.target.value})}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">PAN Card Number *</label>
+                    <input 
+                      type="text" 
+                      className="form-input-text" 
+                      required
+                      placeholder="10-character PAN Number"
+                      value={profileForm.panNumber}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setProfileForm({...profileForm, panNumber: e.target.value})}
+                    />
+                  </div>
+
+                  {/* MANDATORY LOCATION SELECTION SECTION IN EDIT PROFILE */}
+                  <div className="form-group full-width" style={{ background: '#f8fafc', border: '1.5px dashed #ff9e40', padding: '1.25rem', borderRadius: '16px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <label className="form-label" style={{ fontWeight: 800, color: '#c2410c', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.95rem' }}>
+                        <MapPin size={18} />
+                        <span>Shop Map Coordinates (Mandatory) *</span>
+                      </label>
+                      {typeof profileForm.latitude === 'number' && typeof profileForm.longitude === 'number' && !isNaN(profileForm.latitude) && !isNaN(profileForm.longitude) && (
+                        <span style={{ fontSize: '0.78rem', background: '#dcfce7', color: '#15803d', padding: '0.25rem 0.75rem', borderRadius: '12px', fontWeight: 700, border: '1px solid #86efac' }}>
+                          ✓ Coordinates Set ({profileForm.latitude.toFixed(4)}, {profileForm.longitude.toFixed(4)})
+                        </span>
+                      )}
+                    </div>
+
+                    <p style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '0.85rem' }}>
+                      Detect GPS location or search address to pin exact coordinates on Google Maps:
+                    </p>
+
+                    <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '0.85rem' }}>
+                      <button
+                        type="button"
+                        disabled={isProfileLocating}
+                        onClick={() => {
+                          if (!navigator.geolocation) {
+                            triggerToast('Geolocation is not supported by your browser.', 'info');
+                            return;
+                          }
+                          setIsProfileLocating(true);
+                          navigator.geolocation.getCurrentPosition(
+                            (position) => {
+                              setProfileForm(prev => ({
+                                ...prev,
+                                latitude: position.coords.latitude,
+                                longitude: position.coords.longitude
+                              }));
+                              setIsProfileLocating(false);
+                              triggerToast(`GPS Coordinates detected: (${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)})`, 'success');
+                            },
+                            (err) => {
+                              setIsProfileLocating(false);
+                              triggerToast(`Geolocation permission denied: ${err.message}`, 'info');
+                            }
+                          );
+                        }}
+                        style={{
+                          background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                          color: '#ffffff',
+                          border: 'none',
+                          padding: '0.55rem 1rem',
+                          borderRadius: '10px',
+                          fontWeight: 700,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem'
+                        }}
+                      >
+                        <MapPin size={15} />
+                        <span>{isProfileLocating ? 'Detecting GPS...' : '🎯 Detect My GPS Location'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isProfileLocating}
+                        onClick={async () => {
+                          const query = profileForm.address || profileForm.city || 'Kochi';
+                          if (!query) {
+                            triggerToast('Please enter business address or city name', 'info');
+                            return;
+                          }
+                          try {
+                            setIsProfileLocating(true);
+                            const res = await geocodeAddress(`${query}, ${profileForm.city || ''}, India`);
+                            setProfileForm(prev => ({
+                              ...prev,
+                              latitude: res.latitude,
+                              longitude: res.longitude,
+                              address: prev.address || res.formattedAddress
+                            }));
+                            triggerToast(`Map coordinates found: (${res.latitude.toFixed(4)}, ${res.longitude.toFixed(4)})`, 'success');
+                          } catch (err: any) {
+                            triggerToast(err.message || 'Could not find map location.', 'info');
+                          } finally {
+                            setIsProfileLocating(false);
+                          }
+                        }}
+                        style={{
+                          background: '#f1f5f9',
+                          color: '#1e293b',
+                          border: '1px solid #cbd5e1',
+                          padding: '0.55rem 1rem',
+                          borderRadius: '10px',
+                          fontWeight: 700,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem'
+                        }}
+                      >
+                        <Search size={15} />
+                        <span>🔍 Search Map Address</span>
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+                      <div>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.2rem' }}>Latitude *</label>
+                        <input
+                          type="number"
+                          step="any"
+                          className="form-input-text"
+                          required
+                          placeholder="e.g. 9.9312"
+                          value={profileForm.latitude !== undefined && profileForm.latitude !== null ? profileForm.latitude : ''}
+                          onChange={(e) => setProfileForm({ ...profileForm, latitude: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.2rem' }}>Longitude *</label>
+                        <input
+                          type="number"
+                          step="any"
+                          className="form-input-text"
+                          required
+                          placeholder="e.g. 76.2673"
+                          value={profileForm.longitude !== undefined && profileForm.longitude !== null ? profileForm.longitude : ''}
+                          onChange={(e) => setProfileForm({ ...profileForm, longitude: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   <div className="form-actions-row full-width">
@@ -2646,28 +3235,489 @@ export default function App() {
             )}
           </section>
         </main>
-      } /></Routes>
+      } />
+
+      <Route path="/product/:id" element={
+        <ProductDetailPage
+          getSellerShop={getSellerShop}
+          onCallSeller={handleCallSeller}
+          onWhatsAppSeller={handleWhatsAppSeller}
+          onGetDirections={handleGetDirections}
+          onToast={triggerToast}
+        />
+      } />
+      </Routes>
 
       <Footer />
 
-      <ManageCategoriesBrandsModal
-        isOpen={isCatBrandModalOpen}
-        onClose={() => setIsCatBrandModalOpen(false)}
-        onToast={triggerToast}
-      />
-
-      <ProductDetailModal
-        getSellerShop={getSellerShop}
-        onCallSeller={handleCallSeller}
-        onWhatsAppSeller={handleWhatsAppSeller}
-        onGetDirections={handleGetDirections}
-        onToast={triggerToast}
-        isWishlisted={selectedProduct ? wishlistProductIds.includes(selectedProduct.id) : false}
-        onToggleWishlist={handleToggleWishlist}
-      />
-
       {/* --- ADD / EDIT PRODUCT MODAL --- */}
-      <AddEditProductModal onToast={triggerToast} />
+      {showAddEditModal && (
+        <div className="modal-overlay" onClick={() => dispatch(setShowAddEditModal(false))}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '650px' }}>
+            <button className="modal-close-btn" onClick={() => dispatch(setShowAddEditModal(false))}>
+              <X size={18} />
+            </button>
+
+            <div style={{ padding: '2.5rem' }}>
+              <h3 style={{ fontSize: '1.5rem', fontWeight: 700, marginBottom: '1.5rem', borderBottom: '1px solid var(--light-border)', paddingBottom: '0.75rem' }}>
+                {productToEdit ? 'Edit Used Device Details' : 'List Used Gadget for Selling'}
+              </h3>
+
+              <form onSubmit={handleProductSubmit} className="form-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                {/* 1. Multi-Angle Image Uploads (File Upload Only) */}
+                <div className="form-group full-width" style={{ gridColumn: 'span 2', background: 'var(--card-bg, #f8f9fa)', padding: '1rem', borderRadius: '10px', border: '1px dashed #cbd5e1' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <label className="form-label" style={{ fontWeight: 700, color: 'var(--text-primary)', marginBottom: 0 }}>
+                      📷 Multi-Angle Photos (Required: Min 4, Max 7) *
+                    </label>
+                    <span style={{ fontSize: '0.72rem', color: '#64748b', fontWeight: 500 }}>
+                      Select image files directly from device storage
+                    </span>
+                  </div>
+
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '0.75rem' }}>
+                    {[
+                      '1. Front Side (Required) *',
+                      '2. Back Side (Required) *',
+                      '3. Left Side (Required) *',
+                      '4. Right Side (Required) *',
+                      '5. Additional Angle 1 (Optional)',
+                      '6. Additional Angle 2 (Optional)',
+                      '7. Additional Angle 3 (Optional)'
+                    ].map((label, idx) => {
+                      const isRequired = idx < 4;
+                      const img = productForm.images[idx] || '';
+                      const hasImage = Boolean(img && img.trim());
+
+                      const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+
+                        if (!file.type.startsWith('image/')) {
+                          triggerToast('Please select a valid image file (JPG, PNG, WEBP, etc.)', 'info');
+                          return;
+                        }
+
+                        const reader = new FileReader();
+                        reader.onload = (event) => {
+                          const result = event.target?.result as string;
+                          if (!result) return;
+
+                          // Compress high-res camera photos using HTML5 Canvas
+                          const tempImg = new Image();
+                          tempImg.onload = () => {
+                            const canvas = document.createElement('canvas');
+                            const MAX_DIM = 1200;
+                            let w = tempImg.width;
+                            let h = tempImg.height;
+
+                            if (w > h) {
+                              if (w > MAX_DIM) {
+                                h = Math.round((h * MAX_DIM) / w);
+                                w = MAX_DIM;
+                              }
+                            } else {
+                              if (h > MAX_DIM) {
+                                w = Math.round((w * MAX_DIM) / h);
+                                h = MAX_DIM;
+                              }
+                            }
+
+                            canvas.width = w;
+                            canvas.height = h;
+                            const ctx = canvas.getContext('2d');
+                            ctx?.drawImage(tempImg, 0, 0, w, h);
+
+                            const compressedBase64 = canvas.toDataURL('image/jpeg', 0.85);
+                            const updatedImgs = [...productForm.images];
+                            updatedImgs[idx] = compressedBase64;
+                            setProductForm({ ...productForm, images: updatedImgs });
+                          };
+                          tempImg.src = result;
+                        };
+                        reader.readAsDataURL(file);
+                      };
+
+                      return (
+                        <div
+                          key={idx}
+                          style={{
+                            border: hasImage ? '1.5px solid #10b981' : isRequired ? '1.5px dashed #cbd5e1' : '1px dashed #e2e8f0',
+                            borderRadius: '10px',
+                            padding: '0.6rem',
+                            background: hasImage ? '#f0fdf4' : '#ffffff',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: '0.4rem',
+                            position: 'relative'
+                          }}
+                        >
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                            <span style={{ fontSize: '0.74rem', fontWeight: 700, color: isRequired ? '#0f172a' : '#475569' }}>
+                              {label}
+                            </span>
+                            {hasImage && (
+                              <span style={{ fontSize: '0.65rem', background: '#dcfce7', color: '#15803d', padding: '0.15rem 0.4rem', borderRadius: '4px', fontWeight: 700 }}>
+                                ✓ Loaded
+                              </span>
+                            )}
+                          </div>
+
+                          {hasImage ? (
+                            <div style={{ display: 'flex', gap: '0.6rem', alignItems: 'center' }}>
+                              <img
+                                src={img}
+                                alt={label}
+                                style={{
+                                  width: '52px',
+                                  height: '52px',
+                                  objectFit: 'cover',
+                                  borderRadius: '8px',
+                                  border: '1px solid #cbd5e1'
+                                }}
+                              />
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', flex: 1 }}>
+                                <label
+                                  style={{
+                                    fontSize: '0.7rem',
+                                    fontWeight: 600,
+                                    color: '#2563eb',
+                                    background: '#eff6ff',
+                                    border: '1px solid #bfdbfe',
+                                    borderRadius: '6px',
+                                    padding: '0.25rem 0.5rem',
+                                    textAlign: 'center',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  Change File
+                                  <input type="file" accept="image/*" onChange={handleFileSelect} style={{ display: 'none' }} />
+                                </label>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const updatedImgs = [...productForm.images];
+                                    updatedImgs[idx] = '';
+                                    setProductForm({ ...productForm, images: updatedImgs });
+                                  }}
+                                  style={{
+                                    fontSize: '0.68rem',
+                                    fontWeight: 600,
+                                    color: '#dc2626',
+                                    background: '#fef2f2',
+                                    border: '1px solid #fecaca',
+                                    borderRadius: '6px',
+                                    padding: '0.2rem 0.5rem',
+                                    cursor: 'pointer'
+                                  }}
+                                >
+                                  Remove
+                                </button>
+                              </div>
+                            </div>
+                          ) : (
+                            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                              <label
+                                style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: '0.3rem',
+                                  padding: '0.8rem 0.4rem',
+                                  background: '#ffffff',
+                                  border: '1px solid #cbd5e1',
+                                  borderRadius: '8px',
+                                  cursor: 'pointer',
+                                  textAlign: 'center'
+                                }}
+                              >
+                                <span style={{ fontSize: '0.82rem', fontWeight: 700, color: '#2563eb' }}>
+                                  📁 Choose File
+                                </span>
+                                <span style={{ fontSize: '0.65rem', color: '#64748b' }}>
+                                  Select image (PNG, JPG, WEBP)
+                                </span>
+                                <input
+                                  type="file"
+                                  accept="image/*"
+                                  required={isRequired && !hasImage}
+                                  onChange={handleFileSelect}
+                                  style={{ display: 'none' }}
+                                />
+                              </label>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2. Basic Info */}
+                <div className="form-group">
+                  <label className="form-label">Category *</label>
+                  <select
+                    className="form-select-box"
+                    required
+                    value={productForm.category}
+                    onChange={(e: ChangeEvent<HTMLSelectElement>) => setProductForm({ ...productForm, category: e.target.value })}
+                  >
+                    {CATEGORIES.filter(c => c !== "All Categories").map(c => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Brand *</label>
+                  <CompactBrandSelect
+                    value={productForm.brand}
+                    onChange={(val) => setProductForm({ ...productForm, brand: val })}
+                    brands={availableBrandsList}
+                  />
+                </div>
+
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label className="form-label">Product Name / Model *</label>
+                  <input
+                    type="text"
+                    className="form-input-text"
+                    required
+                    placeholder="e.g. iPhone 15 Pro Max 256GB Natural Titanium"
+                    value={productForm.name}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setProductForm({ ...productForm, name: e.target.value })}
+                  />
+                </div>
+
+                {/* 3. Specs & Pricing */}
+                <div className="form-group">
+                  <label className="form-label">Storage Capacity *</label>
+                  <select
+                    className="form-select-box"
+                    value={productForm.storage}
+                    onChange={(e: ChangeEvent<HTMLSelectElement>) => setProductForm({ ...productForm, storage: e.target.value })}
+                  >
+                    <option value="64GB">64GB</option>
+                    <option value="128GB">128GB</option>
+                    <option value="256GB">256GB</option>
+                    <option value="512GB">512GB</option>
+                    <option value="1TB">1TB</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">RAM *</label>
+                  <select
+                    className="form-select-box"
+                    value={productForm.ram}
+                    onChange={(e: ChangeEvent<HTMLSelectElement>) => setProductForm({ ...productForm, ram: e.target.value })}
+                  >
+                    <option value="4GB">4GB</option>
+                    <option value="6GB">6GB</option>
+                    <option value="8GB">8GB</option>
+                    <option value="12GB">12GB</option>
+                    <option value="16GB">16GB</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Regular Listing Price (₹) *</label>
+                  <input
+                    type="number"
+                    className="form-input-text"
+                    required
+                    placeholder="Regular price in INR"
+                    value={productForm.price}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setProductForm({ ...productForm, price: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Discounted Offer Price (₹)</label>
+                  <input
+                    type="number"
+                    className="form-input-text"
+                    placeholder="Offer price (optional)"
+                    value={productForm.offerPrice}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setProductForm({ ...productForm, offerPrice: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Available Stock Quantity (Units) *</label>
+                  <input
+                    type="number"
+                    className="form-input-text"
+                    required
+                    min="1"
+                    placeholder="e.g. 1, 2, 5 units"
+                    value={productForm.stock}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setProductForm({ ...productForm, stock: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Battery Health / Capacity *</label>
+                  <input
+                    type="text"
+                    className="form-input-text"
+                    required
+                    placeholder="e.g. 88% Health or 5000mAh"
+                    value={productForm.batteryHealth}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setProductForm({ ...productForm, batteryHealth: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Device Physical Condition *</label>
+                  <select
+                    className="form-select-box"
+                    value={productForm.condition}
+                    onChange={(e: ChangeEvent<HTMLSelectElement>) => setProductForm({ ...productForm, condition: e.target.value })}
+                  >
+                    <option value="Grade A (Like New)">Grade A (Like New)</option>
+                    <option value="Grade B (Superb)">Grade B (Superb)</option>
+                    <option value="Grade C (Good)">Grade C (Good)</option>
+                    <option value="Fair Condition">Fair Condition</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Shop Warranty *</label>
+                  <select
+                    className="form-select-box"
+                    value={productForm.warranty}
+                    onChange={(e: ChangeEvent<HTMLSelectElement>) => setProductForm({ ...productForm, warranty: e.target.value })}
+                  >
+                    <option value="None">None</option>
+                    <option value="7 Days Shop Warranty">7 Days Shop Warranty</option>
+                    <option value="1 Month Shop Warranty">1 Month Shop Warranty</option>
+                    <option value="3 Months Shop Warranty">3 Months Shop Warranty</option>
+                    <option value="6 Months Shop Warranty">6 Months Shop Warranty</option>
+                    <option value="1 Year Shop Warranty">1 Year Shop Warranty</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Color *</label>
+                  <input
+                    type="text"
+                    className="form-input-text"
+                    required
+                    placeholder="e.g. Space Black, Natural Titanium"
+                    value={productForm.color}
+                    onChange={(e: ChangeEvent<HTMLInputElement>) => setProductForm({ ...productForm, color: e.target.value })}
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">SIM Type *</label>
+                  <select
+                    className="form-select-box"
+                    value={productForm.simType}
+                    onChange={(e: ChangeEvent<HTMLSelectElement>) => setProductForm({ ...productForm, simType: e.target.value })}
+                  >
+                    <option value="Dual SIM">Dual SIM</option>
+                    <option value="Single SIM + eSIM">Single SIM + eSIM</option>
+                    <option value="Dual eSIM">Dual eSIM</option>
+                  </select>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Network *</label>
+                  <select
+                    className="form-select-box"
+                    value={productForm.network}
+                    onChange={(e: ChangeEvent<HTMLSelectElement>) => setProductForm({ ...productForm, network: e.target.value })}
+                  >
+                    <option value="5G">5G</option>
+                    <option value="4G">4G</option>
+                  </select>
+                </div>
+
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label className="form-label">Original Bill Available?</label>
+                  <div style={{ display: 'flex', gap: '1.5rem', marginTop: '0.4rem' }}>
+                    <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="originalBill"
+                        checked={productForm.originalBill === true}
+                        onChange={() => setProductForm({ ...productForm, originalBill: true })}
+                      />
+                      <span>Yes (Original Bill Included)</span>
+                    </label>
+                    <label style={{ fontSize: '0.85rem', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+                      <input
+                        type="radio"
+                        name="originalBill"
+                        checked={productForm.originalBill === false}
+                        onChange={() => setProductForm({ ...productForm, originalBill: false })}
+                      />
+                      <span>No</span>
+                    </label>
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label className="form-label">Included Accessories</label>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '1rem', marginTop: '0.4rem' }}>
+                    {['Box', 'Charger', 'Cable', 'Case', 'Screen Guard'].map(acc => (
+                      <label key={acc} style={{ fontSize: '0.82rem', display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={productForm.accessories.includes(acc)}
+                          onChange={(e) => {
+                            let updatedAcc = [...productForm.accessories];
+                            if (e.target.checked) updatedAcc.push(acc);
+                            else updatedAcc = updatedAcc.filter(a => a !== acc);
+                            setProductForm({ ...productForm, accessories: updatedAcc });
+                          }}
+                        />
+                        <span>{acc}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label className="form-label">Detailed Device Description *</label>
+                  <textarea
+                    className="form-textarea"
+                    required
+                    rows={3}
+                    placeholder="Include scuff details, warranty info, charger status..."
+                    value={productForm.description}
+                    onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setProductForm({ ...productForm, description: e.target.value })}
+                  ></textarea>
+                </div>
+
+                <div className="form-actions-row" style={{ gridColumn: 'span 2', display: 'flex', justifyContent: 'flex-end', gap: '0.75rem', marginTop: '1rem' }}>
+                  <button
+                    type="button"
+                    style={{
+                      padding: '0.6rem 1.4rem',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      background: '#f1f5f9',
+                      color: '#0f172a',
+                      fontWeight: 600,
+                      cursor: 'pointer'
+                    }}
+                    onClick={() => dispatch(setShowAddEditModal(false))}
+                  >
+                    Cancel
+                  </button>
+                  <button type="submit" className="btn-primary" style={{ padding: '0.6rem 1.2rem' }}>
+                    {productToEdit ? 'Save Changes' : 'Submit Device Listing'}
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* --- AUTHENTICATION MODAL (LOGIN & REGISTRATION) --- */}
       <AuthModal onToast={triggerToast} />
