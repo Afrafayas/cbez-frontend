@@ -33,6 +33,52 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [activePlans, setActivePlans] = useState<SubscriptionPlan[]>([]);
+
+  const handleLogoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      onToast('Please select a valid image file (JPG, PNG, WEBP)', 'info');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (!result) return;
+
+      const tempImg = new Image();
+      tempImg.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_DIM = 800;
+        let w = tempImg.width;
+        let h = tempImg.height;
+
+        if (w > h) {
+          if (w > MAX_DIM) {
+            h = Math.round((h * MAX_DIM) / w);
+            w = MAX_DIM;
+          }
+        } else {
+          if (h > MAX_DIM) {
+            w = Math.round((w * MAX_DIM) / h);
+            h = MAX_DIM;
+          }
+        }
+
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(tempImg, 0, 0, w, h);
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        setRegForm(prev => ({ ...prev, profileImage: compressedDataUrl }));
+        onToast('Shop Logo / Owner Photo uploaded successfully!', 'success');
+      };
+      tempImg.src = result;
+    };
+    reader.readAsDataURL(file);
+  };
   
   const [regForm, setRegForm] = useState({
     name: '',
@@ -537,8 +583,48 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                   <input type="text" className="form-input-text" required placeholder="e.g. Afraf Fayas" value={regForm.ownerName} onChange={(e) => setRegForm({ ...regForm, ownerName: e.target.value })} />
                 </div>
                 <div className="form-group">
-                  <label className="form-label">Profile / Logo Image URL *</label>
-                  <input type="text" className="form-input-text" required placeholder="https://..." value={regForm.profileImage} onChange={(e) => setRegForm({ ...regForm, profileImage: e.target.value })} />
+                  <label className="form-label">Profile / Logo Image *</label>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(255, 255, 255, 0.04)', padding: '0.85rem', borderRadius: '14px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                    {regForm.profileImage ? (
+                      <div style={{ position: 'relative', width: '64px', height: '64px', borderRadius: '16px', overflow: 'hidden', border: '2px solid #ff9e40', flexShrink: 0 }}>
+                        <img src={regForm.profileImage} alt="Shop Logo Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                    ) : (
+                      <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'rgba(255, 255, 255, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', flexShrink: 0 }}>
+                        <Store size={28} />
+                      </div>
+                    )}
+                    <div style={{ flex: 1 }}>
+                      <input
+                        type="file"
+                        id="logoFileInput"
+                        accept="image/*"
+                        style={{ display: 'none' }}
+                        onChange={handleLogoFileSelect}
+                      />
+                      <label
+                        htmlFor="logoFileInput"
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem',
+                          background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
+                          color: '#ffffff',
+                          padding: '0.5rem 0.9rem',
+                          borderRadius: '10px',
+                          fontSize: '0.8rem',
+                          fontWeight: 700,
+                          cursor: 'pointer',
+                          marginBottom: '0.3rem'
+                        }}
+                      >
+                        📷 {regForm.profileImage ? 'Change Photo' : 'Upload Shop Logo / Photo'}
+                      </label>
+                      <p style={{ fontSize: '0.73rem', color: '#94a3b8', margin: 0 }}>
+                        Supports JPG, PNG, WEBP (Auto-compressed)
+                      </p>
+                    </div>
+                  </div>
                 </div>
                 <div className="form-group">
                   <label className="form-label">Email Address *</label>

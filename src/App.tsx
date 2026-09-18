@@ -1,9 +1,10 @@
 import { ProductDetailModal } from './components/ProductDetailModal';
+import { ProductDetailPage } from './pages/ProductDetailPage';
 import { ManageCategoriesBrandsModal } from './components/ManageCategoriesBrandsModal';
 import { AuthModal } from './components/AuthModal';
 import { CompactBrandSelect } from './components/CompactBrandSelect';
 import { Footer } from './components/Footer';
-import { getProducts, getShops, createSellerProduct, sendLead, getFollowedShops, unfollowShop, getShopFollowers, getBrands } from './services/apiService';
+import { getProducts, getShops, createSellerProduct, sendLead, getFollowedShops, unfollowShop, getShopFollowers, getBrands, geocodeAddress } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import React, { ChangeEvent, FormEvent } from 'react';
 import { 
@@ -32,6 +33,7 @@ import {
   Tablet as TabletIcon,
   MessageSquare,
   Tag,
+  Clock,
   Calendar
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from './store';
@@ -75,7 +77,7 @@ import {
   setDashboardTab 
 } from './store/uiSlice';
 import { CATEGORIES, CITIES, BUDGET_PRESETS } from './data/mockData';
-import { Product, Shop, Lead, User as CustomerUser } from './types';
+import { Product, Shop, Lead, User as CustomerUser, calculateShopProfileCompletion } from './types';
 
 interface CustomSelectProps {
   value: string;
@@ -205,6 +207,12 @@ export default function App() {
         }
         if (liveShops && liveShops.length > 0) {
           dispatch(setShops(liveShops));
+          if (activeShop) {
+            const currentLiveShop = liveShops.find(s => s.id === activeShop.id || (s.email && activeShop.email && s.email.toLowerCase() === activeShop.email.toLowerCase()) || (s.name && activeShop.name && s.name.toLowerCase() === activeShop.name.toLowerCase()));
+            if (currentLiveShop && (currentLiveShop.verified !== activeShop.verified || currentLiveShop.name !== activeShop.name)) {
+              dispatch(setActiveShop(currentLiveShop));
+            }
+          }
         }
       } catch (err) {
         console.warn('Backend load fallback:', err);
@@ -424,23 +432,97 @@ export default function App() {
     whatsapp: '',
     address: '',
     city: '',
-    category: ''
+    category: '',
+    profileImage: '',
+    district: '',
+    country: '',
+    email: '',
+    aadhaarNumber: '',
+    panNumber: '',
+    latitude: undefined as number | undefined,
+    longitude: undefined as number | undefined,
+    gstNumber: '',
+    websiteUrl: '',
+    businessHours: '',
+    businessDescription: '',
+    alternatePhone: ''
   });
+
+  const [isProfileLocating, setIsProfileLocating] = React.useState(false);
+
+  const handleProfileLogoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      triggerToast('Please select a valid image file (JPG, PNG, WEBP)', 'info');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const result = event.target?.result as string;
+      if (!result) return;
+
+      const tempImg = new Image();
+      tempImg.onload = () => {
+        const canvas = document.createElement('canvas');
+        const MAX_DIM = 800;
+        let w = tempImg.width;
+        let h = tempImg.height;
+
+        if (w > h) {
+          if (w > MAX_DIM) {
+            h = Math.round((h * MAX_DIM) / w);
+            w = MAX_DIM;
+          }
+        } else {
+          if (h > MAX_DIM) {
+            w = Math.round((w * MAX_DIM) / h);
+            h = MAX_DIM;
+          }
+        }
+
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(tempImg, 0, 0, w, h);
+        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
+        setProfileForm(prev => ({ ...prev, profileImage: compressedDataUrl }));
+        triggerToast('Shop Logo / Owner Photo updated successfully!', 'success');
+      };
+      tempImg.src = result;
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Sync profile form when dashboard tab loads or activeShop changes
   React.useEffect(() => {
     if (activeShop) {
       setProfileForm({
-        name: activeShop.name,
-        ownerName: activeShop.ownerName,
-        phone: activeShop.phone,
-        whatsapp: activeShop.whatsapp,
-        address: activeShop.address,
-        city: activeShop.city,
-        category: activeShop.category || 'Mobiles & Tablets'
+        name: activeShop.name || '',
+        ownerName: activeShop.ownerName || '',
+        phone: activeShop.phone || '',
+        whatsapp: activeShop.whatsapp || '',
+        address: activeShop.address || '',
+        city: activeShop.city || '',
+        category: activeShop.category || 'Mobiles & Tablets',
+        profileImage: activeShop.profileImage || '',
+        district: activeShop.district || 'Ernakulam',
+        country: activeShop.country || 'India',
+        email: activeShop.email || activeUser?.email || '',
+        aadhaarNumber: activeShop.aadhaarNumber || '',
+        panNumber: activeShop.panNumber || '',
+        latitude: activeShop.latitude,
+        longitude: activeShop.longitude,
+        gstNumber: activeShop.gstNumber || '',
+        websiteUrl: activeShop.websiteUrl || '',
+        businessHours: activeShop.businessHours || '',
+        businessDescription: activeShop.businessDescription || '',
+        alternatePhone: activeShop.alternatePhone || ''
       });
     }
-  }, [activeShop, dashboardTab]);
+  }, [activeShop, activeUser, dashboardTab]);
 
     React.useEffect(() => {
     
@@ -648,7 +730,20 @@ export default function App() {
       whatsapp: profileForm.whatsapp,
       address: profileForm.address,
       city: profileForm.city,
-      category: profileForm.category
+      category: profileForm.category,
+      profileImage: profileForm.profileImage,
+      district: profileForm.district,
+      country: profileForm.country,
+      email: profileForm.email,
+      aadhaarNumber: profileForm.aadhaarNumber,
+      panNumber: profileForm.panNumber,
+      latitude: profileForm.latitude,
+      longitude: profileForm.longitude,
+      gstNumber: profileForm.gstNumber,
+      websiteUrl: profileForm.websiteUrl,
+      businessHours: profileForm.businessHours,
+      businessDescription: profileForm.businessDescription,
+      alternatePhone: profileForm.alternatePhone,
     };
     
     dispatch(updateShop(updated));
@@ -1400,7 +1495,10 @@ export default function App() {
                     <article 
                       key={product.id} 
                       className="product-card"
-                      onClick={() => dispatch(setSelectedProduct(product))}
+                      onClick={() => {
+                        dispatch(setSelectedProduct(product));
+                        navigate(`/product/${product.id}`);
+                      }}
                     >
                       <div className="card-img-wrapper">
                         {product.images && product.images.length > 0 ? (
@@ -2028,10 +2126,17 @@ export default function App() {
                 {activeShop ? activeShop.name.charAt(0) : 'D'}
               </div>
               <h2 className="profile-name">{activeShop?.name}</h2>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: 'var(--success)', fontWeight: 600, backgroundColor: 'var(--success-bg)', padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-sm)' }}>
-                <ShieldCheck size={12} />
-                <span>Verified Seller Shop</span>
-              </div>
+              {activeShop?.verified ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: '#16a34a', fontWeight: 600, backgroundColor: '#dcfce7', padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-sm)', border: '1px solid #86efac' }}>
+                  <ShieldCheck size={12} />
+                  <span>Verified Seller Shop</span>
+                </div>
+              ) : (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: '#c2410c', fontWeight: 600, backgroundColor: '#ffedd5', padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-sm)', border: '1px solid #fdba74' }}>
+                  <Clock size={12} />
+                  <span>Pending Admin Verification</span>
+                </div>
+              )}
             </div>
 
             <div className="profile-stats-row">
@@ -2106,10 +2211,92 @@ export default function App() {
               );
             })()}
 
+            {/* Brief Shop Profile Completion Sidebar Widget */}
+            {(() => {
+              const completion = calculateShopProfileCompletion(activeShop, activeUser?.email);
+              return (
+                <div
+                  style={{
+                    margin: '0.75rem 0 1rem 0',
+                    padding: '0.85rem 0.95rem',
+                    background: completion.isFullyCompleted
+                      ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.12) 0%, rgba(16, 185, 129, 0.06) 100%)'
+                      : 'linear-gradient(135deg, rgba(255, 111, 0, 0.12) 0%, rgba(234, 88, 12, 0.06) 100%)',
+                    borderRadius: '14px',
+                    border: completion.isFullyCompleted
+                      ? '1px solid rgba(34, 197, 94, 0.3)'
+                      : '1px solid rgba(255, 111, 0, 0.3)',
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.04)'
+                  }}
+                >
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
+                    <span style={{ fontSize: '0.78rem', fontWeight: 800, color: completion.isFullyCompleted ? '#166534' : '#9a3412', display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                      <ShieldCheck size={16} color={completion.isFullyCompleted ? '#16a34a' : '#ea580c'} />
+                      <span>Profile Completion</span>
+                    </span>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 800, color: completion.isFullyCompleted ? '#15803d' : '#c2410c' }}>
+                      {completion.completionPercentage}%
+                    </span>
+                  </div>
+
+                  {/* Mini Progress Bar Track */}
+                  <div style={{ width: '100%', height: '7px', background: 'rgba(0, 0, 0, 0.08)', borderRadius: '10px', overflow: 'hidden', marginBottom: '0.45rem' }}>
+                    <div 
+                      style={{
+                        height: '100%',
+                        width: `${completion.completionPercentage}%`,
+                        background: completion.isFullyCompleted 
+                          ? 'linear-gradient(90deg, #22c55e 0%, #16a34a 100%)' 
+                          : 'linear-gradient(90deg, #ff6f00 0%, #ea580c 100%)',
+                        borderRadius: '10px',
+                        transition: 'width 0.4s ease-in-out'
+                      }}
+                    />
+                  </div>
+
+                  {!completion.isFullyCompleted ? (
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.4rem' }}>
+                      <span style={{ fontSize: '0.72rem', color: '#c2410c', fontWeight: 600 }}>
+                        {completion.missingFields.length} field(s) missing
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          navigate('/seller-dashboard');
+                          dispatch(setDashboardTab('profile'));
+                          window.scrollTo({ top: 0, behavior: 'smooth' });
+                        }}
+                        style={{
+                          background: 'none',
+                          border: 'none',
+                          color: '#ea580c',
+                          fontSize: '0.73rem',
+                          fontWeight: 800,
+                          cursor: 'pointer',
+                          textDecoration: 'underline',
+                          padding: 0
+                        }}
+                      >
+                        Complete Profile →
+                      </button>
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '0.72rem', color: '#15803d', fontWeight: 700, textAlign: 'center', marginTop: '0.2rem' }}>
+                      ✓ 100% Profile Complete
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
+
             <div className="dashboard-menu">
               <button 
                 className={`dash-menu-btn ${dashboardTab === 'listings' ? 'active' : ''}`}
-                onClick={() => dispatch(setDashboardTab('listings'))}
+                onClick={() => {
+                  navigate('/seller-dashboard');
+                  dispatch(setDashboardTab('listings'));
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
               >
                 <Layers size={16} />
                 <span>Manage Product Listings</span>
@@ -2118,7 +2305,11 @@ export default function App() {
               {/* New Leads Report Tab */}
               <button 
                 className={`dash-menu-btn ${dashboardTab === 'leads' ? 'active' : ''}`}
-                onClick={() => dispatch(setDashboardTab('leads'))}
+                onClick={() => {
+                  navigate('/seller-dashboard');
+                  dispatch(setDashboardTab('leads'));
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
               >
                 <MessageSquare size={16} />
                 <span>Leads & Performance Report</span>
@@ -2126,7 +2317,11 @@ export default function App() {
 
               <button 
                 className={`dash-menu-btn ${dashboardTab === 'followers' ? 'active' : ''}`}
-                onClick={() => dispatch(setDashboardTab('followers'))}
+                onClick={() => {
+                  navigate('/seller-dashboard');
+                  dispatch(setDashboardTab('followers'));
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
               >
                 <UserCheck size={16} />
                 <span>My Store Followers ({shopFollowersCount})</span>
@@ -2134,10 +2329,14 @@ export default function App() {
 
               <button 
                 className={`dash-menu-btn ${dashboardTab === 'profile' ? 'active' : ''}`}
-                onClick={() => dispatch(setDashboardTab('profile'))}
+                onClick={() => {
+                  navigate('/seller-dashboard');
+                  dispatch(setDashboardTab('profile'));
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
               >
                 <User size={16} />
-                <span>Edit Shop Profile</span>
+                <span>Edit Shop Profile ({calculateShopProfileCompletion(activeShop, activeUser?.email).completionPercentage}%)</span>
               </button>
 
               <button 
@@ -2594,6 +2793,111 @@ export default function App() {
               </div>
             ) : (
               <div className="dashboard-panel">
+                {/* SHOP PROFILE COMPLETION PROGRESS CARD */}
+                {(() => {
+                  const completion = calculateShopProfileCompletion(
+                    activeShop ? {
+                      ...activeShop,
+                      name: profileForm.name || activeShop.name,
+                      ownerName: profileForm.ownerName || activeShop.ownerName,
+                      phone: profileForm.phone || activeShop.phone,
+                      whatsapp: profileForm.whatsapp || activeShop.whatsapp,
+                      city: profileForm.city || activeShop.city,
+                      address: profileForm.address || activeShop.address,
+                    } : null,
+                    activeUser?.email
+                  );
+
+                  return (
+                    <div 
+                      style={{
+                        background: completion.isFullyCompleted 
+                          ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(16, 185, 129, 0.04) 100%)' 
+                          : 'linear-gradient(135deg, rgba(255, 111, 0, 0.08) 0%, rgba(234, 88, 12, 0.04) 100%)',
+                        border: completion.isFullyCompleted 
+                          ? '1px solid rgba(34, 197, 94, 0.3)' 
+                          : '1px solid rgba(255, 111, 0, 0.3)',
+                        borderRadius: '16px',
+                        padding: '1.25rem 1.5rem',
+                        marginBottom: '1.75rem',
+                        boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: completion.isFullyCompleted ? '#166534' : '#9a3412', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                            <ShieldCheck size={20} color={completion.isFullyCompleted ? '#16a34a' : '#ea580c'} />
+                            <span>Profile Completion: {completion.completionPercentage}%</span>
+                          </h4>
+                          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.83rem', color: '#64748b' }}>
+                            {completion.isFullyCompleted 
+                              ? '🎉 Excellent! Your shop profile is 100% complete and fully verified for buyers.' 
+                              : 'Complete the remaining profile details to reach 100%.'}
+                          </p>
+                        </div>
+                        <div 
+                          style={{
+                            fontSize: '0.82rem',
+                            fontWeight: 800,
+                            padding: '0.35rem 0.85rem',
+                            borderRadius: '20px',
+                            background: completion.isFullyCompleted ? '#dcfce7' : '#ffedd5',
+                            color: completion.isFullyCompleted ? '#15803d' : '#c2410c',
+                            border: completion.isFullyCompleted ? '1px solid #86efac' : '1px solid #fdba74'
+                          }}
+                        >
+                          {completion.completedFieldsCount} / {completion.totalFieldsCount} Mandatory Fields
+                        </div>
+                      </div>
+
+                      {/* PROGRESS BAR TRACK */}
+                      <div style={{ width: '100%', height: '10px', background: 'rgba(0, 0, 0, 0.08)', borderRadius: '10px', overflow: 'hidden', marginBottom: '0.85rem' }}>
+                        <div 
+                          style={{
+                            height: '100%',
+                            width: `${completion.completionPercentage}%`,
+                            background: completion.isFullyCompleted 
+                              ? 'linear-gradient(90deg, #22c55e 0%, #16a34a 100%)' 
+                              : 'linear-gradient(90deg, #ff6f00 0%, #ea580c 100%)',
+                            borderRadius: '10px',
+                            transition: 'width 0.4s ease-in-out'
+                          }}
+                        />
+                      </div>
+
+                      {/* MISSING FIELDS LIST */}
+                      {!completion.isFullyCompleted && completion.missingFields.length > 0 && (
+                        <div style={{ marginTop: '0.85rem', paddingTop: '0.75rem', borderTop: '1px dashed rgba(255, 111, 0, 0.2)' }}>
+                          <span style={{ fontSize: '0.78rem', fontWeight: 700, color: '#c2410c', display: 'block', marginBottom: '0.4rem' }}>
+                            Remaining Incomplete Fields:
+                          </span>
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.4rem' }}>
+                            {completion.missingFields.map((field) => (
+                              <span 
+                                key={field} 
+                                style={{
+                                  fontSize: '0.75rem',
+                                  background: '#fff',
+                                  border: '1px solid #fed7aa',
+                                  color: '#9a3412',
+                                  padding: '0.25rem 0.6rem',
+                                  borderRadius: '8px',
+                                  fontWeight: 600,
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.3rem'
+                                }}
+                              >
+                                ⚠️ {field}
+                              </span>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
                 <div className="panel-header">
                   <h3 className="panel-title">Edit Shop Profile</h3>
                 </div>
@@ -2666,14 +2970,244 @@ export default function App() {
                     </select>
                   </div>
 
-                  <div className="form-group full-width">
-                    <label className="form-label">Market Business Address *</label>
-                    <textarea 
-                      className="form-textarea" 
+                  <div className="form-group full-width" style={{ background: 'rgba(255, 255, 255, 0.04)', padding: '1rem', borderRadius: '14px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                    <label className="form-label" style={{ fontWeight: 700, color: '#0f172a' }}>Shop Profile / Logo Image *</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1.25rem', marginTop: '0.4rem' }}>
+                      {profileForm.profileImage ? (
+                        <div style={{ position: 'relative', width: '72px', height: '72px', borderRadius: '18px', overflow: 'hidden', border: '2px solid #ff6f00', flexShrink: 0 }}>
+                          <img src={profileForm.profileImage} alt="Shop Logo Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                      ) : (
+                        <div style={{ width: '72px', height: '72px', borderRadius: '18px', background: '#f1f5f9', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b', flexShrink: 0, border: '2px dashed #cbd5e1' }}>
+                          <Store size={32} />
+                        </div>
+                      )}
+                      <div style={{ flex: 1 }}>
+                        <input
+                          type="file"
+                          id="editProfileLogoInput"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={handleProfileLogoFileSelect}
+                        />
+                        <label
+                          htmlFor="editProfileLogoInput"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
+                            color: '#ffffff',
+                            padding: '0.55rem 1rem',
+                            borderRadius: '10px',
+                            fontSize: '0.83rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            marginBottom: '0.35rem',
+                            boxShadow: '0 4px 12px rgba(255, 111, 0, 0.25)'
+                          }}
+                        >
+                          📷 {profileForm.profileImage ? 'Change Logo / Photo' : 'Upload Shop Logo / Photo'}
+                        </label>
+                        <p style={{ fontSize: '0.75rem', color: '#64748b', margin: 0 }}>
+                          Supports JPG, PNG, WEBP (Auto-compressed)
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Email Address *</label>
+                    <input 
+                      type="email" 
+                      className="form-input-text" 
                       required
-                      value={profileForm.address}
-                      onChange={(e: ChangeEvent<HTMLTextAreaElement>) => setProfileForm({...profileForm, address: e.target.value})}
-                    ></textarea>
+                      placeholder="e.g. store@gmail.com"
+                      value={profileForm.email}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setProfileForm({...profileForm, email: e.target.value})}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">District *</label>
+                    <input 
+                      type="text" 
+                      className="form-input-text" 
+                      required
+                      placeholder="e.g. Ernakulam / Calicut"
+                      value={profileForm.district}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setProfileForm({...profileForm, district: e.target.value})}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Country *</label>
+                    <input 
+                      type="text" 
+                      className="form-input-text" 
+                      required
+                      placeholder="India"
+                      value={profileForm.country}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setProfileForm({...profileForm, country: e.target.value})}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Aadhaar Card Number *</label>
+                    <input 
+                      type="text" 
+                      className="form-input-text" 
+                      required
+                      placeholder="12-digit Aadhaar Number"
+                      value={profileForm.aadhaarNumber}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setProfileForm({...profileForm, aadhaarNumber: e.target.value})}
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">PAN Card Number *</label>
+                    <input 
+                      type="text" 
+                      className="form-input-text" 
+                      required
+                      placeholder="10-character PAN Number"
+                      value={profileForm.panNumber}
+                      onChange={(e: ChangeEvent<HTMLInputElement>) => setProfileForm({...profileForm, panNumber: e.target.value})}
+                    />
+                  </div>
+
+                  {/* MANDATORY LOCATION SELECTION SECTION IN EDIT PROFILE */}
+                  <div className="form-group full-width" style={{ background: '#f8fafc', border: '1.5px dashed #ff9e40', padding: '1.25rem', borderRadius: '16px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                      <label className="form-label" style={{ fontWeight: 800, color: '#c2410c', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.95rem' }}>
+                        <MapPin size={18} />
+                        <span>Shop Map Coordinates (Mandatory) *</span>
+                      </label>
+                      {profileForm.latitude !== undefined && profileForm.longitude !== undefined && (
+                        <span style={{ fontSize: '0.78rem', background: '#dcfce7', color: '#15803d', padding: '0.25rem 0.75rem', borderRadius: '12px', fontWeight: 700, border: '1px solid #86efac' }}>
+                          ✓ Coordinates Set ({profileForm.latitude.toFixed(4)}, {profileForm.longitude.toFixed(4)})
+                        </span>
+                      )}
+                    </div>
+
+                    <p style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '0.85rem' }}>
+                      Detect GPS location or search address to pin exact coordinates on Google Maps:
+                    </p>
+
+                    <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '0.85rem' }}>
+                      <button
+                        type="button"
+                        disabled={isProfileLocating}
+                        onClick={() => {
+                          if (!navigator.geolocation) {
+                            triggerToast('Geolocation is not supported by your browser.', 'info');
+                            return;
+                          }
+                          setIsProfileLocating(true);
+                          navigator.geolocation.getCurrentPosition(
+                            (position) => {
+                              setProfileForm(prev => ({
+                                ...prev,
+                                latitude: position.coords.latitude,
+                                longitude: position.coords.longitude
+                              }));
+                              setIsProfileLocating(false);
+                              triggerToast(`GPS Coordinates detected: (${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)})`, 'success');
+                            },
+                            (err) => {
+                              setIsProfileLocating(false);
+                              triggerToast(`Geolocation permission denied: ${err.message}`, 'info');
+                            }
+                          );
+                        }}
+                        style={{
+                          background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                          color: '#ffffff',
+                          border: 'none',
+                          padding: '0.55rem 1rem',
+                          borderRadius: '10px',
+                          fontWeight: 700,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem'
+                        }}
+                      >
+                        <MapPin size={15} />
+                        <span>{isProfileLocating ? 'Detecting GPS...' : '🎯 Detect My GPS Location'}</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isProfileLocating}
+                        onClick={async () => {
+                          const query = profileForm.address || profileForm.city || 'Kochi';
+                          if (!query) {
+                            triggerToast('Please enter business address or city name', 'info');
+                            return;
+                          }
+                          try {
+                            setIsProfileLocating(true);
+                            const res = await geocodeAddress(`${query}, ${profileForm.city || ''}, India`);
+                            setProfileForm(prev => ({
+                              ...prev,
+                              latitude: res.latitude,
+                              longitude: res.longitude,
+                              address: prev.address || res.formattedAddress
+                            }));
+                            triggerToast(`Map coordinates found: (${res.latitude.toFixed(4)}, ${res.longitude.toFixed(4)})`, 'success');
+                          } catch (err: any) {
+                            triggerToast(err.message || 'Could not find map location.', 'info');
+                          } finally {
+                            setIsProfileLocating(false);
+                          }
+                        }}
+                        style={{
+                          background: '#f1f5f9',
+                          color: '#1e293b',
+                          border: '1px solid #cbd5e1',
+                          padding: '0.55rem 1rem',
+                          borderRadius: '10px',
+                          fontWeight: 700,
+                          fontSize: '0.82rem',
+                          cursor: 'pointer',
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          gap: '0.4rem'
+                        }}
+                      >
+                        <Search size={15} />
+                        <span>🔍 Search Map Address</span>
+                      </button>
+                    </div>
+
+                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+                      <div>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.2rem' }}>Latitude *</label>
+                        <input
+                          type="number"
+                          step="any"
+                          className="form-input-text"
+                          required
+                          placeholder="e.g. 9.9312"
+                          value={profileForm.latitude !== undefined ? profileForm.latitude : ''}
+                          onChange={(e) => setProfileForm({ ...profileForm, latitude: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        />
+                      </div>
+                      <div>
+                        <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.2rem' }}>Longitude *</label>
+                        <input
+                          type="number"
+                          step="any"
+                          className="form-input-text"
+                          required
+                          placeholder="e.g. 76.2673"
+                          value={profileForm.longitude !== undefined ? profileForm.longitude : ''}
+                          onChange={(e) => setProfileForm({ ...profileForm, longitude: e.target.value ? parseFloat(e.target.value) : undefined })}
+                        />
+                      </div>
+                    </div>
                   </div>
 
                   <div className="form-actions-row full-width">

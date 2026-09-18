@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Phone, Smartphone, MapPin, ShieldCheck, Clock } from 'lucide-react';
 import { Product, Shop } from '../types';
 import { useAppDispatch } from '../store';
@@ -18,12 +19,16 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onWhatsAppSeller
 }) => {
   const dispatch = useAppDispatch();
+  const navigate = useNavigate();
   const isSoldOut = product.stock <= 0 || product.isSoldOut;
 
   return (
     <div 
       className="product-card"
-      onClick={() => dispatch(setSelectedProduct(product))}
+      onClick={() => {
+        dispatch(setSelectedProduct(product));
+        navigate(`/product/${product.id}`);
+      }}
       style={{ cursor: 'pointer', opacity: isSoldOut ? 0.8 : 1, position: 'relative' }}
     >
       {/* Sold Out Red Badge Overlay */}

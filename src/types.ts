@@ -8,6 +8,15 @@ export interface SubscriptionPlan {
   updatedAt?: string;
 }
 
+export interface ShopProfileCompletion {
+  completionPercentage: number;
+  completedFields: string[];
+  missingFields: string[];
+  totalFieldsCount: number;
+  completedFieldsCount: number;
+  isFullyCompleted: boolean;
+}
+
 export interface Shop {
   id: string;
   name: string;
@@ -33,7 +42,70 @@ export interface Shop {
   businessHours?: string;
   businessDescription?: string;
   alternatePhone?: string;
+  email?: string;
   status?: 'PENDING' | 'APPROVED' | 'REJECTED';
+  profileCompletion?: ShopProfileCompletion;
+}
+
+export function calculateShopProfileCompletion(shop?: Partial<Shop> | null, ownerEmail?: string): ShopProfileCompletion {
+  const allMandatoryLabels = [
+    'Owner Name', 'Profile Image', 'Shop Name', 'Address', 'City',
+    'District', 'Country', 'Email Address', 'Aadhaar Number',
+    'PAN Number', 'Subscription Plan', 'Latitude', 'Longitude'
+  ];
+
+  if (!shop) {
+    return {
+      completionPercentage: 0,
+      completedFields: [],
+      missingFields: allMandatoryLabels,
+      totalFieldsCount: 13,
+      completedFieldsCount: 0,
+      isFullyCompleted: false
+    };
+  }
+
+  const emailVal = shop.email || ownerEmail;
+
+  const mandatoryFields = [
+    { key: 'ownerName', label: 'Owner Name', isCompleted: Boolean(shop.ownerName && shop.ownerName.trim()) },
+    { key: 'profileImage', label: 'Profile Image', isCompleted: Boolean(shop.profileImage && shop.profileImage.trim()) },
+    { key: 'name', label: 'Shop Name', isCompleted: Boolean(shop.name && shop.name.trim()) },
+    { key: 'address', label: 'Address', isCompleted: Boolean(shop.address && shop.address.trim()) },
+    { key: 'city', label: 'City', isCompleted: Boolean(shop.city && shop.city.trim()) },
+    { key: 'district', label: 'District', isCompleted: Boolean(shop.district && shop.district.trim()) },
+    { key: 'country', label: 'Country', isCompleted: Boolean(shop.country && shop.country.trim()) },
+    { key: 'email', label: 'Email Address', isCompleted: Boolean(emailVal && emailVal.trim()) },
+    { key: 'aadhaarNumber', label: 'Aadhaar Number', isCompleted: Boolean(shop.aadhaarNumber && shop.aadhaarNumber.trim()) },
+    { key: 'panNumber', label: 'PAN Number', isCompleted: Boolean(shop.panNumber && shop.panNumber.trim()) },
+    { key: 'subscriptionPlanId', label: 'Subscription Plan', isCompleted: Boolean(shop.subscriptionPlanId && shop.subscriptionPlanId.trim()) },
+    { key: 'latitude', label: 'Latitude', isCompleted: shop.latitude !== null && shop.latitude !== undefined && !isNaN(Number(shop.latitude)) },
+    { key: 'longitude', label: 'Longitude', isCompleted: shop.longitude !== null && shop.longitude !== undefined && !isNaN(Number(shop.longitude)) },
+  ];
+
+  const completedFields: string[] = [];
+  const missingFields: string[] = [];
+
+  for (const item of mandatoryFields) {
+    if (item.isCompleted) {
+      completedFields.push(item.label);
+    } else {
+      missingFields.push(item.label);
+    }
+  }
+
+  const completedFieldsCount = completedFields.length;
+  const totalFieldsCount = mandatoryFields.length;
+  const completionPercentage = Math.round((completedFieldsCount / totalFieldsCount) * 100);
+
+  return {
+    completionPercentage,
+    completedFields,
+    missingFields,
+    totalFieldsCount,
+    completedFieldsCount,
+    isFullyCompleted: completionPercentage === 100
+  };
 }
 
 export interface User {
