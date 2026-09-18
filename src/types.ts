@@ -105,6 +105,31 @@ export interface Product {
   deviceAge?: string;
   imeiNumber?: string;
   documents?: string[];
+
+  // Mobile / Tablet specs
+  processor?: string;
+  displaySize?: string;
+  batteryPercentage?: string;
+  camera?: string;
+  os?: string;
+  simWifi?: string;
+  imeiSerial?: string;
+
+  // Laptop specs
+  storageType?: string;
+  storageCapacity?: string;
+  graphics?: string;
+  resolution?: string;
+  batteryBackup?: string;
+  keyboardLayout?: string;
+  serialNumber?: string;
+
+  // Accessories & Smart Watches specs
+  productType?: string;
+  model?: string;
+  compatibility?: string;
+  includedItems?: string;
+  technicalSpecifications?: string;
 }
 
 export interface WishlistItem {
@@ -114,7 +139,6 @@ export interface WishlistItem {
   createdAt: string;
   product: Product & { shop?: Shop };
 }
-
 
 export interface SourcingToast {
   id: number;

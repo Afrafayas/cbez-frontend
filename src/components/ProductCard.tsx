@@ -100,10 +100,21 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         </div>
 
         <div className="product-specs-chips">
-          {product.storage && <span className="chip">💾 {product.storage}</span>}
-          {product.ram && <span className="chip">⚡ {product.ram}</span>}
-          {product.batteryHealth && <span className="chip">🔋 {product.batteryHealth}</span>}
-          {product.condition && <span className="chip">✨ {product.condition}</span>}
+          {(product.storage || product.specs?.['Storage'] || product.specs?.['Storage Capacity']) && (
+            <span className="chip">💾 {product.storage || product.specs?.['Storage'] || product.specs?.['Storage Capacity']}</span>
+          )}
+          {(product.ram || product.specs?.['RAM']) && (
+            <span className="chip">⚡ {product.ram || product.specs?.['RAM']}</span>
+          )}
+          {(product.processor || product.specs?.['Processor'] || product.specs?.['Processor / Chipset']) && (
+            <span className="chip">⚙️ {product.processor || product.specs?.['Processor'] || product.specs?.['Processor / Chipset']}</span>
+          )}
+          {(product.specs?.['Product Type'] || product.productType) && (
+            <span className="chip">🏷️ {product.specs?.['Product Type'] || product.productType}</span>
+          )}
+          {(product.condition || product.specs?.['Condition']) && (
+            <span className="chip">✨ {product.condition || product.specs?.['Condition']}</span>
+          )}
         </div>
 
         <div className="product-pricing">

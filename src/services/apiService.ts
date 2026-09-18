@@ -342,6 +342,36 @@ export async function createSellerProduct(
   return data;
 }
 
+export async function updateSellerProduct(
+  productId: string,
+  productData: {
+    name?: string;
+    brand?: string;
+    category?: string;
+    description?: string;
+    price?: number;
+    stock?: number;
+    specs?: Record<string, string>;
+    images?: string[];
+  },
+  token: string
+) {
+  const res = await fetch(`${API_BASE_URL}/products/${productId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(productData),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(data.message) ? data.message.join(', ') : data.message;
+    throw new Error(errorMsg || 'Failed to update product listing');
+  }
+  return data;
+}
+
 export async function deleteSellerProduct(productId: string, token: string) {
   const res = await fetch(`${API_BASE_URL}/products/${productId}`, {
     method: 'DELETE',
