@@ -762,17 +762,47 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
 
         {/* Related / Similar Products Section */}
         {relatedProducts.length > 0 && (
-          <div style={{ marginTop: '2.5rem' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.25rem' }}>
+          <section style={{ marginTop: '3.5rem', paddingTop: '2.5rem', borderTop: '1px solid #e2e8f0' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '1.5rem', flexWrap: 'wrap', gap: '0.75rem' }}>
               <div>
-                <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0f172a', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                  <Sparkles size={20} color="#ea580c" />
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.4rem', padding: '0.25rem 0.75rem', borderRadius: '20px', background: 'rgba(255, 111, 0, 0.1)', color: '#ea580c', fontSize: '0.75rem', fontWeight: 800, marginBottom: '0.45rem' }}>
+                  <Sparkles size={13} />
+                  <span>RECOMMENDED SIMILAR GADGETS</span>
+                </div>
+                <h3 style={{ fontSize: '1.4rem', fontWeight: 800, color: '#0f172a', margin: 0, letterSpacing: '-0.02em', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                   <span>Similar Gadgets in {product.category}</span>
                 </h3>
-                <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.82rem', color: '#64748b' }}>
-                  Explore more verified listings in the same category
+                <p style={{ margin: '0.3rem 0 0 0', fontSize: '0.86rem', color: '#64748b' }}>
+                  Explore more verified listings and certified pre-owned devices in the same category
                 </p>
               </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  navigate('/');
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.35rem',
+                  fontSize: '0.85rem',
+                  fontWeight: 700,
+                  color: '#ea580c',
+                  background: '#fff7ed',
+                  border: '1px solid #fed7aa',
+                  padding: '0.5rem 0.95rem',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#ffedd5')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = '#fff7ed')}
+              >
+                <span>Browse All {product.category}</span>
+                <ChevronRight size={15} />
+              </button>
             </div>
 
             <div 
@@ -794,7 +824,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                 />
               ))}
             </div>
-          </div>
+          </section>
         )}
 
       </div>

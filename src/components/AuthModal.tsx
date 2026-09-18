@@ -24,7 +24,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { showAuthModal, authTab, authRole } = useAppSelector(state => state.auth);
-  const { shops, subscriptionPlans } = useAppSelector(state => state.products);
+  const { subscriptionPlans } = useAppSelector(state => state.products);
 
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -210,12 +210,34 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         password: loginPassword,
       });
 
+      const actualRole = resData.user?.role || (resData.user?.shop ? 'seller' : 'customer');
+
+      // --- STRICT ROLE VALIDATION ---
+      // 1. If user is in "Seller Login" tab but account is a Customer
+      if (authRole === 'seller' && actualRole !== 'seller') {
+        localStorage.removeItem('mlx_token');
+        setIsSubmitting(false);
+        onToast('This account is registered as a Customer. Please sign in via Customer Sign In.', 'info');
+        dispatch(setAuthRole('customer'));
+        return;
+      }
+
+      // 2. If user is in "Customer Sign In" tab but account is a Seller
+      if (authRole === 'customer' && actualRole === 'seller') {
+        localStorage.removeItem('mlx_token');
+        setIsSubmitting(false);
+        onToast('This account is registered as a Merchant Store. Please sign in via Seller Login.', 'info');
+        dispatch(setAuthRole('seller'));
+        return;
+      }
+
+      // Safe to persist authentication token once role is verified
       if (resData.token) {
         localStorage.setItem('mlx_token', resData.token);
       }
 
-      if (resData.user?.role === 'seller' || authRole === 'seller') {
-        const shop: Shop = resData.user?.shop || shops[0] || {
+      if (actualRole === 'seller') {
+        const shop: Shop = resData.user?.shop || {
           id: resData.user?.id || `shop-${Date.now()}`,
           name: resData.user?.name || 'Seller Shop',
           ownerName: resData.user?.name || 'Shop Owner',
@@ -529,6 +551,32 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
               <a href="#" onClick={(e) => { e.preventDefault(); dispatch(setAuthTab('register')); }} style={{ color: '#ff9e40', fontWeight: 700, textDecoration: 'none' }}>
                 Register Here
               </a>
+            </div>
+
+            <div style={{ textAlign: 'center', marginTop: '0.65rem', paddingTop: '0.65rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)', fontSize: '0.8rem', color: '#94a3b8' }}>
+              {authRole === 'seller' ? (
+                <>
+                  Looking for buyer portal?{' '}
+                  <button
+                    type="button"
+                    onClick={() => dispatch(setAuthRole('customer'))}
+                    style={{ background: 'none', border: 'none', color: '#60a5fa', fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                  >
+                    Switch to Customer Sign In →
+                  </button>
+                </>
+              ) : (
+                <>
+                  Are you a store merchant?{' '}
+                  <button
+                    type="button"
+                    onClick={() => dispatch(setAuthRole('seller'))}
+                    style={{ background: 'none', border: 'none', color: '#ff9e40', fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                  >
+                    Switch to Seller Login →
+                  </button>
+                </>
+              )}
             </div>
           </form>
         ) : (

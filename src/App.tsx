@@ -25,6 +25,7 @@ import {
   LogOut,
   LogIn,
   Store,
+  X,
   CheckCircle,
   HelpCircle,
   Info,
@@ -259,6 +260,7 @@ export default function App() {
   const [isSearchFocused, setIsSearchFocused] = React.useState(false);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = React.useState(false);
   const [currentSlide, setCurrentSlide] = React.useState(0);
+  const [logoutConfirmType, setLogoutConfirmType] = React.useState<'seller' | 'customer' | null>(null);
   const [shopFollowers, setShopFollowers] = React.useState<Array<{ id: string; name: string; email?: string; phone?: string; followedAt: string }>>([]);
   const [shopFollowersCount, setShopFollowersCount] = React.useState<number>(0);
   const [shopSubscriptionUsage, setShopSubscriptionUsage] = React.useState<{
@@ -349,8 +351,19 @@ export default function App() {
 
   const isAnyModalActive = Boolean(
     showAuthModal ||
-    showAddEditModal
+    showAddEditModal ||
+    logoutConfirmType !== null
   );
+
+  React.useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && logoutConfirmType) {
+        setLogoutConfirmType(null);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [logoutConfirmType]);
 
   React.useEffect(() => {
     if (isAnyModalActive) {
@@ -753,9 +766,72 @@ export default function App() {
   // Extract unique brands for sidebar filters
   const uniqueBrands = Array.from(new Set(products.map(p => p.brand)));
 
+  // Dynamically extract trending products/models that actually exist in inventory
+  const trendingTags = React.useMemo(() => {
+    const popularPresets = ['iPhone 15 Pro', 'Galaxy S24', 'iPhone 14', 'AirPods Pro', 'iPad Air', 'Watch Ultra'];
+    if (!products || products.length === 0) return popularPresets;
+
+    const extracted: string[] = [];
+    const checkList = [
+      { key: 'iphone 15 pro max', label: 'iPhone 15 Pro Max' },
+      { key: 'iphone 15 pro', label: 'iPhone 15 Pro' },
+      { key: 'iphone 15', label: 'iPhone 15' },
+      { key: 'iphone 14', label: 'iPhone 14' },
+      { key: 'galaxy s24 ultra', label: 'Galaxy S24 Ultra' },
+      { key: 'galaxy s24', label: 'Galaxy S24' },
+      { key: 'galaxy a55', label: 'Galaxy A55' },
+      { key: 'airpods pro', label: 'AirPods Pro' },
+      { key: 'watch ultra', label: 'Apple Watch Ultra' },
+      { key: 'ipad', label: 'iPad Air' },
+      { key: 'wh-1000xm5', label: 'Sony XM5' },
+      { key: 'hp pavilion', label: 'HP Pavilion' }
+    ];
+
+    for (const item of checkList) {
+      const exists = products.some(p =>
+        p.name.toLowerCase().includes(item.key) ||
+        (p.brand && p.brand.toLowerCase().includes(item.key)) ||
+        (p.description && p.description.toLowerCase().includes(item.key))
+      );
+      if (exists && !extracted.includes(item.label)) {
+        extracted.push(item.label);
+      }
+    }
+
+    if (extracted.length < 4) {
+      for (const p of products) {
+        const simpleName = p.name.split('(')[0].split('-')[0].trim();
+        if (simpleName && !extracted.includes(simpleName)) {
+          extracted.push(simpleName);
+        }
+        if (extracted.length >= 6) break;
+      }
+    }
+
+    return extracted.length > 0 ? extracted.slice(0, 6) : popularPresets;
+  }, [products]);
+
   // --- HANDLERS ---
   const triggerToast = (message: string, type: 'info' | 'success' | 'warning' = 'info') => {
     dispatch(addToast({ message, type }));
+  };
+
+  const handleConfirmLogout = () => {
+    if (logoutConfirmType === 'seller') {
+      localStorage.removeItem('mlx_token');
+      dispatch(setActiveShop(null));
+      triggerToast("Seller logged out successfully.", "info");
+      setLogoutConfirmType(null);
+      navigate('/');
+    } else if (logoutConfirmType === 'customer') {
+      localStorage.removeItem('mlx_token');
+      setWishlistItems([]);
+      setWishlistProductIds([]);
+      dispatch(setActiveUser(null));
+      triggerToast("Logged out successfully.", "info");
+      setLogoutConfirmType(null);
+      navigate('/');
+    }
   };
 
   const handleProfileUpdate = (e: FormEvent) => {
@@ -939,8 +1015,15 @@ export default function App() {
   const handleTagClick = (tagType: 'query' | 'category' | 'budget' | 'city', value: string) => {
     if (tagType === 'query') {
       dispatch(setSearchQuery(value));
+      // Reset conflicting filters so that trending product search displays immediately
+      dispatch(setSelectedCategory('All Categories'));
+      dispatch(setFilterBrand(''));
+      dispatch(setFilterMinPrice(''));
+      dispatch(setFilterMaxPrice(''));
+      dispatch(setFilterMaxBudget('Any Budget'));
     } else if (tagType === 'category') {
       dispatch(setSelectedCategory(value));
+      dispatch(setSearchQuery(''));
     } else if (tagType === 'budget') {
       dispatch(setFilterMaxBudget(value));
     } else if (tagType === 'city') {
@@ -948,6 +1031,12 @@ export default function App() {
     }
     setIsSearchFocused(false);
     navigate('/');
+    setTimeout(() => {
+      const grid = document.getElementById('marketplace-grid');
+      if (grid) {
+        grid.scrollIntoView({ behavior: 'smooth' });
+      }
+    }, 100);
   };
 
   return (
@@ -1057,7 +1146,7 @@ export default function App() {
                       </button>
                       <div className="minimal-tags">
                         {CITIES.filter(c => c !== "All Cities").map(city => (
-                          <button key={city} className="min-tag city" onClick={() => handleTagClick('city', city)}>{city}</button>
+                          <button key={city} type="button" className="min-tag city" onMouseDown={(e) => e.preventDefault()} onClick={() => handleTagClick('city', city)}>{city}</button>
                         ))}
                       </div>
                     </div>
@@ -1066,15 +1155,15 @@ export default function App() {
                     <div className="overlay-minimal-row">
                       <span className="min-row-lbl">Budgets:</span>
                       <div className="minimal-tags">
-                        <button className="min-tag budget" onClick={() => handleTagClick('budget', 'Under ₹5,000')}>&lt; 5k</button>
-                        <button className="min-tag budget" onClick={() => handleTagClick('budget', 'Under ₹10,000')}>&lt; 10k</button>
-                        <button className="min-tag budget" onClick={() => handleTagClick('budget', 'Under ₹25,000')}>&lt; 25k</button>
+                        <button type="button" className="min-tag budget" onMouseDown={(e) => e.preventDefault()} onClick={() => handleTagClick('budget', 'Under ₹5,000')}>&lt; 5k</button>
+                        <button type="button" className="min-tag budget" onMouseDown={(e) => e.preventDefault()} onClick={() => handleTagClick('budget', 'Under ₹10,000')}>&lt; 10k</button>
+                        <button type="button" className="min-tag budget" onMouseDown={(e) => e.preventDefault()} onClick={() => handleTagClick('budget', 'Under ₹25,000')}>&lt; 25k</button>
                       </div>
                       <span className="min-row-lbl" style={{ marginLeft: '0.5rem' }}>Categories:</span>
                       <div className="minimal-tags">
-                        <button className="min-tag cat" onClick={() => handleTagClick('category', 'Mobiles')}>Mobiles</button>
-                        <button className="min-tag cat" onClick={() => handleTagClick('category', 'Laptops')}>Laptops</button>
-                        <button className="min-tag cat" onClick={() => handleTagClick('category', 'Smart Watches')}>Watches</button>
+                        <button type="button" className="min-tag cat" onMouseDown={(e) => e.preventDefault()} onClick={() => handleTagClick('category', 'Mobiles')}>Mobiles</button>
+                        <button type="button" className="min-tag cat" onMouseDown={(e) => e.preventDefault()} onClick={() => handleTagClick('category', 'Laptops')}>Laptops</button>
+                        <button type="button" className="min-tag cat" onMouseDown={(e) => e.preventDefault()} onClick={() => handleTagClick('category', 'Smart Watches')}>Watches</button>
                       </div>
                     </div>
 
@@ -1082,10 +1171,17 @@ export default function App() {
                     <div className="overlay-minimal-row" style={{ borderTop: '1px solid var(--light-border)', paddingTop: '0.5rem', marginTop: '0.25rem', width: '100%' }}>
                       <span className="min-row-lbl">Trending:</span>
                       <div className="minimal-tags">
-                        <button className="min-tag model" onClick={() => handleTagClick('query', 'iPhone 13')}>iPhone 13</button>
-                        <button className="min-tag model" onClick={() => handleTagClick('query', 'Samsung S22')}>Samsung S22</button>
-                        <button className="min-tag model" onClick={() => handleTagClick('query', 'MacBook Air')}>MacBook Air</button>
-                        <button className="min-tag model" onClick={() => handleTagClick('query', 'OnePlus')}>OnePlus</button>
+                        {trendingTags.map(tag => (
+                          <button
+                            key={tag}
+                            type="button"
+                            className="min-tag model"
+                            onMouseDown={(e) => e.preventDefault()}
+                            onClick={() => handleTagClick('query', tag)}
+                          >
+                            {tag}
+                          </button>
+                        ))}
                       </div>
                     </div>
 
@@ -1237,12 +1333,7 @@ export default function App() {
                 </span>
                 <button
                   className="action-btn"
-                  onClick={() => {
-                    localStorage.removeItem('mlx_token');
-                    dispatch(setActiveShop(null));
-                    triggerToast("Seller logged out.");
-                    navigate('/');
-                  }}
+                  onClick={() => setLogoutConfirmType('seller')}
                   title="Logout Shop"
                   style={{
                     display: 'inline-flex',
@@ -1275,14 +1366,7 @@ export default function App() {
                 </button>
                 <button
                   className="action-btn"
-                  onClick={() => {
-                    localStorage.removeItem('mlx_token');
-                    setWishlistItems([]);
-                    setWishlistProductIds([]);
-                    dispatch(setActiveUser(null));
-                    triggerToast("Logged out successfully.");
-                    navigate('/');
-                  }}
+                  onClick={() => setLogoutConfirmType('customer')}
                   title="Logout User"
                 >
                   <LogOut size={16} />
@@ -3388,6 +3472,153 @@ export default function App() {
 
       {/* --- ADD / EDIT PRODUCT MODAL --- */}
       <AddEditProductModal onToast={triggerToast} />
+
+      {/* --- LOGOUT CONFIRMATION MODAL (BOTH FOR CUSTOMER AND SELLER) --- */}
+      {logoutConfirmType && (
+        <div
+          className="modal-overlay"
+          onClick={() => setLogoutConfirmType(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.65)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem'
+          }}
+        >
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#ffffff',
+              borderRadius: '20px',
+              maxWidth: '440px',
+              width: '100%',
+              padding: '2.25rem 2rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              textAlign: 'center',
+              position: 'relative'
+            }}
+          >
+            <button
+              type="button"
+              onClick={() => setLogoutConfirmType(null)}
+              style={{
+                position: 'absolute',
+                top: '1.1rem',
+                right: '1.1rem',
+                background: '#f1f5f9',
+                border: 'none',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#64748b',
+                cursor: 'pointer'
+              }}
+            >
+              <X size={16} />
+            </button>
+
+            {/* Top MLX Brand Accent Strip */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '5px',
+                background: 'linear-gradient(90deg, #ff6f00 0%, #ea580c 50%, #f59e0b 100%)',
+                borderTopLeftRadius: '20px',
+                borderTopRightRadius: '20px'
+              }}
+            />
+
+            {/* Icon Badge */}
+            <div
+              style={{
+                width: '64px',
+                height: '64px',
+                borderRadius: '20px',
+                background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',
+                border: '1.5px solid #fed7aa',
+                color: '#ea580c',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0.25rem auto 1.25rem',
+                boxShadow: '0 10px 25px -5px rgba(234, 88, 12, 0.25)'
+              }}
+            >
+              <LogOut size={28} />
+            </div>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#0f172a', margin: '0 0 0.5rem' }}>
+              {logoutConfirmType === 'seller' ? 'Log out of Store Portal?' : 'Log out of your Account?'}
+            </h3>
+
+            <p style={{ fontSize: '0.88rem', color: '#64748b', margin: '0 0 1.75rem', lineHeight: 1.55 }}>
+              {logoutConfirmType === 'seller'
+                ? `Are you sure you want to log out of "${activeShop?.name || 'Seller Portal'}"? You will need to sign in again to manage products and buyer leads.`
+                : `Are you sure you want to log out${activeUser?.name ? `, ${getFormattedUserName(activeUser)}` : ''}? You will need to sign in again to view your wishlist and inquiries.`}
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.75rem' }}>
+              <button
+                type="button"
+                onClick={() => setLogoutConfirmType(null)}
+                style={{
+                  padding: '0.75rem 1rem',
+                  borderRadius: '12px',
+                  border: '1px solid #cbd5e1',
+                  background: '#f8fafc',
+                  color: '#334155',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#f1f5f9')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = '#f8fafc')}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmLogout}
+                style={{
+                  padding: '0.75rem 1rem',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '0.9rem',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.45rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 15px rgba(234, 88, 12, 0.38)',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.filter = 'brightness(1.06)')}
+                onMouseLeave={(e) => (e.currentTarget.style.filter = 'none')}
+              >
+                <LogOut size={16} />
+                <span>Yes, Log Out</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* --- AUTHENTICATION MODAL (LOGIN & REGISTRATION) --- */}
       <AuthModal onToast={triggerToast} />

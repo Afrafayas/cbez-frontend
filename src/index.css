@@ -2733,6 +2733,19 @@ body.modal-open {
   border-color: #DB2777;
 }
 
+.min-tag.model {
+  background: #FFF7ED;
+  color: #C2410C;
+  border-color: #FFEDD5;
+  font-weight: 600;
+}
+
+.min-tag.model:hover {
+  background: #EA580C;
+  color: #FFFFFF;
+  border-color: #EA580C;
+}
+
 /* --- RESPONSIVE MEDIA QUERIES --- */
 
 /* 1. Tablet & Small Laptops (max-width: 992px) */

@@ -1,6 +1,6 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Phone, Smartphone, MapPin, ShieldCheck, Clock, Heart } from 'lucide-react';
+import { Phone, Smartphone, MapPin, ShieldCheck, Clock, Heart, Store, Sparkles } from 'lucide-react';
 import { Product, Shop } from '../types';
 import { useAppDispatch, useAppSelector } from '../store';
 import { setSelectedProduct } from '../store/productsSlice';
@@ -27,176 +27,413 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const { activeUser, activeShop } = useAppSelector((state) => state.auth);
+  const [isHovered, setIsHovered] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
   const isSoldOut = product.stock <= 0 || product.isSoldOut;
+  const effectivePrice = product.offerPrice || product.price;
+  const hasDiscount = product.offerPrice && product.offerPrice < product.price;
+  const condition = product.condition || product.specs?.['Condition'] || 'Verified Pre-owned';
+
+  const handleClick = () => {
+    if (!activeUser && !activeShop) {
+      dispatch(setSelectedProduct(null));
+      dispatch(setAuthRole('customer'));
+      dispatch(setAuthTab('login'));
+      dispatch(setShowAuthModal(true));
+      return;
+    }
+    logActivity({
+      action: 'PRODUCT_CLICK',
+      details: `Clicked on similar product "${product.name}" (ID: ${product.id}, Price: ₹${effectivePrice.toLocaleString('en-IN')}) listed by "${seller?.name || 'Shop'}"`,
+      userId: activeUser?.id,
+    });
+    dispatch(setSelectedProduct(product));
+    navigate(`/product/${product.id}`);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  const imageSrc = !imgError && product.images && product.images.length > 0 ? product.images[0] : null;
 
   return (
-    <div
-      className="product-card"
-      onClick={() => {
-        if (!activeUser && !activeShop) {
-          dispatch(setSelectedProduct(null));
-          dispatch(setAuthRole('customer'));
-          dispatch(setAuthTab('login'));
-          dispatch(setShowAuthModal(true));
-          return;
-        }
-        logActivity({
-          action: 'PRODUCT_CLICK',
-          details: `Clicked on product "${product.name}" (ID: ${product.id}, Price: ₹${(product.offerPrice || product.price).toLocaleString('en-IN')}) listed by "${seller?.name || 'Shop'}"`,
-          userId: activeUser?.id,
-        });
-        dispatch(setSelectedProduct(product));
-        navigate(`/product/${product.id}`);
+    <article
+      onClick={handleClick}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      style={{
+        background: '#ffffff',
+        borderRadius: '16px',
+        border: isHovered ? '1px solid #fed7aa' : '1px solid #e2e8f0',
+        overflow: 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        boxShadow: isHovered ? '0 16px 32px -4px rgba(234, 88, 12, 0.12), 0 4px 12px rgba(0,0,0,0.04)' : '0 2px 10px rgba(0, 0, 0, 0.04)',
+        transform: isHovered ? 'translateY(-4px)' : 'none',
+        transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)',
+        cursor: 'pointer',
+        position: 'relative',
+        opacity: isSoldOut ? 0.82 : 1
       }}
-      style={{ cursor: 'pointer', opacity: isSoldOut ? 0.8 : 1, position: 'relative' }}
     >
-      {/* Wishlist Heart Icon Overlay */}
-      {onToggleWishlist && (
-        <button
-          type="button"
-          title={isWishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleWishlist(product);
-          }}
-          style={{
-            position: 'absolute',
-            top: '12px',
-            right: '12px',
-            zIndex: 11,
-            width: '34px',
-            height: '34px',
-            borderRadius: '50%',
-            backgroundColor: 'rgba(255, 255, 255, 0.95)',
-            border: '1px solid #e2e8f0',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            color: isWishlisted ? '#ef4444' : '#64748b',
-            cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-            transition: 'all 0.2s ease'
-          }}
-        >
-          <Heart size={18} fill={isWishlisted ? '#ef4444' : 'transparent'} />
-        </button>
-      )}
-
-      {/* Sold Out Red Badge Overlay */}
-      {isSoldOut && (
-        <div style={{
-          position: 'absolute',
-          top: '12px',
-          left: '12px',
-          zIndex: 10,
-          background: '#dc2626',
-          color: '#ffffff',
-          fontWeight: 800,
-          fontSize: '0.75rem',
-          padding: '0.25rem 0.6rem',
-          borderRadius: '6px',
-          boxShadow: '0 2px 6px rgba(0,0,0,0.2)',
-          textTransform: 'uppercase',
-          letterSpacing: '0.5px'
-        }}>
-          🔴 SOLD OUT
-        </div>
-      )}
-
-      <div className="product-visual">
-        {product.images && product.images.length > 0 ? (
-          <img src={product.images[0]} alt={product.name} className="product-visual-img" />
-        ) : (
-          <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#f8f9fa' }}>
-            📱
-          </div>
+      {/* Visual Image Showcase */}
+      <div
+        style={{
+          position: 'relative',
+          height: '210px',
+          width: '100%',
+          backgroundColor: '#f8fafc',
+          background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          overflow: 'hidden',
+          borderBottom: '1px solid #f1f5f9'
+        }}
+      >
+        {/* Wishlist Heart Overlay */}
+        {onToggleWishlist && (
+          <button
+            type="button"
+            title={isWishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleWishlist(product);
+            }}
+            style={{
+              position: 'absolute',
+              top: '10px',
+              right: '10px',
+              zIndex: 10,
+              width: '34px',
+              height: '34px',
+              borderRadius: '50%',
+              backgroundColor: 'rgba(255, 255, 255, 0.92)',
+              backdropFilter: 'blur(4px)',
+              border: '1px solid rgba(226, 232, 240, 0.9)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: isWishlisted ? '#ef4444' : '#64748b',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => (e.currentTarget.style.transform = 'scale(1.1)')}
+            onMouseLeave={(e) => (e.currentTarget.style.transform = 'none')}
+          >
+            <Heart size={16} fill={isWishlisted ? '#ef4444' : 'transparent'} />
+          </button>
         )}
-      </div>
 
-      <div className="product-details">
-        <div className="product-header">
-          <span className="product-category-tag">{product.category}</span>
-          <h3 className="product-title">{product.name}</h3>
-        </div>
-
-        <div className="product-specs-chips">
-          {(product.storage || product.specs?.['Storage'] || product.specs?.['Storage Capacity']) && (
-            <span className="chip">💾 {product.storage || product.specs?.['Storage'] || product.specs?.['Storage Capacity']}</span>
-          )}
-          {(product.ram || product.specs?.['RAM']) && (
-            <span className="chip">⚡ {product.ram || product.specs?.['RAM']}</span>
-          )}
-          {(product.processor || product.specs?.['Processor'] || product.specs?.['Processor / Chipset']) && (
-            <span className="chip">⚙️ {product.processor || product.specs?.['Processor'] || product.specs?.['Processor / Chipset']}</span>
-          )}
-          {(product.specs?.['Product Type'] || product.productType) && (
-            <span className="chip">🏷️ {product.specs?.['Product Type'] || product.productType}</span>
-          )}
-          {(product.condition || product.specs?.['Condition']) && (
-            <span className="chip">✨ {product.condition || product.specs?.['Condition']}</span>
-          )}
-        </div>
-
-        <div className="product-pricing">
-          <span className="product-price">
-            ₹{(product.offerPrice || product.price).toLocaleString('en-IN')}
-          </span>
-          {product.offerPrice && product.offerPrice < product.price && (
-            <span style={{ fontSize: '0.8rem', color: '#94a3b8', textDecoration: 'line-through' }}>
-              ₹{product.price.toLocaleString('en-IN')}
+        {/* Condition / Stock Tag Overlay */}
+        <div style={{ position: 'absolute', top: '10px', left: '10px', zIndex: 10, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+          {isSoldOut ? (
+            <span
+              style={{
+                background: '#ef4444',
+                color: '#ffffff',
+                fontWeight: 800,
+                fontSize: '0.68rem',
+                padding: '0.22rem 0.55rem',
+                borderRadius: '6px',
+                boxShadow: '0 2px 6px rgba(239, 68, 68, 0.3)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px'
+              }}
+            >
+              🔴 SOLD OUT
+            </span>
+          ) : (
+            <span
+              style={{
+                background: 'rgba(15, 23, 42, 0.78)',
+                backdropFilter: 'blur(4px)',
+                color: '#ffffff',
+                fontWeight: 600,
+                fontSize: '0.68rem',
+                padding: '0.22rem 0.55rem',
+                borderRadius: '6px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.25rem',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
+              }}
+            >
+              <Sparkles size={11} color="#f59e0b" />
+              <span>{condition}</span>
             </span>
           )}
         </div>
 
-        <div className="merchant-info" onClick={(e) => {
-          e.stopPropagation();
-          logActivity({
-            action: 'SHOP_CLICK',
-            details: `Clicked on shop "${seller.name}" (ID: ${seller.id}, City: ${seller.city || 'N/A'})`,
-            userId: activeUser?.id,
-          });
-        }}>
-          <div className="merchant-name-row">
-            <span className="merchant-name">{seller.name}</span>
-            {seller.verified ? (
-              <div className="merchant-badge">
+        {/* Gadget Image */}
+        {imageSrc ? (
+          <img
+            src={imageSrc}
+            alt={product.name}
+            onError={() => setImgError(true)}
+            style={{
+              width: '100%',
+              height: '100%',
+              objectFit: 'contain',
+              padding: '12px',
+              transition: 'transform 0.35s ease',
+              transform: isHovered ? 'scale(1.06)' : 'none'
+            }}
+          />
+        ) : (
+          <div
+            style={{
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#94a3b8',
+              gap: '0.4rem'
+            }}
+          >
+            <span style={{ fontSize: '2.5rem' }}>📱</span>
+            <span style={{ fontSize: '0.75rem', fontWeight: 600 }}>{product.category}</span>
+          </div>
+        )}
+      </div>
+
+      {/* Card Body */}
+      <div style={{ padding: '1rem 1.15rem', display: 'flex', flexDirection: 'column', flexGrow: 1 }}>
+        {/* Category & Urgency */}
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.35rem' }}>
+          <span
+            style={{
+              fontSize: '0.72rem',
+              fontWeight: 800,
+              color: '#ea580c',
+              textTransform: 'uppercase',
+              letterSpacing: '0.6px'
+            }}
+          >
+            {product.brand || product.category}
+          </span>
+          {product.stock > 0 && product.stock <= 3 && !isSoldOut && (
+            <span style={{ fontSize: '0.68rem', fontWeight: 700, color: '#d97706', background: '#fef3c7', padding: '0.15rem 0.45rem', borderRadius: '4px' }}>
+              ⚡ Only {product.stock} left!
+            </span>
+          )}
+        </div>
+
+        {/* Product Title */}
+        <h4
+          title={product.name}
+          style={{
+            fontSize: '0.98rem',
+            fontWeight: 700,
+            color: '#0f172a',
+            lineHeight: 1.35,
+            margin: '0 0 0.55rem 0',
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+            minHeight: '2.65rem'
+          }}
+        >
+          {product.name}
+        </h4>
+
+        {/* Specs Chips */}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.35rem', marginBottom: '0.75rem', minHeight: '1.6rem' }}>
+          {(product.storage || product.specs?.['Storage'] || product.specs?.['Storage Capacity']) && (
+            <span style={{ background: '#f8fafc', border: '1px solid #e2e8f0', color: '#475569', fontSize: '0.7rem', fontWeight: 600, padding: '0.18rem 0.45rem', borderRadius: '6px' }}>
+              💾 {product.storage || product.specs?.['Storage'] || product.specs?.['Storage Capacity']}
+            </span>
+          )}
+          {(product.ram || product.specs?.['RAM']) && (
+            <span style={{ background: '#f8fafc', border: '1px solid #e2e8f0', color: '#475569', fontSize: '0.7rem', fontWeight: 600, padding: '0.18rem 0.45rem', borderRadius: '6px' }}>
+              ⚡ {product.ram || product.specs?.['RAM']}
+            </span>
+          )}
+          {(product.processor || product.specs?.['Processor'] || product.specs?.['Processor / Chipset']) && (
+            <span style={{ background: '#f8fafc', border: '1px solid #e2e8f0', color: '#475569', fontSize: '0.7rem', fontWeight: 600, padding: '0.18rem 0.45rem', borderRadius: '6px' }}>
+              ⚙️ {product.processor || product.specs?.['Processor'] || product.specs?.['Processor / Chipset']}
+            </span>
+          )}
+          {(product.specs?.['Product Type'] || product.productType) && (
+            <span style={{ background: '#f8fafc', border: '1px solid #e2e8f0', color: '#475569', fontSize: '0.7rem', fontWeight: 600, padding: '0.18rem 0.45rem', borderRadius: '6px' }}>
+              🏷️ {product.specs?.['Product Type'] || product.productType}
+            </span>
+          )}
+        </div>
+
+        {/* Price Row */}
+        <div style={{ display: 'flex', alignItems: 'baseline', gap: '0.5rem', marginBottom: '0.8rem' }}>
+          <span style={{ fontSize: '1.28rem', fontWeight: 800, color: '#0f172a' }}>
+            ₹{effectivePrice.toLocaleString('en-IN')}
+          </span>
+          {hasDiscount && (
+            <>
+              <span style={{ fontSize: '0.82rem', color: '#94a3b8', textDecoration: 'line-through' }}>
+                ₹{product.price.toLocaleString('en-IN')}
+              </span>
+              <span style={{ fontSize: '0.68rem', fontWeight: 800, color: '#16a34a', background: '#dcfce7', padding: '0.15rem 0.4rem', borderRadius: '4px' }}>
+                SAVE ₹{(product.price - product.offerPrice!).toLocaleString('en-IN')}
+              </span>
+            </>
+          )}
+        </div>
+
+        {/* Seller Info Box */}
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            if (seller?.id) {
+              logActivity({
+                action: 'SHOP_CLICK',
+                details: `Clicked on shop "${seller.name}" (ID: ${seller.id}) from similar gadgets`,
+                userId: activeUser?.id,
+              });
+            }
+          }}
+          style={{
+            marginTop: 'auto',
+            paddingTop: '0.65rem',
+            borderTop: '1px solid #f1f5f9',
+            marginBottom: '0.85rem'
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '0.5rem' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', overflow: 'hidden' }}>
+              <Store size={13} style={{ color: '#ea580c', flexShrink: 0 }} />
+              <span
+                style={{
+                  fontSize: '0.82rem',
+                  fontWeight: 700,
+                  color: '#334155',
+                  whiteSpace: 'nowrap',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis'
+                }}
+              >
+                {seller?.name || 'Verified Local Partner'}
+              </span>
+            </div>
+
+            {seller?.verified ? (
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.2rem',
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  color: '#15803d',
+                  background: '#dcfce7',
+                  padding: '0.15rem 0.45rem',
+                  borderRadius: '4px',
+                  flexShrink: 0
+                }}
+              >
                 <ShieldCheck size={12} />
                 <span>Verified</span>
-              </div>
+              </span>
             ) : (
-              <div className="merchant-badge" style={{ background: 'rgba(245, 158, 11, 0.12)', color: '#d97706', border: '1px solid rgba(245, 158, 11, 0.3)' }}>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.2rem',
+                  fontSize: '0.68rem',
+                  fontWeight: 700,
+                  color: '#d97706',
+                  background: '#fef3c7',
+                  padding: '0.15rem 0.45rem',
+                  borderRadius: '4px',
+                  flexShrink: 0
+                }}
+              >
                 <Clock size={12} />
                 <span>Pending</span>
-              </div>
+              </span>
             )}
           </div>
-          <div className="merchant-location">
-            <MapPin size={12} />
-            <span>{seller.city}</span>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.74rem', color: '#64748b', marginTop: '0.3rem' }}>
+            <MapPin size={12} style={{ color: '#94a3b8', flexShrink: 0 }} />
+            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+              {seller?.city || seller?.address || 'Kerala, India'}
+            </span>
           </div>
         </div>
 
-        <div className="card-actions" onClick={(e) => e.stopPropagation()}>
+        {/* Actions Row: Call Dealer & WhatsApp */}
+        <div
+          onClick={(e) => e.stopPropagation()}
+          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: 'auto' }}
+        >
           <button
-            className="btn-call"
+            type="button"
             disabled={isSoldOut}
             onClick={() => onCallSeller(product, seller)}
-            style={{ opacity: isSoldOut ? 0.5 : 1 }}
+            style={{
+              padding: '0.55rem 0.6rem',
+              borderRadius: '10px',
+              border: '1px solid #fed7aa',
+              background: '#fff7ed',
+              color: '#ea580c',
+              fontWeight: 700,
+              fontSize: '0.8rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.35rem',
+              cursor: isSoldOut ? 'not-allowed' : 'pointer',
+              opacity: isSoldOut ? 0.5 : 1,
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              if (!isSoldOut) e.currentTarget.style.background = '#ffedd5';
+            }}
+            onMouseLeave={(e) => {
+              if (!isSoldOut) e.currentTarget.style.background = '#fff7ed';
+            }}
           >
-            <Phone size={14} />
+            <Phone size={13} />
             <span>Call Dealer</span>
           </button>
+
           <button
-            className="btn-whatsapp"
+            type="button"
             disabled={isSoldOut}
             onClick={() => onWhatsAppSeller(product, seller)}
-            style={{ opacity: isSoldOut ? 0.5 : 1 }}
+            style={{
+              padding: '0.55rem 0.6rem',
+              borderRadius: '10px',
+              border: 'none',
+              background: '#22c55e',
+              color: '#ffffff',
+              fontWeight: 700,
+              fontSize: '0.8rem',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.35rem',
+              cursor: isSoldOut ? 'not-allowed' : 'pointer',
+              opacity: isSoldOut ? 0.5 : 1,
+              boxShadow: isSoldOut ? 'none' : '0 2px 8px rgba(34, 197, 94, 0.28)',
+              transition: 'all 0.2s ease'
+            }}
+            onMouseEnter={(e) => {
+              if (!isSoldOut) e.currentTarget.style.background = '#16a34a';
+            }}
+            onMouseLeave={(e) => {
+              if (!isSoldOut) e.currentTarget.style.background = '#22c55e';
+            }}
           >
-            <Smartphone size={14} />
+            <Smartphone size={13} />
             <span>WhatsApp</span>
           </button>
         </div>
       </div>
-    </div>
+    </article>
   );
 };
