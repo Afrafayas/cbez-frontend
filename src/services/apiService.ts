@@ -141,6 +141,47 @@ export async function deleteBrand(id: string, token: string): Promise<{ success:
 }
 
 /* Subscription Plan APIs */
+
+export async function getShopSubscription(shopId: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/subscriptions/shop/${shopId}`);
+    if (!res.ok) return null;
+    const result = await res.json();
+    return result.data ?? null;
+  } catch (err) {
+    console.error('Failed to fetch shop subscription:', err);
+    return null;
+  }
+}
+
+export async function getMyShopSubscription(token: string): Promise<any> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/subscriptions/mine`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+    if (!res.ok) return null;
+    const result = await res.json();
+    return result.data ?? null;
+  } catch (err) {
+    console.error('Failed to fetch my subscription:', err);
+    return null;
+  }
+}
+
+export async function getShop(shopId: string): Promise<Shop | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/shops/${shopId}`);
+    if (!res.ok) return null;
+    const result = await res.json();
+    return result.data?.shop ?? null;
+  } catch (err) {
+    console.error('Failed to fetch shop:', err);
+    return null;
+  }
+}
+
 export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
   try {
     const res = await fetch(`${API_BASE_URL}/subscriptions/plans`);
@@ -279,11 +320,12 @@ export async function registerUser(userData: {
 
 export async function sendLead(leadData: {
   shopId: string;
-  productId: string;
+  productId?: string;
   productName: string;
   customerName: string;
   customerPhone: string;
   contactType: 'call' | 'whatsapp';
+  userId?: string;
 }) {
   const res = await fetch(`${API_BASE_URL}/leads`, {
     method: 'POST',
@@ -570,3 +612,45 @@ export async function getWishlistIds(token: string): Promise<string[]> {
 }
 
 
+
+/* Activity Logging API */
+export async function logActivity(data: {
+  action: string;
+  details?: string;
+  userId?: string;
+}): Promise<void> {
+  try {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('mlx_token') : null;
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+    };
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+    await fetch(`${API_BASE_URL}/activity-logs`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(data),
+    });
+  } catch (err) {
+    console.warn('Failed to log activity:', err);
+  }
+}
+
+/* Seller Customer Activity Logs API */
+export async function getSellerCustomerActivityLogs(token: string, shopId?: string): Promise<any> {
+  const url = shopId
+    ? `${API_BASE_URL}/activity-logs/seller/customers?shopId=${encodeURIComponent(shopId)}`
+    : `${API_BASE_URL}/activity-logs/seller/customers`;
+  const res = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  const result = await res.json();
+  if (!res.ok) {
+    throw new Error(result.message || 'Failed to fetch customer activity logs');
+  }
+  return result.data;
+}

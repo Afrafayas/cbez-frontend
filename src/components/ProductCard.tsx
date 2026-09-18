@@ -4,6 +4,7 @@ import { Phone, Smartphone, MapPin, ShieldCheck, Clock, Heart } from 'lucide-rea
 import { Product, Shop } from '../types';
 import { useAppDispatch, useAppSelector } from '../store';
 import { setSelectedProduct } from '../store/productsSlice';
+import { logActivity } from '../services/apiService';
 import { setShowAuthModal, setAuthTab, setAuthRole } from '../store/authSlice';
 
 interface ProductCardProps {
@@ -39,6 +40,11 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           dispatch(setShowAuthModal(true));
           return;
         }
+        logActivity({
+          action: 'PRODUCT_CLICK',
+          details: `Clicked on product "${product.name}" (ID: ${product.id}, Price: ₹${(product.offerPrice || product.price).toLocaleString('en-IN')}) listed by "${seller?.name || 'Shop'}"`,
+          userId: activeUser?.id,
+        });
         dispatch(setSelectedProduct(product));
         navigate(`/product/${product.id}`);
       }}
@@ -142,7 +148,14 @@ export const ProductCard: React.FC<ProductCardProps> = ({
           )}
         </div>
 
-        <div className="merchant-info">
+        <div className="merchant-info" onClick={(e) => {
+          e.stopPropagation();
+          logActivity({
+            action: 'SHOP_CLICK',
+            details: `Clicked on shop "${seller.name}" (ID: ${seller.id}, City: ${seller.city || 'N/A'})`,
+            userId: activeUser?.id,
+          });
+        }}>
           <div className="merchant-name-row">
             <span className="merchant-name">{seller.name}</span>
             {seller.verified ? (

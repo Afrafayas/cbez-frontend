@@ -18,7 +18,7 @@ import { Product, Shop } from '../types';
 import { useAppDispatch, useAppSelector } from '../store';
 import { setSelectedProduct } from '../store/productsSlice';
 import { setShowAuthModal, setAuthTab, setAuthRole } from '../store/authSlice';
-import { followShop, unfollowShop, checkFollowStatus } from '../services/apiService';
+import { followShop, unfollowShop, checkFollowStatus, logActivity } from '../services/apiService';
 import { ProductCard } from '../components/ProductCard';
 
 interface ProductDetailPageProps {
@@ -64,6 +64,18 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
       navigate('/', { replace: true });
     }
   }, [activeUser, activeShop, dispatch, navigate]);
+
+  // Log Product Click activity
+  useEffect(() => {
+    if (product) {
+      const sellerShop = getSellerShop(product.shopId);
+      logActivity({
+        action: 'PRODUCT_CLICK',
+        details: `Clicked on product "${product.name}" (ID: ${product.id}, Price: ₹${(product.offerPrice || product.price).toLocaleString('en-IN')}) listed by "${sellerShop?.name || 'Shop'}"`,
+        userId: activeUser?.id,
+      });
+    }
+  }, [product?.id]);
 
   // Scroll to top on page mount or ID change
   useEffect(() => {
@@ -522,6 +534,13 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
 
               {/* Seller Merchant Store Details & Action Buttons Card */}
               <div
+                onClick={() => {
+                  logActivity({
+                    action: 'SHOP_CLICK',
+                    details: `Clicked on shop "${seller.name}" (ID: ${seller.id}, City: ${seller.city || 'N/A'})`,
+                    userId: activeUser?.id,
+                  });
+                }}
                 style={{
                   marginTop: '0.5rem',
                   background: 'linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%)',
