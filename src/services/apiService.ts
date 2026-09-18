@@ -342,6 +342,36 @@ export async function createSellerProduct(
   return data;
 }
 
+export async function updateSellerProduct(
+  productId: string,
+  productData: {
+    name?: string;
+    brand?: string;
+    category?: string;
+    description?: string;
+    price?: number;
+    stock?: number;
+    specs?: Record<string, string>;
+    images?: string[];
+  },
+  token: string
+) {
+  const res = await fetch(`${API_BASE_URL}/products/${productId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(productData),
+  });
+  const data = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(data.message) ? data.message.join(', ') : data.message;
+    throw new Error(errorMsg || 'Failed to update product listing');
+  }
+  return data;
+}
+
 export async function deleteSellerProduct(productId: string, token: string) {
   const res = await fetch(`${API_BASE_URL}/products/${productId}`, {
     method: 'DELETE',
@@ -489,4 +519,54 @@ export async function reverseGeocodeCoords(lat: number, lng: number): Promise<{
     country,
   };
 }
+
+/* Wishlist APIs */
+export async function toggleWishlist(productId: string, token: string) {
+  const res = await fetch(`${API_BASE_URL}/wishlist/toggle/${productId}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to update wishlist');
+  return data;
+}
+
+export async function addToWishlist(productId: string, token: string) {
+  const res = await fetch(`${API_BASE_URL}/wishlist/${productId}`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to add to wishlist');
+  return data;
+}
+
+export async function removeFromWishlist(productId: string, token: string) {
+  const res = await fetch(`${API_BASE_URL}/wishlist/${productId}`, {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to remove from wishlist');
+  return data;
+}
+
+export async function getUserWishlist(token: string) {
+  const res = await fetch(`${API_BASE_URL}/wishlist`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to fetch wishlist');
+  return data.data ?? { count: 0, items: [], products: [] };
+}
+
+export async function getWishlistIds(token: string): Promise<string[]> {
+  const res = await fetch(`${API_BASE_URL}/wishlist/ids`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  const data = await res.json();
+  if (!res.ok) return [];
+  return data.data?.productIds ?? [];
+}
+
 

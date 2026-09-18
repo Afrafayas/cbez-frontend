@@ -1,6 +1,6 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Phone, Smartphone, MapPin, ShieldCheck, Clock } from 'lucide-react';
+import { Phone, Smartphone, MapPin, ShieldCheck, Clock, Heart } from 'lucide-react';
 import { Product, Shop } from '../types';
 import { useAppDispatch, useAppSelector } from '../store';
 import { setSelectedProduct } from '../store/productsSlice';
@@ -11,13 +11,17 @@ interface ProductCardProps {
   seller: Shop;
   onCallSeller: (product: Product, seller: Shop) => void;
   onWhatsAppSeller: (product: Product, seller: Shop) => void;
+  isWishlisted?: boolean;
+  onToggleWishlist?: (product: Product) => void;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({
   product,
   seller,
   onCallSeller,
-  onWhatsAppSeller
+  onWhatsAppSeller,
+  isWishlisted = false,
+  onToggleWishlist
 }) => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -25,7 +29,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const isSoldOut = product.stock <= 0 || product.isSoldOut;
 
   return (
-    <div 
+    <div
       className="product-card"
       onClick={() => {
         const token = typeof window !== 'undefined' ? localStorage.getItem('mlx_token') : null;
@@ -40,6 +44,38 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       }}
       style={{ cursor: 'pointer', opacity: isSoldOut ? 0.8 : 1, position: 'relative' }}
     >
+      {/* Wishlist Heart Icon Overlay */}
+      {onToggleWishlist && (
+        <button
+          type="button"
+          title={isWishlisted ? "Remove from Wishlist" : "Add to Wishlist"}
+          onClick={(e) => {
+            e.stopPropagation();
+            onToggleWishlist(product);
+          }}
+          style={{
+            position: 'absolute',
+            top: '12px',
+            right: '12px',
+            zIndex: 11,
+            width: '34px',
+            height: '34px',
+            borderRadius: '50%',
+            backgroundColor: 'rgba(255, 255, 255, 0.95)',
+            border: '1px solid #e2e8f0',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            color: isWishlisted ? '#ef4444' : '#64748b',
+            cursor: 'pointer',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            transition: 'all 0.2s ease'
+          }}
+        >
+          <Heart size={18} fill={isWishlisted ? '#ef4444' : 'transparent'} />
+        </button>
+      )}
+
       {/* Sold Out Red Badge Overlay */}
       {isSoldOut && (
         <div style={{
@@ -78,10 +114,21 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         </div>
 
         <div className="product-specs-chips">
-          {product.storage && <span className="chip">💾 {product.storage}</span>}
-          {product.ram && <span className="chip">⚡ {product.ram}</span>}
-          {product.batteryHealth && <span className="chip">🔋 {product.batteryHealth}</span>}
-          {product.condition && <span className="chip">✨ {product.condition}</span>}
+          {(product.storage || product.specs?.['Storage'] || product.specs?.['Storage Capacity']) && (
+            <span className="chip">💾 {product.storage || product.specs?.['Storage'] || product.specs?.['Storage Capacity']}</span>
+          )}
+          {(product.ram || product.specs?.['RAM']) && (
+            <span className="chip">⚡ {product.ram || product.specs?.['RAM']}</span>
+          )}
+          {(product.processor || product.specs?.['Processor'] || product.specs?.['Processor / Chipset']) && (
+            <span className="chip">⚙️ {product.processor || product.specs?.['Processor'] || product.specs?.['Processor / Chipset']}</span>
+          )}
+          {(product.specs?.['Product Type'] || product.productType) && (
+            <span className="chip">🏷️ {product.specs?.['Product Type'] || product.productType}</span>
+          )}
+          {(product.condition || product.specs?.['Condition']) && (
+            <span className="chip">✨ {product.condition || product.specs?.['Condition']}</span>
+          )}
         </div>
 
         <div className="product-pricing">

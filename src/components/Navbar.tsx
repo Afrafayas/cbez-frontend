@@ -1,5 +1,5 @@
 import React, { useState, ChangeEvent } from 'react';
-import { Search, MapPin, Store, User, LogOut, LogIn, Smartphone } from 'lucide-react';
+import { Search, MapPin, Store, User, LogOut, LogIn, Smartphone, Heart } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store';
 import { 
@@ -16,9 +16,10 @@ import { Product } from '../types';
 interface NavbarProps {
   filteredProducts: Product[];
   onToast: (msg: string, type?: 'success' | 'info') => void;
+  wishlistCount?: number;
 }
 
-export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast }) => {
+export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishlistCount = 0 }) => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
   const location = useLocation();
@@ -37,6 +38,17 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast }) => 
     if (type === 'query') dispatch(setSearchQuery(val));
     setIsSearchFocused(false);
     navigate('/');
+  };
+
+  const handleWishlistClick = () => {
+    if (activeUser) {
+      navigate('/wishlist');
+    } else {
+      onToast("Please log in to access your wishlist", "info");
+      dispatch(setAuthRole('customer'));
+      dispatch(setAuthTab('login'));
+      dispatch(setShowAuthModal(true));
+    }
   };
 
   return (
@@ -168,7 +180,38 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast }) => 
         </div>
 
         {/* User & Seller Actions */}
-        <div className="header-actions">
+        <div className="header-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+          {/* Wishlist Button */}
+          <button
+            type="button"
+            className={`action-btn ${location.pathname === '/wishlist' ? 'active' : ''}`}
+            onClick={handleWishlistClick}
+            title="My Wishlist"
+            style={{ position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0.5rem 0.6rem' }}
+          >
+            <Heart size={18} fill={wishlistCount > 0 ? '#ef4444' : 'transparent'} color={wishlistCount > 0 ? '#ef4444' : 'currentColor'} />
+            {wishlistCount > 0 && (
+              <span style={{
+                position: 'absolute',
+                top: '-5px',
+                right: '-5px',
+                backgroundColor: '#ef4444',
+                color: '#ffffff',
+                fontSize: '0.65rem',
+                fontWeight: 800,
+                width: '18px',
+                height: '18px',
+                borderRadius: '50%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+              }}>
+                {wishlistCount}
+              </span>
+            )}
+          </button>
+
           {activeShop ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
               <button 
@@ -205,13 +248,23 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast }) => 
 
               {activeUser ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span className="user-indicator">
-                    <User size={14} />
-                    <span className="user-badge-text-container">
-                      <span className="user-badge-name">{activeUser.name}</span>
+                  <button 
+                    className={`action-btn sell-btn ${location.pathname === '/customer-dashboard' ? 'active' : ''}`}
+                    onClick={() => navigate('/customer-dashboard')}
+                    title="Go to My Dashboard"
+                  >
+                    <User size={15} />
+                    <span className="nav-btn-text">
+                      {activeUser.name && !activeUser.name.includes('@')
+                        ? activeUser.name
+                        : activeUser.name && activeUser.name.includes('@')
+                          ? activeUser.name.split('@')[0].charAt(0).toUpperCase() + activeUser.name.split('@')[0].slice(1)
+                          : activeUser.email
+                            ? activeUser.email.split('@')[0].charAt(0).toUpperCase() + activeUser.email.split('@')[0].slice(1)
+                            : 'My Dashboard'}
                     </span>
-                  </span>
-                  <button className="action-btn" onClick={() => { dispatch(setActiveUser(null)); onToast("Customer logged out."); }} title="Sign Out">
+                  </button>
+                  <button className="action-btn" onClick={() => { dispatch(setActiveUser(null)); onToast("Customer logged out."); navigate('/'); }} title="Sign Out">
                     <LogOut size={16} />
                   </button>
                 </div>
@@ -235,3 +288,4 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast }) => 
     </header>
   );
 };
+
