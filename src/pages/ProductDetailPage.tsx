@@ -127,7 +127,17 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
     .filter((p) => p.category === product.category && String(p.id) !== String(product.id))
     .slice(0, 4);
 
+  const isOwnShop = Boolean(
+    (activeShop && seller && activeShop.id === seller.id) || 
+    (activeShop && seller && activeShop.name === seller.name)
+  );
+
   const handleFollowClick = async () => {
+    if (isOwnShop) {
+      if (onToast) onToast('You cannot follow your own merchant store', 'info');
+      return;
+    }
+
     const token = localStorage.getItem('mlx_token');
     if (!token) {
       if (onToast) onToast('Please sign in as consumer to follow shops', 'info');
@@ -535,38 +545,59 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                   </div>
 
                   {/* Follow Store Button */}
-                  <button
-                    type="button"
-                    onClick={handleFollowClick}
-                    disabled={isFollowLoading}
-                    style={{
-                      display: 'inline-flex',
-                      alignItems: 'center',
-                      gap: '0.4rem',
-                      padding: '0.45rem 1rem',
-                      borderRadius: '20px',
-                      fontSize: '0.78rem',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s ease',
-                      border: isFollowing ? '1px solid #16a34a' : '1px solid #2563eb',
-                      background: isFollowing ? '#f0fdf4' : '#2563eb',
-                      color: isFollowing ? '#15803d' : '#ffffff',
-                      flexShrink: 0,
-                    }}
-                  >
-                    {isFollowing ? (
-                      <>
-                        <UserCheck size={15} />
-                        <span>Following Store</span>
-                      </>
-                    ) : (
-                      <>
-                        <UserPlus size={15} />
-                        <span>+ Follow Shop</span>
-                      </>
-                    )}
-                  </button>
+                  {isOwnShop ? (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.35rem',
+                        padding: '0.45rem 1rem',
+                        borderRadius: '20px',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        background: '#f1f5f9',
+                        color: '#64748b',
+                        border: '1px solid #cbd5e1',
+                        flexShrink: 0,
+                      }}
+                    >
+                      <Store size={15} />
+                      <span>Your Store</span>
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={handleFollowClick}
+                      disabled={isFollowLoading}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        padding: '0.45rem 1rem',
+                        borderRadius: '20px',
+                        fontSize: '0.78rem',
+                        fontWeight: 700,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        border: isFollowing ? '1px solid #16a34a' : '1px solid #2563eb',
+                        background: isFollowing ? '#f0fdf4' : '#2563eb',
+                        color: isFollowing ? '#15803d' : '#ffffff',
+                        flexShrink: 0,
+                      }}
+                    >
+                      {isFollowing ? (
+                        <>
+                          <UserCheck size={15} />
+                          <span>Following Store</span>
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus size={15} />
+                          <span>+ Follow Shop</span>
+                        </>
+                      )}
+                    </button>
+                  )}
                 </div>
 
                 {/* Sourcing Action Buttons */}

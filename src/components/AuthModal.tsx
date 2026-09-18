@@ -736,7 +736,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                   </div>
 
                   {/* Display Coordinates Status */}
-                  {regForm.latitude !== undefined && regForm.longitude !== undefined ? (
+                  {typeof regForm.latitude === 'number' && typeof regForm.longitude === 'number' && !isNaN(regForm.latitude) && !isNaN(regForm.longitude) ? (
                     <div style={{ fontSize: '0.78rem', background: 'rgba(0, 0, 0, 0.3)', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#e2e8f0' }}>
                       📍 <strong>Selected Coordinates:</strong> Lat: {regForm.latitude.toFixed(5)}, Lng: {regForm.longitude.toFixed(5)}
                     </div>

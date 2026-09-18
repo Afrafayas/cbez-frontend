@@ -1,6 +1,4 @@
-import { ProductDetailModal } from './components/ProductDetailModal';
 import { ProductDetailPage } from './pages/ProductDetailPage';
-import { ManageCategoriesBrandsModal } from './components/ManageCategoriesBrandsModal';
 import { AuthModal } from './components/AuthModal';
 import { CompactBrandSelect } from './components/CompactBrandSelect';
 import { Footer } from './components/Footer';
@@ -234,7 +232,6 @@ export default function App() {
   const [isSearchFocused, setIsSearchFocused] = React.useState(false);
   const [isMobileFilterOpen, setIsMobileFilterOpen] = React.useState(false);
   const [currentSlide, setCurrentSlide] = React.useState(0);
-  const [isCatBrandModalOpen, setIsCatBrandModalOpen] = React.useState(false);
   const [shopFollowers, setShopFollowers] = React.useState<Array<{ id: string; name: string; email?: string; phone?: string; followedAt: string }>>([]);
   const [shopFollowersCount, setShopFollowersCount] = React.useState<number>(0);
 
@@ -292,7 +289,6 @@ export default function App() {
   const isAnyModalActive = Boolean(
     showAuthModal || 
     selectedProduct || 
-    isCatBrandModalOpen || 
     showAddEditModal
   );
 
@@ -2224,7 +2220,12 @@ export default function App() {
             {(() => {
               const completion = calculateShopProfileCompletion(activeShop, activeUser?.email);
               return (
-                <div
+                <div 
+                  onClick={() => {
+                    navigate('/seller-dashboard');
+                    dispatch(setDashboardTab('profile'));
+                    window.scrollTo({ top: 0, behavior: 'smooth' });
+                  }}
                   style={{
                     margin: '0.75rem 0 1rem 0',
                     padding: '0.85rem 0.95rem',
@@ -2235,7 +2236,8 @@ export default function App() {
                     border: completion.isFullyCompleted
                       ? '1px solid rgba(34, 197, 94, 0.3)'
                       : '1px solid rgba(255, 111, 0, 0.3)',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.04)'
+                    boxShadow: '0 4px 12px rgba(0,0,0,0.04)',
+                    cursor: 'pointer'
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.4rem' }}>
@@ -2270,7 +2272,9 @@ export default function App() {
                       </span>
                       <button
                         type="button"
-                        onClick={() => {
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
                           navigate('/seller-dashboard');
                           dispatch(setDashboardTab('profile'));
                           window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2348,14 +2352,6 @@ export default function App() {
                 <span>Edit Shop Profile ({calculateShopProfileCompletion(activeShop, activeUser?.email).completionPercentage}%)</span>
               </button>
 
-              <button 
-                className="dash-menu-btn"
-                onClick={() => setIsCatBrandModalOpen(true)}
-              >
-                <Tag size={16} />
-                <span>Manage Categories & Brands</span>
-              </button>
-              
               <button className="dash-menu-btn" onClick={() => navigate('/')} style={{ borderTop: '1px solid var(--light-border)', marginTop: '0.5rem', paddingTop: '1rem' }}>
                 <Store size={16} />
                 <span>Back to Marketplace Directory</span>
@@ -2740,65 +2736,75 @@ export default function App() {
             ) : dashboardTab === 'followers' ? (
               /* My Store Followers Panel */
               <div className="dashboard-panel">
-                <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                  <div>
-                    <h3 className="panel-title">My Store Followers</h3>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary-light)' }}>
-                      Customers who are following <strong>{activeShop?.name}</strong> for inventory updates
-                    </div>
-                  </div>
-                  <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '0.4rem 0.85rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, color: '#2563eb' }}>
-                    Total Followers: {shopFollowersCount}
-                  </div>
-                </div>
+                {(() => {
+                  const validFollowers = shopFollowers.filter(
+                    (follower) => follower.id !== activeShop?.id && follower.name !== activeShop?.name
+                  );
 
-                <div style={{ marginTop: '1.5rem' }}>
-                  {shopFollowers.length > 0 ? (
-                    <table className="leads-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                      <thead>
-                        <tr style={{ backgroundColor: 'var(--light-bg)', textAlign: 'left', borderBottom: '1px solid var(--light-border)' }}>
-                          <th style={{ padding: '0.75rem' }}>Followed Date</th>
-                          <th style={{ padding: '0.75rem' }}>Customer Name</th>
-                          <th style={{ padding: '0.75rem' }}>Contact Details</th>
-                          <th style={{ padding: '0.75rem', textAlign: 'right' }}>Direct Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {shopFollowers.map((follower) => (
-                          <tr key={follower.id} style={{ borderBottom: '1px solid var(--light-border)' }}>
-                            <td style={{ padding: '0.75rem' }}>
-                              {new Date(follower.followedAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
-                            </td>
-                            <td style={{ padding: '0.75rem', fontWeight: 600 }}>{follower.name}</td>
-                            <td style={{ padding: '0.75rem' }}>
-                              <div>{follower.phone || follower.email || 'Registered Customer'}</div>
-                            </td>
-                            <td style={{ padding: '0.75rem', textAlign: 'right' }}>
-                              {follower.phone ? (
-                                <a
-                                  href={`https://wa.me/${follower.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${follower.name}, thank you for following ${activeShop?.name} on MLX Market!`)}`}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  className="btn-whatsapp"
-                                  style={{ padding: '0.25rem 0.65rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', textDecoration: 'none', borderRadius: '6px' }}
-                                >
-                                  <span>WhatsApp Customer</span>
-                                </a>
-                              ) : (
-                                <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Subscribed</span>
-                              )}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  ) : (
-                    <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary-light)' }}>
-                      <UserCheck size={36} style={{ opacity: 0.3, marginBottom: '1rem' }} />
-                      <p>No customers are following your store yet. Keep your product catalog updated and accurate to attract followers!</p>
-                    </div>
-                  )}
-                </div>
+                  return (
+                    <>
+                      <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <h3 className="panel-title">My Store Followers</h3>
+                          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary-light)' }}>
+                            Customers who are following <strong>{activeShop?.name}</strong> for inventory updates
+                          </div>
+                        </div>
+                        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '0.4rem 0.85rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, color: '#2563eb' }}>
+                          Total Followers: {validFollowers.length}
+                        </div>
+                      </div>
+
+                      <div style={{ marginTop: '1.5rem' }}>
+                        {validFollowers.length > 0 ? (
+                          <table className="leads-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                            <thead>
+                              <tr style={{ backgroundColor: 'var(--light-bg)', textAlign: 'left', borderBottom: '1px solid var(--light-border)' }}>
+                                <th style={{ padding: '0.75rem' }}>Followed Date</th>
+                                <th style={{ padding: '0.75rem' }}>Customer Name</th>
+                                <th style={{ padding: '0.75rem' }}>Contact Details</th>
+                                <th style={{ padding: '0.75rem', textAlign: 'right' }}>Direct Action</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {validFollowers.map((follower) => (
+                                <tr key={follower.id} style={{ borderBottom: '1px solid var(--light-border)' }}>
+                                  <td style={{ padding: '0.75rem' }}>
+                                    {new Date(follower.followedAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
+                                  </td>
+                                  <td style={{ padding: '0.75rem', fontWeight: 600 }}>{follower.name}</td>
+                                  <td style={{ padding: '0.75rem' }}>
+                                    <div>{follower.phone || follower.email || 'Registered Customer'}</div>
+                                  </td>
+                                  <td style={{ padding: '0.75rem', textAlign: 'right' }}>
+                                    {follower.phone ? (
+                                      <a
+                                        href={`https://wa.me/${follower.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${follower.name}, thank you for following ${activeShop?.name} on MLX Market!`)}`}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="btn-whatsapp"
+                                        style={{ padding: '0.25rem 0.65rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', textDecoration: 'none', borderRadius: '6px' }}
+                                      >
+                                        <span>WhatsApp Customer</span>
+                                      </a>
+                                    ) : (
+                                      <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Subscribed</span>
+                                    )}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        ) : (
+                          <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary-light)' }}>
+                            <UserCheck size={36} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+                            <p>No customers are following your store yet. Keep your product catalog updated and accurate to attract followers!</p>
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             ) : (
               <div className="dashboard-panel">
@@ -3092,7 +3098,7 @@ export default function App() {
                         <MapPin size={18} />
                         <span>Shop Map Coordinates (Mandatory) *</span>
                       </label>
-                      {profileForm.latitude !== undefined && profileForm.longitude !== undefined && (
+                      {typeof profileForm.latitude === 'number' && typeof profileForm.longitude === 'number' && !isNaN(profileForm.latitude) && !isNaN(profileForm.longitude) && (
                         <span style={{ fontSize: '0.78rem', background: '#dcfce7', color: '#15803d', padding: '0.25rem 0.75rem', borderRadius: '12px', fontWeight: 700, border: '1px solid #86efac' }}>
                           ✓ Coordinates Set ({profileForm.latitude.toFixed(4)}, {profileForm.longitude.toFixed(4)})
                         </span>
@@ -3200,7 +3206,7 @@ export default function App() {
                           className="form-input-text"
                           required
                           placeholder="e.g. 9.9312"
-                          value={profileForm.latitude !== undefined ? profileForm.latitude : ''}
+                          value={profileForm.latitude !== undefined && profileForm.latitude !== null ? profileForm.latitude : ''}
                           onChange={(e) => setProfileForm({ ...profileForm, latitude: e.target.value ? parseFloat(e.target.value) : undefined })}
                         />
                       </div>
@@ -3212,7 +3218,7 @@ export default function App() {
                           className="form-input-text"
                           required
                           placeholder="e.g. 76.2673"
-                          value={profileForm.longitude !== undefined ? profileForm.longitude : ''}
+                          value={profileForm.longitude !== undefined && profileForm.longitude !== null ? profileForm.longitude : ''}
                           onChange={(e) => setProfileForm({ ...profileForm, longitude: e.target.value ? parseFloat(e.target.value) : undefined })}
                         />
                       </div>
@@ -3243,20 +3249,6 @@ export default function App() {
       </Routes>
 
       <Footer />
-
-      <ManageCategoriesBrandsModal
-        isOpen={isCatBrandModalOpen}
-        onClose={() => setIsCatBrandModalOpen(false)}
-        onToast={triggerToast}
-      />
-
-      <ProductDetailModal
-        getSellerShop={getSellerShop}
-        onCallSeller={handleCallSeller}
-        onWhatsAppSeller={handleWhatsAppSeller}
-        onGetDirections={handleGetDirections}
-        onToast={triggerToast}
-      />
 
       {/* --- ADD / EDIT PRODUCT MODAL --- */}
       {showAddEditModal && (
