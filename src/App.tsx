@@ -1496,6 +1496,13 @@ export default function App() {
                       key={product.id} 
                       className="product-card"
                       onClick={() => {
+                        const token = typeof window !== 'undefined' ? localStorage.getItem('mlx_token') : null;
+                        if (!activeUser && !activeShop && !token) {
+                          dispatch(setAuthRole('customer'));
+                          dispatch(setAuthTab('login'));
+                          dispatch(setShowAuthModal(true));
+                          return;
+                        }
                         dispatch(setSelectedProduct(product));
                         navigate(`/product/${product.id}`);
                       }}
@@ -2197,8 +2204,10 @@ export default function App() {
                   </div>
 
                   {isPending && (
-                    <div style={{ marginTop: '0.65rem', padding: '0.4rem 0.6rem', borderRadius: '8px', background: 'rgba(239, 68, 68, 0.15)', border: '1px solid rgba(239, 68, 68, 0.3)', color: '#fca5a5', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>
-                      ⚠️ Shop Status: PENDING Admin Approval
+                    <div style={{ marginTop: "0.75rem", padding: "0.75rem 0.85rem", borderRadius: "12px", background: "linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(217, 119, 6, 0.08) 100%)", border: "1px solid rgba(245, 158, 11, 0.35)", boxShadow: "0 4px 12px rgba(245, 158, 11, 0.08)" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "0.45rem", marginBottom: "0.25rem" }}><Clock size={15} color="#fbbf24" style={{ flexShrink: 0 }} /><span style={{ fontSize: "0.78rem", fontWeight: 800, color: "#fbbf24" }}>Pending Admin Verification</span></div>
+                      <p style={{ margin: 0, fontSize: "0.72rem", color: "#cbd5ea", lineHeight: "1.4" }}>Your store profile is currently being reviewed by MLX admins. Verification updates automatically here.</p>
+
                     </div>
                   )}
 
@@ -3220,7 +3229,18 @@ export default function App() {
             )}
           </section>
         </main>
-      } /></Routes>
+      } />
+
+      <Route path="/product/:id" element={
+        <ProductDetailPage
+          getSellerShop={getSellerShop}
+          onCallSeller={handleCallSeller}
+          onWhatsAppSeller={handleWhatsAppSeller}
+          onGetDirections={handleGetDirections}
+          onToast={triggerToast}
+        />
+      } />
+      </Routes>
 
       <Footer />
 

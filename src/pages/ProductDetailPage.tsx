@@ -16,6 +16,7 @@ import {
 import { Product, Shop } from '../types';
 import { useAppDispatch, useAppSelector } from '../store';
 import { setSelectedProduct } from '../store/productsSlice';
+import { setShowAuthModal, setAuthTab, setAuthRole } from '../store/authSlice';
 import { followShop, unfollowShop, checkFollowStatus } from '../services/apiService';
 import { ProductCard } from '../components/ProductCard';
 
@@ -38,6 +39,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const products = useAppSelector((state) => state.products.items);
+  const { activeUser, activeShop } = useAppSelector((state) => state.auth);
   
   // Find product by URL param id or fallback to selectedProduct
   const product = products.find((p) => String(p.id) === String(id)) || 
@@ -46,6 +48,17 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   const [activeImgIdx, setActiveImgIdx] = useState<number>(0);
   const [isFollowing, setIsFollowing] = useState<boolean>(false);
   const [isFollowLoading, setIsFollowLoading] = useState<boolean>(false);
+
+  // Enforce customer/seller login requirement
+  useEffect(() => {
+    const token = typeof window !== 'undefined' ? localStorage.getItem('mlx_token') : null;
+    if (!activeUser && !activeShop && !token) {
+      dispatch(setAuthRole('customer'));
+      dispatch(setAuthTab('login'));
+      dispatch(setShowAuthModal(true));
+      navigate('/', { replace: true });
+    }
+  }, [activeUser, activeShop, dispatch, navigate]);
 
   // Scroll to top on page mount or ID change
   useEffect(() => {
