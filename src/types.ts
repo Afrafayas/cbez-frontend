@@ -1,4 +1,5 @@
 export interface SubscriptionPlan {
+  price?: number;
   id: string;
   name: string;
   description: string;
@@ -9,6 +10,11 @@ export interface SubscriptionPlan {
 }
 
 export interface Shop {
+  subscription?: {
+    id: string;
+    planId: string;
+    plan?: SubscriptionPlan;
+  };
   id: string;
   name: string;
   ownerName: string;
@@ -99,6 +105,39 @@ export interface Product {
   deviceAge?: string;
   imeiNumber?: string;
   documents?: string[];
+
+  // Mobile / Tablet specs
+  processor?: string;
+  displaySize?: string;
+  batteryPercentage?: string;
+  camera?: string;
+  os?: string;
+  simWifi?: string;
+  imeiSerial?: string;
+
+  // Laptop specs
+  storageType?: string;
+  storageCapacity?: string;
+  graphics?: string;
+  resolution?: string;
+  batteryBackup?: string;
+  keyboardLayout?: string;
+  serialNumber?: string;
+
+  // Accessories & Smart Watches specs
+  productType?: string;
+  model?: string;
+  compatibility?: string;
+  includedItems?: string;
+  technicalSpecifications?: string;
+}
+
+export interface WishlistItem {
+  id: string;
+  userId: string;
+  productId: string;
+  createdAt: string;
+  product: Product & { shop?: Shop };
 }
 
 export interface SourcingToast {
