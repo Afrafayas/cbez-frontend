@@ -1791,13 +1791,6 @@ export default function App() {
                             key={product.id}
                             className="product-card"
                             onClick={() => {
-                              const token = typeof window !== 'undefined' ? localStorage.getItem('mlx_token') : null;
-                              if (!activeUser && !activeShop && !token) {
-                                dispatch(setAuthRole('customer'));
-                                dispatch(setAuthTab('login'));
-                                dispatch(setShowAuthModal(true));
-                                return;
-                              }
                               logActivity({
                                 action: 'PRODUCT_CLICK',
                                 details: `Clicked on product "${product.name}" (ID: ${product.id}, Price: ₹${(product.offerPrice || product.price).toLocaleString('en-IN')}) listed by "${seller?.name || 'Shop'}"`,

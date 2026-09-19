@@ -279,7 +279,7 @@ export async function deleteSubscriptionPlan(id: string, token?: string): Promis
 }
 
 /* Auth APIs */
-export async function loginUser(credentials: { email: string; password: string }) {
+export async function loginUser(credentials: { email?: string; phone?: string; password: string }) {
   const res = await fetch(`${API_BASE_URL}/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },

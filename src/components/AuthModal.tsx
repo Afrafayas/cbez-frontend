@@ -232,10 +232,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
 
     try {
       setIsSubmitting(true);
-      const resData = await loginUser({
-        email: loginEmail,
-        password: loginPassword,
-      });
+      const cleanInput = loginEmail.trim();
+      const isEmail = cleanInput.includes('@');
+      const payload = isEmail
+        ? { email: cleanInput.toLowerCase(), password: loginPassword }
+        : { phone: cleanInput, email: cleanInput, password: loginPassword };
+
+      const resData = await loginUser(payload);
 
       const userObj = resData.data?.user || resData.user;
       const tokenVal = resData.data?.token || resData.token;

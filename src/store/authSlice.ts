@@ -59,6 +59,7 @@ const authSlice = createSlice({
           localStorage.removeItem('mlx_active_shop');
           if (!state.activeUser) {
             localStorage.removeItem('mlx_auth_role');
+            localStorage.removeItem('mlx_token');
             state.authRole = 'customer';
           }
         }
@@ -73,6 +74,7 @@ const authSlice = createSlice({
           localStorage.removeItem('mlx_active_user');
           if (!state.activeShop) {
             localStorage.removeItem('mlx_auth_role');
+            localStorage.removeItem('mlx_token');
             state.authRole = 'customer';
           }
         }

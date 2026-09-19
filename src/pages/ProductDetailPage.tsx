@@ -17,7 +17,6 @@ import {
 import { Product, Shop } from '../types';
 import { useAppDispatch, useAppSelector } from '../store';
 import { setSelectedProduct } from '../store/productsSlice';
-import { setShowAuthModal, setAuthTab, setAuthRole } from '../store/authSlice';
 import { followShop, unfollowShop, checkFollowStatus, logActivity } from '../services/apiService';
 import { ProductCard } from '../components/ProductCard';
 
@@ -44,32 +43,15 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
   const products = useAppSelector((state) => state.products.items);
+  const selectedProduct = useAppSelector((state) => state.products.selectedProduct);
   const { activeUser, activeShop } = useAppSelector((state) => state.auth);
   
   // Find product by URL param id or fallback to selectedProduct
-  const product = products.find((p) => String(p.id) === String(id)) || 
-                  useAppSelector((state) => state.products.selectedProduct);
+  const product = products.find((p) => String(p.id) === String(id)) || selectedProduct;
 
   const [activeImgIdx, setActiveImgIdx] = useState<number>(0);
   const [isFollowing, setIsFollowing] = useState<boolean>(false);
   const [isFollowLoading, setIsFollowLoading] = useState<boolean>(false);
-
-  const isLoggedIn = Boolean(activeUser || activeShop);
-
-  // Enforce customer/seller login requirement
-  useEffect(() => {
-    if (!isLoggedIn) {
-      dispatch(setSelectedProduct(null));
-      dispatch(setAuthRole('customer'));
-      dispatch(setAuthTab('login'));
-      dispatch(setShowAuthModal(true));
-      navigate('/', { replace: true });
-    }
-  }, [isLoggedIn, dispatch, navigate]);
-
-  if (!isLoggedIn) {
-    return null;
-  }
 
   // Log Product Click activity
   useEffect(() => {
