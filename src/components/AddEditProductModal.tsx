@@ -4,7 +4,7 @@ import { useAppDispatch, useAppSelector } from '../store';
 import { setShowAddEditModal, addProduct, editProduct } from '../store/productsSlice';
 import { Product } from '../types';
 import { CATEGORIES } from '../data/mockData';
-import { createSellerProduct, updateSellerProduct, getBrands } from '../services/apiService';
+import { createSellerProduct, updateSellerProduct, getBrands, getCategories } from '../services/apiService';
 import { CompactBrandSelect } from './CompactBrandSelect';
 
 interface AddEditProductModalProps {
@@ -13,26 +13,41 @@ interface AddEditProductModalProps {
 
 export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToast }) => {
   const dispatch = useAppDispatch();
-  const { showAddEditModal, productToEdit, items: products, subscriptionPlans } = useAppSelector(state => state.products);
+  const { showAddEditModal, productToEdit, items: products, subscriptionPlans, categories: storeCategories } = useAppSelector(state => state.products);
   const activeShop = useAppSelector(state => state.auth.activeShop);
 
   const [formImages, setFormImages] = useState<string[]>(['', '', '', '']);
   const [dbBrands, setDbBrands] = useState<string[]>([]);
+  const [dbCategories, setDbCategories] = useState<string[]>([]);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   useEffect(() => {
-    async function fetchDbBrands() {
+    async function fetchDbData() {
       try {
-        const fetched = await getBrands();
-        if (fetched && Array.isArray(fetched) && fetched.length > 0) {
-          setDbBrands(fetched.map(b => b.name));
+        const [fetchedBrands, fetchedCats] = await Promise.all([
+          getBrands().catch(() => []),
+          getCategories().catch(() => [])
+        ]);
+        if (fetchedBrands && Array.isArray(fetchedBrands) && fetchedBrands.length > 0) {
+          setDbBrands(fetchedBrands.map(b => b.name));
+        }
+        if (fetchedCats && Array.isArray(fetchedCats) && fetchedCats.length > 0) {
+          setDbCategories(fetchedCats.map(c => c.name));
         }
       } catch (err) {
-        console.warn('Failed to load DB brands in modal:', err);
+        console.warn('Failed to load DB brands/categories in modal:', err);
       }
     }
-    fetchDbBrands();
+    fetchDbData();
   }, []);
+
+  const availableCategoriesList = Array.from(
+    new Set([
+      ...CATEGORIES.filter(c => c !== "All Categories"),
+      ...(storeCategories || []).map(c => c.name),
+      ...dbCategories
+    ])
+  ).filter(Boolean).sort();
 
   const availableBrandsList = Array.from(
     new Set([
@@ -62,7 +77,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
   const [productForm, setProductForm] = useState({
     name: '',
     brand: 'Apple',
-    category: 'Mobiles',
+    category: 'Smartphones & Mobiles',
     description: '',
     price: '',
     offerPrice: '',
@@ -124,6 +139,13 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
       lower.includes('accessories') ||
       lower.includes('watch') ||
       lower.includes('audio') ||
+      lower.includes('earbud') ||
+      lower.includes('headphone') ||
+      lower.includes('camera') ||
+      lower.includes('photo') ||
+      lower.includes('gaming') ||
+      lower.includes('console') ||
+      lower.includes('gear') ||
       lower.includes('wearable')
     ) {
       return 'accessory';
@@ -139,7 +161,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
       setProductForm({
         name: productToEdit.name || '',
         brand: productToEdit.brand || 'Apple',
-        category: productToEdit.category || 'Mobiles',
+        category: productToEdit.category || 'Smartphones & Mobiles',
         description: productToEdit.description || '',
         price: productToEdit.price ? String(productToEdit.price) : '',
         offerPrice: productToEdit.offerPrice ? String(productToEdit.offerPrice) : '',
@@ -201,7 +223,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
       setProductForm({
         name: '',
         brand: 'Apple',
-        category: 'Mobiles',
+        category: 'Smartphones & Mobiles',
         description: '',
         price: '',
         offerPrice: '',
@@ -778,7 +800,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
               value={productForm.category}
               onChange={(e) => setProductForm({ ...productForm, category: e.target.value })}
             >
-              {CATEGORIES.filter(c => c !== "All Categories").map(c => (
+              {availableCategoriesList.map(c => (
                 <option key={c} value={c}>{c}</option>
               ))}
             </select>

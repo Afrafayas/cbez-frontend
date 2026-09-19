@@ -48,6 +48,17 @@ export async function getShops(): Promise<Shop[]> {
   return result.data?.shops ?? (Array.isArray(result) ? result : []);
 }
 
+export async function getShopById(id: string): Promise<Shop | null> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/shops/${id}`);
+    if (!res.ok) return null;
+    const result = await res.json();
+    return result.data?.shop || null;
+  } catch {
+    return null;
+  }
+}
+
 /* Category CRUD APIs */
 export async function getCategories(): Promise<Category[]> {
   const res = await fetch(`${API_BASE_URL}/categories`);

@@ -1,5 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
-import { Product, Shop, Lead, SubscriptionPlan } from '../types';
+import { Product, Shop, Lead, SubscriptionPlan, Category } from '../types';
 import { INITIAL_SHOPS, INITIAL_PRODUCTS, INITIAL_LEADS, INITIAL_SUBSCRIPTION_PLANS } from '../data/mockData';
 
 interface ProductsState {
@@ -7,6 +7,7 @@ interface ProductsState {
   shops: Shop[];
   leads: Lead[];
   subscriptionPlans: SubscriptionPlan[];
+  categories: Category[];
   selectedProduct: Product | null;
   showAddEditModal: boolean;
   productToEdit: Product | null;
@@ -44,11 +45,20 @@ const getInitialPlans = (): SubscriptionPlan[] => {
   return INITIAL_SUBSCRIPTION_PLANS;
 };
 
+const getInitialCategories = (): Category[] => {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('mlx_categories');
+    return saved ? JSON.parse(saved) : [];
+  }
+  return [];
+};
+
 const initialState: ProductsState = {
   items: getInitialProducts(),
   shops: getInitialShops(),
   leads: getInitialLeads(),
   subscriptionPlans: getInitialPlans(),
+  categories: getInitialCategories(),
   selectedProduct: null,
   showAddEditModal: false,
   productToEdit: null,
@@ -155,6 +165,12 @@ const productsSlice = createSlice({
       if (typeof window !== 'undefined') {
         localStorage.setItem('mlx_subscription_plans', JSON.stringify(state.subscriptionPlans));
       }
+    },
+    setCategories(state, action: PayloadAction<Category[]>) {
+      state.categories = action.payload;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('mlx_categories', JSON.stringify(state.categories));
+      }
     }
   },
 });
@@ -176,7 +192,8 @@ export const {
   addSubscriptionPlan,
   updateSubscriptionPlan,
   deleteSubscriptionPlan,
-  toggleSubscriptionPlanStatus
+  toggleSubscriptionPlanStatus,
+  setCategories
 } = productsSlice.actions;
 
 export default productsSlice.reducer;

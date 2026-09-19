@@ -139,9 +139,9 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
                   </div>
                   <span className="min-row-lbl" style={{ marginLeft: '0.5rem' }}>Categories:</span>
                   <div className="minimal-tags">
-                    <button className="min-tag cat" onClick={() => handleTagClick('category', 'Mobiles')}>Mobiles</button>
-                    <button className="min-tag cat" onClick={() => handleTagClick('category', 'Laptops')}>Laptops</button>
-                    <button className="min-tag cat" onClick={() => handleTagClick('category', 'Smart Watches')}>Watches</button>
+                    <button className="min-tag cat" onClick={() => handleTagClick('category', 'Smartphones & Mobiles')}>Smartphones</button>
+                    <button className="min-tag cat" onClick={() => handleTagClick('category', 'Laptops & MacBooks')}>Laptops</button>
+                    <button className="min-tag cat" onClick={() => handleTagClick('category', 'Smartwatches')}>Smartwatches</button>
                   </div>
                 </div>
 
@@ -246,7 +246,21 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
                   <span className="user-badge-role"> (Seller)</span>
                 </span>
               </span>
-              <button className="action-btn" onClick={() => { dispatch(setActiveShop(null)); onToast("Seller logged out."); navigate('/'); }} title="Logout Shop">
+              <button
+                className="action-btn"
+                onClick={() => {
+                  localStorage.removeItem('mlx_token');
+                  localStorage.removeItem('mlx_active_shop');
+                  localStorage.removeItem('mlx_auth_role');
+                  dispatch(setActiveShop(null));
+                  dispatch(setAuthRole('customer'));
+                  dispatch(setAuthTab('login'));
+                  dispatch(setShowAuthModal(false));
+                  onToast("Seller logged out.", "info");
+                  navigate('/');
+                }}
+                title="Logout Shop"
+              >
                 <LogOut size={16} />
               </button>
             </div>
@@ -276,7 +290,21 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
                       {getFormattedUserName(activeUser)}
                     </span>
                   </button>
-                  <button className="action-btn" onClick={() => { dispatch(setActiveUser(null)); onToast("Customer logged out."); navigate('/'); }} title="Sign Out">
+                  <button
+                    className="action-btn"
+                    onClick={() => {
+                      localStorage.removeItem('mlx_token');
+                      localStorage.removeItem('mlx_active_user');
+                      localStorage.removeItem('mlx_auth_role');
+                      dispatch(setActiveUser(null));
+                      dispatch(setAuthRole('customer'));
+                      dispatch(setAuthTab('login'));
+                      dispatch(setShowAuthModal(false));
+                      onToast("Customer logged out.", "info");
+                      navigate('/');
+                    }}
+                    title="Sign Out"
+                  >
                     <LogOut size={16} />
                   </button>
                 </div>

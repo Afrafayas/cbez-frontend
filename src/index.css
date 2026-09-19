@@ -1590,6 +1590,19 @@ body.modal-open {
   color: var(--text-primary-light);
 }
 
+.btn-icon-action.view {
+  color: #ea580c;
+  background-color: #fff7ed;
+  border: 1px solid #ffedd5;
+}
+
+.btn-icon-action.view:hover {
+  color: #c2410c;
+  background-color: #ffedd5;
+  border-color: #fed7aa;
+  transform: translateY(-1px);
+}
+
 .btn-icon-action.edit:hover {
   color: var(--info);
   background-color: var(--info-bg);

@@ -20,10 +20,36 @@ interface AuthModalProps {
   onToast: (msg: string, type?: 'success' | 'info') => void;
 }
 
+const INITIAL_REG_FORM = {
+  name: '',
+  email: '',
+  phone: '',
+  password: '',
+  shopName: '',
+  ownerName: '',
+  whatsapp: '',
+  address: '',
+  city: 'Kochi',
+  category: 'Mobiles & Tablets',
+  district: 'Ernakulam',
+  country: 'India',
+  aadhaarNumber: '',
+  panNumber: '',
+  profileImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
+  subscriptionPlanId: '',
+  latitude: undefined as number | undefined,
+  longitude: undefined as number | undefined,
+  gstNumber: '',
+  websiteUrl: '',
+  businessHours: '',
+  businessDescription: '',
+  alternatePhone: ''
+};
+
 export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { showAuthModal, authTab, authRole } = useAppSelector(state => state.auth);
+  const { showAuthModal, authTab, authRole, activeShop, activeUser } = useAppSelector(state => state.auth);
   const { subscriptionPlans } = useAppSelector(state => state.products);
 
   const [loginEmail, setLoginEmail] = useState('');
@@ -31,6 +57,32 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
   const [activePlans, setActivePlans] = useState<SubscriptionPlan[]>([]);
+  const [regForm, setRegForm] = useState(INITIAL_REG_FORM);
+
+  const resetAllForms = React.useCallback(() => {
+    setLoginEmail('');
+    setLoginPassword('');
+    setRegForm(INITIAL_REG_FORM);
+  }, []);
+
+  // 1. Reset forms every time showAuthModal opens (becomes true)
+  useEffect(() => {
+    if (showAuthModal) {
+      resetAllForms();
+    }
+  }, [showAuthModal, resetAllForms]);
+
+  // 2. Reset forms whenever user or shop logs out
+  useEffect(() => {
+    if (!activeShop && !activeUser) {
+      resetAllForms();
+    }
+  }, [activeShop, activeUser, resetAllForms]);
+
+  const handleCloseModal = () => {
+    resetAllForms();
+    dispatch(setShowAuthModal(false));
+  };
 
   const handleLogoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -77,32 +129,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
     };
     reader.readAsDataURL(file);
   };
-  
-  const [regForm, setRegForm] = useState({
-    name: '',
-    email: '',
-    phone: '',
-    password: '',
-    shopName: '',
-    ownerName: '',
-    whatsapp: '',
-    address: '',
-    city: 'Kochi',
-    category: 'Mobiles & Tablets',
-    district: 'Ernakulam',
-    country: 'India',
-    aadhaarNumber: '',
-    panNumber: '',
-    profileImage: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80',
-    subscriptionPlanId: '',
-    latitude: undefined as number | undefined,
-    longitude: undefined as number | undefined,
-    gstNumber: '',
-    websiteUrl: '',
-    businessHours: '',
-    businessDescription: '',
-    alternatePhone: ''
-  });
+
 
   const handleUseCurrentLocation = () => {
     if (!navigator.geolocation) {
@@ -270,6 +297,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         dispatch(setActiveUser(user));
         onToast(`Welcome back, ${user.name}!`, 'success');
       }
+      resetAllForms();
       dispatch(setShowAuthModal(false));
     } catch (err: any) {
       onToast(err.message || 'Login failed. Please check credentials.', 'info');
@@ -298,9 +326,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           longitude: regForm.longitude,
         });
 
+        const tokenVal = resData?.token || resData?.data?.token;
+        const userObj = resData?.user || resData?.data?.user;
+
         if (tokenVal) {
-        localStorage.setItem('mlx_token', tokenVal);
-      }
+          localStorage.setItem('mlx_token', tokenVal);
+        }
 
         const user: CustomerUser = {
           id: userObj?.id || `user-${Date.now()}`,
@@ -355,9 +386,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           alternatePhone: regForm.alternatePhone,
         });
 
+        const tokenVal = resData?.token || resData?.data?.token;
+        const userObj = resData?.user || resData?.data?.user;
+
         if (tokenVal) {
-        localStorage.setItem('mlx_token', tokenVal);
-      }
+          localStorage.setItem('mlx_token', tokenVal);
+        }
 
         const newShop: Shop = userObj?.shop || {
           id: userObj?.id || `shop-${Date.now()}`,
@@ -392,6 +426,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         onToast(`Merchant Shop Registered: ${newShop.name} (Status: PENDING Admin Approval)`, 'success');
         navigate('/seller-dashboard');
       }
+      resetAllForms();
       dispatch(setShowAuthModal(false));
     } catch (err: any) {
       onToast(err.message || 'Registration failed', 'info');
@@ -401,7 +436,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   };
 
   return (
-    <div className="modal-overlay" onClick={() => dispatch(setShowAuthModal(false))}>
+    <div className="modal-overlay" onClick={handleCloseModal}>
       <div
         className="modal-content"
         onClick={(e) => e.stopPropagation()}
@@ -419,7 +454,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
       >
         <button
           className="modal-close-btn"
-          onClick={() => dispatch(setShowAuthModal(false))}
+          onClick={handleCloseModal}
           style={{
             position: 'absolute',
             top: '1.25rem',
@@ -467,7 +502,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         <div style={{ display: 'flex', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', marginBottom: '1.5rem' }}>
           <button
             type="button"
-            onClick={() => dispatch(setAuthTab('login'))}
+            onClick={() => {
+              resetAllForms();
+              dispatch(setAuthTab('login'));
+            }}
             style={{
               flex: 1,
               padding: '0.65rem',
@@ -484,7 +522,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           </button>
           <button
             type="button"
-            onClick={() => dispatch(setAuthTab('register'))}
+            onClick={() => {
+              resetAllForms();
+              dispatch(setAuthTab('register'));
+            }}
             style={{
               flex: 1,
               padding: '0.65rem',
@@ -502,16 +543,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         </div>
 
         {authTab === 'login' ? (
-          <form onSubmit={handleLoginSubmit} className="modal-form">
+          <form onSubmit={handleLoginSubmit} className="modal-form" autoComplete="off">
             <div className="form-group">
               <label className="form-label">Email Address / Phone *</label>
               <input
                 type="text"
                 className="form-input-text"
                 required
-                placeholder="e.g. store@gmail.com"
+                placeholder={authRole === 'seller' ? "e.g. store@gmail.com" : "e.g. rahul@gmail.com"}
                 value={loginEmail}
                 onChange={(e) => setLoginEmail(e.target.value)}
+                autoComplete="off"
               />
             </div>
             <div className="form-group">
@@ -523,6 +565,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 placeholder="••••••••"
                 value={loginPassword}
                 onChange={(e) => setLoginPassword(e.target.value)}
+                autoComplete="new-password"
               />
             </div>
             <button
@@ -568,7 +611,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                   Looking for buyer portal?{' '}
                   <button
                     type="button"
-                    onClick={() => dispatch(setAuthRole('customer'))}
+                    onClick={() => {
+                      resetAllForms();
+                      dispatch(setAuthRole('customer'));
+                    }}
                     style={{ background: 'none', border: 'none', color: '#60a5fa', fontWeight: 700, cursor: 'pointer', padding: 0 }}
                   >
                     Switch to Customer Sign In →
@@ -579,7 +625,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                   Are you a store merchant?{' '}
                   <button
                     type="button"
-                    onClick={() => dispatch(setAuthRole('seller'))}
+                    onClick={() => {
+                      resetAllForms();
+                      dispatch(setAuthRole('seller'));
+                    }}
                     style={{ background: 'none', border: 'none', color: '#ff9e40', fontWeight: 700, cursor: 'pointer', padding: 0 }}
                   >
                     Switch to Seller Login →

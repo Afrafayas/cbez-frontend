@@ -27,6 +27,11 @@ const getInitialActiveUser = (): User | null => {
 
 const getInitialAuthRole = (): 'customer' | 'seller' => {
   if (typeof window !== 'undefined') {
+    const shop = getInitialActiveShop();
+    const user = getInitialActiveUser();
+    if (!shop && !user) {
+      return 'customer';
+    }
     const saved = localStorage.getItem('mlx_auth_role');
     return (saved === 'seller' || saved === 'customer') ? saved : 'customer';
   }
@@ -52,6 +57,10 @@ const authSlice = createSlice({
           localStorage.setItem('mlx_active_shop', JSON.stringify(action.payload));
         } else {
           localStorage.removeItem('mlx_active_shop');
+          if (!state.activeUser) {
+            localStorage.removeItem('mlx_auth_role');
+            state.authRole = 'customer';
+          }
         }
       }
     },
@@ -62,6 +71,10 @@ const authSlice = createSlice({
           localStorage.setItem('mlx_active_user', JSON.stringify(action.payload));
         } else {
           localStorage.removeItem('mlx_active_user');
+          if (!state.activeShop) {
+            localStorage.removeItem('mlx_auth_role');
+            state.authRole = 'customer';
+          }
         }
       }
     },

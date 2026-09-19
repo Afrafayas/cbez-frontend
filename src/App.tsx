@@ -3,8 +3,9 @@ import { ProductDetailPage } from './pages/ProductDetailPage';
 import { WishlistPage } from './pages/WishlistPage';
 import { AuthModal } from './components/AuthModal';
 import { AddEditProductModal } from './components/AddEditProductModal';
+import { ProductDetailModal } from './components/ProductDetailModal';
 import { Footer } from './components/Footer';
-import { logActivity, getProducts, getShops, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop } from './services/apiService';
+import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import React, { ChangeEvent, FormEvent } from 'react';
 import {
@@ -21,6 +22,7 @@ import {
   Plus,
   Edit,
   Trash2,
+  Eye,
   User,
   LogOut,
   LogIn,
@@ -56,7 +58,8 @@ import {
   addLead,
   setProducts,
   setShops,
-  setSubscriptionPlans
+  setSubscriptionPlans,
+  setCategories
 } from './store/productsSlice';
 import {
   setSearchQuery,
@@ -207,6 +210,17 @@ export default function App() {
   const { items: products, shops, leads, selectedProduct, showAddEditModal, subscriptionPlans } = useAppSelector(state => state.products);
   const { toasts, dashboardTab } = useAppSelector(state => state.ui);
   const filters = useAppSelector(state => state.filters);
+  const storeCategories = useAppSelector(state => state.products.categories);
+
+  const displayCategories = React.useMemo(() => {
+    return Array.from(
+      new Set([
+        'All Categories',
+        ...(storeCategories || []).map(c => c.name),
+        ...CATEGORIES
+      ])
+    ).filter(Boolean);
+  }, [storeCategories]);
 
   // --- LIVE BACKEND DATA LOADER ---
   React.useEffect(() => {
@@ -221,12 +235,16 @@ export default function App() {
           city: filters.filterCity,
           sortBy: filters.sortBy,
         });
-        const [liveShops, livePlans] = await Promise.all([
+        const [liveShops, livePlans, liveCats] = await Promise.all([
           getShops().catch(() => []),
-          getSubscriptionPlans().catch(() => [])
+          getSubscriptionPlans().catch(() => []),
+          getCategories().catch(() => [])
         ]);
         if (livePlans && livePlans.length > 0) {
           dispatch(setSubscriptionPlans(livePlans));
+        }
+        if (liveCats && liveCats.length > 0) {
+          dispatch(setCategories(liveCats));
         }
         if (liveProducts) {
           dispatch(setProducts(liveProducts));
@@ -261,6 +279,7 @@ export default function App() {
   const [isMobileFilterOpen, setIsMobileFilterOpen] = React.useState(false);
   const [currentSlide, setCurrentSlide] = React.useState(0);
   const [logoutConfirmType, setLogoutConfirmType] = React.useState<'seller' | 'customer' | null>(null);
+  const [viewingSellerProduct, setViewingSellerProduct] = React.useState<Product | null>(null);
   const [shopFollowers, setShopFollowers] = React.useState<Array<{ id: string; name: string; email?: string; phone?: string; followedAt: string }>>([]);
   const [shopFollowersCount, setShopFollowersCount] = React.useState<number>(0);
   const [shopSubscriptionUsage, setShopSubscriptionUsage] = React.useState<{
@@ -400,7 +419,6 @@ export default function App() {
     longitude: undefined as number | undefined | null,
     city: ''
   });
-  const [isCustLocating, setIsCustLocating] = React.useState(false);
 
   // --- Seller Dashboard Pagination & Search State ---
   const [sellerListPage, setSellerListPage] = React.useState<number>(1);
@@ -681,6 +699,24 @@ export default function App() {
     };
   };
 
+  // Helper for flexible category matching (handles exact match, slugs, and legacy category aliases)
+  const isCategoryMatch = (prodCat?: string, filterCat?: string) => {
+    if (!filterCat || filterCat === 'All Categories' || filterCat === 'All') return true;
+    if (!prodCat) return false;
+    const p = prodCat.toLowerCase().trim();
+    const f = filterCat.toLowerCase().trim();
+    if (p === f) return true;
+    if ((f.includes('mobile') || f.includes('smartphone')) && (p.includes('mobile') || p.includes('smartphone'))) return true;
+    if ((f.includes('laptop') || f.includes('macbook')) && (p.includes('laptop') || p.includes('macbook'))) return true;
+    if ((f.includes('watch') || f.includes('smartwatch')) && (p.includes('watch') || p.includes('smartwatch'))) return true;
+    if ((f.includes('audio') || f.includes('earbud') || f.includes('headphone')) && (p.includes('audio') || p.includes('earbud') || p.includes('headphone'))) return true;
+    if ((f.includes('camera') || f.includes('photo')) && (p.includes('camera') || p.includes('photo'))) return true;
+    if ((f.includes('gaming') || f.includes('console')) && (p.includes('gaming') || p.includes('console'))) return true;
+    if (f.includes('tablet') && p.includes('tablet')) return true;
+    if (f.includes('accessories') && p.includes('accessories')) return true;
+    return p.includes(f) || f.includes(p);
+  };
+
   // --- FILTER & SORT LOGIC ---
   const filteredProducts = products.filter(product => {
     const seller = getSellerShop(product.shopId);
@@ -692,12 +728,10 @@ export default function App() {
     const matchesQuery = keywords.length === 0 || keywords.every(kw => productSearchText.includes(kw));
 
     // 2. Search category dropdown
-    const matchesSearchCat = filters.searchCategory === 'All Categories' ||
-      product.category.toLowerCase() === filters.searchCategory.toLowerCase();
+    const matchesSearchCat = isCategoryMatch(product.category, filters.searchCategory);
 
     // 3. Quick-bar category select
-    const matchesQuickCat = filters.selectedCategory === 'All Categories' ||
-      product.category.toLowerCase() === filters.selectedCategory.toLowerCase();
+    const matchesQuickCat = isCategoryMatch(product.category, filters.selectedCategory);
 
     // 4. Sidebar Brand Filter
     const matchesBrand = !filters.filterBrand ||
@@ -826,20 +860,100 @@ export default function App() {
   const handleConfirmLogout = () => {
     if (logoutConfirmType === 'seller') {
       localStorage.removeItem('mlx_token');
+      localStorage.removeItem('mlx_active_shop');
+      localStorage.removeItem('mlx_auth_role');
       dispatch(setActiveShop(null));
+      dispatch(setAuthRole('customer'));
+      dispatch(setAuthTab('login'));
+      dispatch(setShowAuthModal(false));
       triggerToast("Seller logged out successfully.", "info");
       setLogoutConfirmType(null);
       navigate('/');
     } else if (logoutConfirmType === 'customer') {
       localStorage.removeItem('mlx_token');
+      localStorage.removeItem('mlx_active_user');
+      localStorage.removeItem('mlx_auth_role');
       setWishlistItems([]);
       setWishlistProductIds([]);
       dispatch(setActiveUser(null));
+      dispatch(setAuthRole('customer'));
+      dispatch(setAuthTab('login'));
+      dispatch(setShowAuthModal(false));
       triggerToast("Logged out successfully.", "info");
       setLogoutConfirmType(null);
       navigate('/');
     }
   };
+
+  // --- AUTOMATIC LIVE SYNC FOR SELLER SHOP VERIFICATION STATUS ---
+  React.useEffect(() => {
+    if (!activeShop?.id) return;
+
+    let isMounted = true;
+
+    const syncLiveShopStatus = async () => {
+      try {
+        let freshShop = await getShopById(activeShop.id);
+
+        if (!freshShop) {
+          const allShops = await getShops().catch(() => []);
+          freshShop = allShops.find(s =>
+            s.id === activeShop.id ||
+            (s.email && activeShop.email && s.email.toLowerCase() === activeShop.email.toLowerCase()) ||
+            (s.name && activeShop.name && s.name.toLowerCase() === activeShop.name.toLowerCase())
+          ) || null;
+        }
+
+        if (!isMounted || !freshShop) return;
+
+        const hasVerificationChanged = activeShop.verified !== freshShop.verified;
+        const hasStatusChanged = activeShop.status !== freshShop.status;
+        const hasNameChanged = activeShop.name !== freshShop.name;
+
+        if (hasVerificationChanged || hasStatusChanged || hasNameChanged) {
+          const mergedShop: Shop = {
+            ...activeShop,
+            ...freshShop,
+            subscription: freshShop.subscription || activeShop.subscription,
+            subscriptionUsage: freshShop.subscriptionUsage || activeShop.subscriptionUsage,
+          };
+
+          dispatch(setActiveShop(mergedShop));
+          dispatch(updateShop(mergedShop));
+        }
+      } catch (err) {
+        console.warn("Auto sync shop status failed:", err);
+      }
+    };
+
+    // Immediate check on mount or when route changes
+    syncLiveShopStatus();
+
+    // Auto-polling interval:
+    // If pending verification, poll frequently (every 5 seconds) so admin approval reflects automatically without logout!
+    // If already verified, check every 30 seconds to catch status/name changes.
+    const pollInterval = !activeShop.verified ? 5000 : 30000;
+    const timer = setInterval(() => {
+      syncLiveShopStatus();
+    }, pollInterval);
+
+    // Auto-sync when window regains focus or tab becomes active
+    const handleVisibilityOrFocus = () => {
+      if (document.visibilityState === 'visible') {
+        syncLiveShopStatus();
+      }
+    };
+
+    window.addEventListener('focus', handleVisibilityOrFocus);
+    document.addEventListener('visibilitychange', handleVisibilityOrFocus);
+
+    return () => {
+      isMounted = false;
+      clearInterval(timer);
+      window.removeEventListener('focus', handleVisibilityOrFocus);
+      document.removeEventListener('visibilitychange', handleVisibilityOrFocus);
+    };
+  }, [activeShop?.id, activeShop?.verified, activeShop?.status, location.pathname, dispatch]);
 
   const handleProfileUpdate = async (e: FormEvent) => {
     e.preventDefault();
@@ -1194,9 +1308,9 @@ export default function App() {
                       </div>
                       <span className="min-row-lbl" style={{ marginLeft: '0.5rem' }}>Categories:</span>
                       <div className="minimal-tags">
-                        <button type="button" className="min-tag cat" onMouseDown={(e) => e.preventDefault()} onClick={() => handleTagClick('category', 'Mobiles')}>Mobiles</button>
-                        <button type="button" className="min-tag cat" onMouseDown={(e) => e.preventDefault()} onClick={() => handleTagClick('category', 'Laptops')}>Laptops</button>
-                        <button type="button" className="min-tag cat" onMouseDown={(e) => e.preventDefault()} onClick={() => handleTagClick('category', 'Smart Watches')}>Watches</button>
+                        <button type="button" className="min-tag cat" onMouseDown={(e) => e.preventDefault()} onClick={() => handleTagClick('category', 'Smartphones & Mobiles')}>Smartphones</button>
+                        <button type="button" className="min-tag cat" onMouseDown={(e) => e.preventDefault()} onClick={() => handleTagClick('category', 'Laptops & MacBooks')}>Laptops</button>
+                        <button type="button" className="min-tag cat" onMouseDown={(e) => e.preventDefault()} onClick={() => handleTagClick('category', 'Smartwatches')}>Watches</button>
                       </div>
                     </div>
 
@@ -1421,7 +1535,7 @@ export default function App() {
       {location.pathname === '/' && !activeShop && (
         <div className="category-bar">
           <div className="category-container">
-            {CATEGORIES.map(cat => (
+            {displayCategories.map(cat => (
               <button
                 key={cat}
                 className={`cat-tab ${filters.selectedCategory === cat ? 'active' : ''}`}
@@ -1517,6 +1631,16 @@ export default function App() {
                     />
                     <MapPin size={14} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary-light)' }} />
                   </div>
+                </div>
+
+                {/* Category Selector */}
+                <div className="filter-group">
+                  <label className="filter-label">Category</label>
+                  <CustomSelect
+                    value={filters.selectedCategory}
+                    onChange={(val) => dispatch(setSelectedCategory(val))}
+                    options={displayCategories}
+                  />
                 </div>
 
                 {/* City Selector */}
@@ -2826,15 +2950,32 @@ export default function App() {
                         <>
                           {paginatedSellerProducts.map(product => (
                             <div key={product.id} className="listing-item">
-                              <div className="listing-preview-img">
+                              <div
+                                className="listing-preview-img"
+                                onClick={() => setViewingSellerProduct(product)}
+                                style={{ cursor: 'pointer' }}
+                                title="Click to view full details"
+                              >
                                 {product.images && product.images.length > 0 ? (
                                   <img src={product.images[0]} alt={product.name} className="product-card-img" style={{ borderRadius: 'var(--radius-sm)' }} />
                                 ) : (
                                   renderCategoryIcon(product.category, "listing-preview-svg")
                                 )}
                               </div>
-                              <div className="listing-info">
-                                <span className="listing-name">{product.name}</span>
+                              <div
+                                className="listing-info"
+                                onClick={() => setViewingSellerProduct(product)}
+                                style={{ cursor: 'pointer' }}
+                                title="Click to view full details"
+                              >
+                                <span
+                                  className="listing-name"
+                                  style={{ transition: 'color 0.2s ease' }}
+                                  onMouseEnter={(e) => (e.currentTarget.style.color = '#ea580c')}
+                                  onMouseLeave={(e) => (e.currentTarget.style.color = '')}
+                                >
+                                  {product.name}
+                                </span>
                                 <div className="listing-meta">
                                   <span>Category: <strong>{product.category}</strong></span>
                                   <span>Brand: <strong>{product.brand}</strong></span>
@@ -2860,6 +3001,14 @@ export default function App() {
                                   }}
                                 >
                                   {(product.stock <= 0 || product.isSoldOut) ? '🔴 Sold Out (Restore)' : '🟢 In Stock'}
+                                </button>
+                                <button
+                                  className="btn-icon-action view"
+                                  title="View product details"
+                                  onClick={() => setViewingSellerProduct(product)}
+                                  aria-label={`View details of ${product.name}`}
+                                >
+                                  <Eye size={16} />
                                 </button>
                                 <button
                                   className="btn-icon-action edit"
@@ -3518,7 +3667,16 @@ export default function App() {
         } />
       </Routes>
 
-      {/* --- PRODUCT DETAIL MODAL --- */}
+      {/* --- SELLER DASHBOARD PRODUCT DETAIL MODAL --- */}
+      <ProductDetailModal
+        product={viewingSellerProduct}
+        isOpen={Boolean(viewingSellerProduct)}
+        onClose={() => setViewingSellerProduct(null)}
+        onEdit={(prod) => {
+          setViewingSellerProduct(null);
+          handleOpenEditProduct(prod);
+        }}
+      />
 
 
       <Footer />
