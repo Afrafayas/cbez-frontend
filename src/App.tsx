@@ -4,7 +4,7 @@ import { WishlistPage } from './pages/WishlistPage';
 import { AuthModal } from './components/AuthModal';
 import { AddEditProductModal } from './components/AddEditProductModal';
 import { Footer } from './components/Footer';
-import { logActivity, getProducts, getShops, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, toggleWishlist, getUserWishlist, getWishlistIds } from './services/apiService';
+import { logActivity, getProducts, getShops, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import React, { ChangeEvent, FormEvent } from 'react';
 import {
@@ -395,8 +395,12 @@ export default function App() {
   const [custProfileForm, setCustProfileForm] = React.useState({
     name: '',
     email: '',
-    phone: ''
+    phone: '',
+    latitude: undefined as number | undefined | null,
+    longitude: undefined as number | undefined | null,
+    city: ''
   });
+  const [isCustLocating, setIsCustLocating] = React.useState(false);
 
   // --- Seller Dashboard Pagination & Search State ---
   const [sellerListPage, setSellerListPage] = React.useState<number>(1);
@@ -450,7 +454,10 @@ export default function App() {
       setCustProfileForm({
         name: activeUser.name,
         email: activeUser.email,
-        phone: activeUser.phone
+        phone: activeUser.phone,
+        latitude: activeUser.latitude ?? null,
+        longitude: activeUser.longitude ?? null,
+        city: ''
       });
     }
 
@@ -834,7 +841,7 @@ export default function App() {
     }
   };
 
-  const handleProfileUpdate = (e: FormEvent) => {
+  const handleProfileUpdate = async (e: FormEvent) => {
     e.preventDefault();
     if (!activeShop) return;
     const updated: Shop = {
@@ -861,9 +868,35 @@ export default function App() {
       alternatePhone: profileForm.alternatePhone,
     };
 
+    try {
+      await createOrUpdateMyShop({
+        name: updated.name,
+        ownerName: updated.ownerName,
+        phone: updated.phone,
+        whatsapp: updated.whatsapp,
+        address: updated.address,
+        city: updated.city,
+        category: updated.category,
+        profileImage: updated.profileImage,
+        district: updated.district,
+        country: updated.country,
+        aadhaarNumber: updated.aadhaarNumber,
+        panNumber: updated.panNumber,
+        latitude: updated.latitude,
+        longitude: updated.longitude,
+        gstNumber: updated.gstNumber,
+        websiteUrl: updated.websiteUrl,
+        businessHours: updated.businessHours,
+        businessDescription: updated.businessDescription,
+        alternatePhone: updated.alternatePhone,
+      });
+    } catch (err: any) {
+      console.warn('Backend shop sync error:', err);
+    }
+
     dispatch(updateShop(updated));
     dispatch(setActiveShop(updated));
-    triggerToast("Shop profile updated successfully!", "success");
+    triggerToast("Shop profile & location updated successfully!", "success");
   };
 
   const handleOpenAddProduct = () => {
@@ -1688,8 +1721,8 @@ export default function App() {
                               <span className={`tag-stock ${isOutOfStock ? 'out' : 'in'}`}>
                                 {isOutOfStock ? 'Out of Stock' : `Stock: ${product.stock} units`}
                               </span>
-                              {product.specs?.['Condition'] && (
-                                <span className="tag-condition">{product.specs['Condition']}</span>
+                              {(product.condition || product.specs?.['Condition']) && (
+                                <span className="tag-condition">{product.condition || product.specs['Condition']}</span>
                               )}
                             </div>
 
@@ -1735,26 +1768,32 @@ export default function App() {
                                 <div className="process-steps">
                                   <div className="process-step-card">
                                     <div className="step-icon-wrapper">
-                                      <MapPin size={18} />
+                                      <MapPin size={20} />
                                     </div>
-                                    <span className="step-card-num">Step 1</span>
-                                    <p className="step-card-txt">Select your city and browse used gadgets near you</p>
+                                    <div className="step-card-content">
+                                      <span className="step-card-num">Step 1</span>
+                                      <p className="step-card-txt">Select your city and browse used gadgets near you</p>
+                                    </div>
                                   </div>
 
                                   <div className="process-step-card">
                                     <div className="step-icon-wrapper">
-                                      <Phone size={18} />
+                                      <Phone size={20} />
                                     </div>
-                                    <span className="step-card-num">Step 2</span>
-                                    <p className="step-card-txt">Click WhatsApp or Call to contact the store directly</p>
+                                    <div className="step-card-content">
+                                      <span className="step-card-num">Step 2</span>
+                                      <p className="step-card-txt">Click WhatsApp or Call to contact the store directly</p>
+                                    </div>
                                   </div>
 
                                   <div className="process-step-card">
                                     <div className="step-icon-wrapper">
-                                      <CheckCircle size={18} />
+                                      <CheckCircle size={20} />
                                     </div>
-                                    <span className="step-card-num">Step 3</span>
-                                    <p className="step-card-txt">Meet dealer, physically inspect the gadget, and buy</p>
+                                    <div className="step-card-content">
+                                      <span className="step-card-num">Step 3</span>
+                                      <p className="step-card-txt">Meet dealer, physically inspect the gadget, and buy</p>
+                                    </div>
                                   </div>
                                 </div>
                                 <span className="process-footer">No hidden platform fees. No commissions. Pure peer-to-merchant deals.</span>
@@ -2254,39 +2293,53 @@ export default function App() {
                   </div>
 
                   <form
-                    onSubmit={(e) => {
+                    onSubmit={async (e) => {
                       e.preventDefault();
                       if (!custProfileForm.name || !custProfileForm.email || !custProfileForm.phone) {
                         triggerToast("Please fill in all required fields.", "info");
                         return;
                       }
                       if (activeUser) {
-                        const updatedUser = {
-                          ...activeUser,
-                          name: custProfileForm.name,
-                          email: custProfileForm.email,
-                          phone: custProfileForm.phone
-                        };
-
-                        // Update user list in localStorage
-                        let customUsers: CustomerUser[] = [];
                         try {
-                          const savedUsers = localStorage.getItem('mlx_registered_users');
-                          if (savedUsers) customUsers = JSON.parse(savedUsers);
-                        } catch (err) {
-                          console.error(err);
-                        }
+                          const updatedFromBackend = await updateUser(activeUser.id, {
+                            name: custProfileForm.name,
+                            email: custProfileForm.email,
+                            phone: custProfileForm.phone,
+                            latitude: custProfileForm.latitude,
+                            longitude: custProfileForm.longitude
+                          });
 
-                        const userIdx = customUsers.findIndex(u => u.id === activeUser.id);
-                        if (userIdx !== -1) {
-                          customUsers[userIdx] = updatedUser;
-                        } else {
-                          customUsers.push(updatedUser);
-                        }
-                        localStorage.setItem('mlx_registered_users', JSON.stringify(customUsers));
+                          const updatedUser: CustomerUser = {
+                            ...activeUser,
+                            name: updatedFromBackend.name || custProfileForm.name,
+                            email: updatedFromBackend.email || custProfileForm.email,
+                            phone: updatedFromBackend.phone || custProfileForm.phone,
+                            latitude: updatedFromBackend.latitude ?? custProfileForm.latitude ?? null,
+                            longitude: updatedFromBackend.longitude ?? custProfileForm.longitude ?? null,
+                          };
 
-                        dispatch(setActiveUser(updatedUser));
-                        triggerToast("Profile updated successfully!", "success");
+                          // Update user list in localStorage
+                          let customUsers: CustomerUser[] = [];
+                          try {
+                            const savedUsers = localStorage.getItem('mlx_registered_users');
+                            if (savedUsers) customUsers = JSON.parse(savedUsers);
+                          } catch (err) {
+                            console.error(err);
+                          }
+
+                          const userIdx = customUsers.findIndex(u => u.id === activeUser.id);
+                          if (userIdx !== -1) {
+                            customUsers[userIdx] = updatedUser;
+                          } else {
+                            customUsers.push(updatedUser);
+                          }
+                          localStorage.setItem('mlx_registered_users', JSON.stringify(customUsers));
+
+                          dispatch(setActiveUser(updatedUser));
+                          triggerToast("Profile & location updated successfully!", "success");
+                        } catch (err: any) {
+                          triggerToast(err.message || "Failed to update profile", "info");
+                        }
                       }
                     }}
                     className="form-grid"
