@@ -210,7 +210,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         password: loginPassword,
       });
 
-      const actualRole = resData.user?.role || (resData.user?.shop ? 'seller' : 'customer');
+      const userObj = resData.data?.user || resData.user;
+      const tokenVal = resData.data?.token || resData.token;
+
+      const actualRole = userObj?.role || (userObj?.shop ? 'seller' : 'customer');
 
       // --- STRICT ROLE VALIDATION ---
       // 1. If user is in "Seller Login" tab but account is a Customer
@@ -232,24 +235,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
       }
 
       // Safe to persist authentication token once role is verified
-      if (resData.token) {
-        localStorage.setItem('mlx_token', resData.token);
+      if (tokenVal) {
+        localStorage.setItem('mlx_token', tokenVal);
       }
 
       if (actualRole === 'seller') {
-        const shop: Shop = resData.user?.shop || {
-          id: resData.user?.id || `shop-${Date.now()}`,
-          name: resData.user?.name || 'Seller Shop',
-          ownerName: resData.user?.name || 'Shop Owner',
-          phone: resData.user?.phone || '+91 98765 43210',
-          whatsapp: resData.user?.phone || '919876543210',
+        const shop: Shop = userObj?.shop || {
+          id: userObj?.id || `shop-${Date.now()}`,
+          name: userObj?.name || 'Seller Shop',
+          ownerName: userObj?.name || 'Shop Owner',
+          phone: userObj?.phone || '+91 98765 43210',
+          whatsapp: userObj?.phone || '919876543210',
           address: 'Kochi Market',
           city: 'Kochi',
           category: 'Mobiles & Tablets',
-          verified: Boolean(resData.user?.shop?.verified),
+          verified: Boolean(userObj?.shop?.verified),
           rating: 5.0,
           joinedDate: 'Today',
-          status: resData.user?.shop?.verified ? 'APPROVED' : 'PENDING'
+          status: userObj?.shop?.verified ? 'APPROVED' : 'PENDING'
         };
         dispatch(setActiveShop(shop));
         dispatch(setDashboardTab('listings'));
@@ -257,12 +260,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         navigate('/seller-dashboard');
       } else {
         const user: CustomerUser = {
-          id: resData.user?.id || `user-${Date.now()}`,
-          name: resData.user?.name || loginEmail.split('@')[0],
-          email: resData.user?.email || loginEmail,
-          phone: resData.user?.phone || '+91 98765 00000',
-          latitude: resData.user?.latitude ?? null,
-          longitude: resData.user?.longitude ?? null,
+          id: userObj?.id || `user-${Date.now()}`,
+          name: userObj?.name || loginEmail.split('@')[0],
+          email: userObj?.email || loginEmail,
+          phone: userObj?.phone || '+91 98765 00000',
+          latitude: userObj?.latitude ?? null,
+          longitude: userObj?.longitude ?? null,
         };
         dispatch(setActiveUser(user));
         onToast(`Welcome back, ${user.name}!`, 'success');
@@ -295,17 +298,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           longitude: regForm.longitude,
         });
 
-        if (resData.token) {
-          localStorage.setItem('mlx_token', resData.token);
-        }
+        if (tokenVal) {
+        localStorage.setItem('mlx_token', tokenVal);
+      }
 
         const user: CustomerUser = {
-          id: resData.user?.id || `user-${Date.now()}`,
-          name: resData.user?.name || regForm.name,
-          email: resData.user?.email || regForm.email,
-          phone: resData.user?.phone || regForm.phone,
-          latitude: resData.user?.latitude ?? regForm.latitude ?? null,
-          longitude: resData.user?.longitude ?? regForm.longitude ?? null,
+          id: userObj?.id || `user-${Date.now()}`,
+          name: userObj?.name || regForm.name,
+          email: userObj?.email || regForm.email,
+          phone: userObj?.phone || regForm.phone,
+          latitude: userObj?.latitude ?? regForm.latitude ?? null,
+          longitude: userObj?.longitude ?? regForm.longitude ?? null,
         };
         dispatch(setActiveUser(user));
         onToast(`Customer account created! Welcome ${user.name}`, 'success');
@@ -352,12 +355,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           alternatePhone: regForm.alternatePhone,
         });
 
-        if (resData.token) {
-          localStorage.setItem('mlx_token', resData.token);
-        }
+        if (tokenVal) {
+        localStorage.setItem('mlx_token', tokenVal);
+      }
 
-        const newShop: Shop = resData.user?.shop || {
-          id: resData.user?.id || `shop-${Date.now()}`,
+        const newShop: Shop = userObj?.shop || {
+          id: userObj?.id || `shop-${Date.now()}`,
           name: regForm.shopName,
           ownerName: regForm.ownerName,
           phone: regForm.phone,
