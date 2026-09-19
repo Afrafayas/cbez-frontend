@@ -260,7 +260,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           id: resData.user?.id || `user-${Date.now()}`,
           name: resData.user?.name || loginEmail.split('@')[0],
           email: resData.user?.email || loginEmail,
-          phone: resData.user?.phone || '+91 98765 00000'
+          phone: resData.user?.phone || '+91 98765 00000',
+          latitude: resData.user?.latitude ?? null,
+          longitude: resData.user?.longitude ?? null,
         };
         dispatch(setActiveUser(user));
         onToast(`Welcome back, ${user.name}!`, 'success');
@@ -288,7 +290,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           password: regForm.password,
           name: regForm.name,
           phone: regForm.phone,
-          role: 'customer'
+          role: 'customer',
+          latitude: regForm.latitude,
+          longitude: regForm.longitude,
         });
 
         if (resData.token) {
@@ -299,7 +303,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           id: resData.user?.id || `user-${Date.now()}`,
           name: resData.user?.name || regForm.name,
           email: resData.user?.email || regForm.email,
-          phone: resData.user?.phone || regForm.phone
+          phone: resData.user?.phone || regForm.phone,
+          latitude: resData.user?.latitude ?? regForm.latitude ?? null,
+          longitude: resData.user?.longitude ?? regForm.longitude ?? null,
         };
         dispatch(setActiveUser(user));
         onToast(`Customer account created! Welcome ${user.name}`, 'success');
@@ -598,6 +604,85 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 <div className="form-group">
                   <label className="form-label">Phone Number *</label>
                   <PhoneInputWithCountry required value={regForm.phone} onChange={(val) => setRegForm({ ...regForm, phone: val })} />
+                </div>
+
+                {/* CUSTOMER LOCATION SELECTION SECTION */}
+                <div className="form-group" style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1.5px dashed #3b82f6', padding: '1rem', borderRadius: '14px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                    <label className="form-label" style={{ fontWeight: 700, color: '#60a5fa', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <MapPin size={16} />
+                      <span>Your Location Coordinates (Optional)</span>
+                    </label>
+                    {typeof regForm.latitude === 'number' && typeof regForm.longitude === 'number' && !isNaN(regForm.latitude) && !isNaN(regForm.longitude) && (
+                      <span style={{ fontSize: '0.72rem', background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', padding: '0.2rem 0.6rem', borderRadius: '12px', fontWeight: 700 }}>
+                        ✓ Coordinates Set
+                      </span>
+                    )}
+                  </div>
+
+                  <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.75rem' }}>
+                    Detect GPS location or search address to locate nearby verified stores and local deals:
+                  </p>
+
+                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                    <button
+                      type="button"
+                      disabled={isLocating}
+                      onClick={handleUseCurrentLocation}
+                      style={{
+                        flex: 1,
+                        minWidth: '150px',
+                        padding: '0.55rem 0.8rem',
+                        borderRadius: '10px',
+                        border: '1px solid #3b82f6',
+                        background: 'rgba(59, 130, 246, 0.15)',
+                        color: '#60a5fa',
+                        fontWeight: 700,
+                        fontSize: '0.78rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.4rem',
+                        cursor: isLocating ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      {isLocating ? <Loader2 className="animate-spin" size={14} /> : <MapPin size={14} />}
+                      <span>Use Current GPS Location</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={isLocating}
+                      onClick={handleSearchLocationCoordinates}
+                      style={{
+                        padding: '0.55rem 0.8rem',
+                        borderRadius: '10px',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        background: 'rgba(255, 255, 255, 0.05)',
+                        color: '#f8fafc',
+                        fontWeight: 600,
+                        fontSize: '0.78rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        gap: '0.4rem',
+                        cursor: isLocating ? 'not-allowed' : 'pointer'
+                      }}
+                    >
+                      <Search size={14} />
+                      <span>Search Address / City</span>
+                    </button>
+                  </div>
+
+                  {typeof regForm.latitude === 'number' && typeof regForm.longitude === 'number' && !isNaN(regForm.latitude) && !isNaN(regForm.longitude) ? (
+                    <div style={{ fontSize: '0.78rem', background: 'rgba(0, 0, 0, 0.3)', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#e2e8f0' }}>
+                      📍 <strong>Selected Coordinates:</strong> Lat: {regForm.latitude.toFixed(5)}, Lng: {regForm.longitude.toFixed(5)}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: '0.76rem', color: '#94a3b8', fontStyle: 'italic' }}>
+                      ℹ️ Optional: GPS coordinates can be selected now or updated anytime in your profile.
+                    </div>
+                  )}
                 </div>
               </>
             ) : (

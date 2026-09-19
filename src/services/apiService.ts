@@ -654,3 +654,69 @@ export async function getSellerCustomerActivityLogs(token: string, shopId?: stri
   }
   return result.data;
 }
+
+/* Update User Profile & Location */
+export async function updateUser(
+  userId: string,
+  data: {
+    name?: string;
+    phone?: string;
+    email?: string;
+    latitude?: number | null;
+    longitude?: number | null;
+    role?: string;
+  }
+) {
+  const token = localStorage.getItem('mlx_token');
+  const res = await fetch(`${API_BASE_URL}/users/${userId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.message || 'Failed to update user profile');
+  }
+  const json = await res.json();
+  return json.data?.user || json.user || json;
+}
+
+/* Seller Shop Profile & Location Update */
+export async function createOrUpdateMyShop(data: any) {
+  const token = localStorage.getItem('mlx_token');
+  const res = await fetch(`${API_BASE_URL}/shops/mine`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.message || 'Failed to save shop profile');
+  }
+  const json = await res.json();
+  return json.data?.shop || json.shop || json;
+}
+
+export async function updateShop(shopId: string, data: any) {
+  const token = localStorage.getItem('mlx_token');
+  const res = await fetch(`${API_BASE_URL}/shops/${shopId}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => ({}));
+    throw new Error(errorData.message || 'Failed to update shop');
+  }
+  const json = await res.json();
+  return json.data?.shop || json.shop || json;
+}

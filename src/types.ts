@@ -126,6 +126,10 @@ export interface User {
   name: string;
   email: string;
   phone: string;
+  role?: string;
+  latitude?: number | null;
+  longitude?: number | null;
+  shop?: Shop | null;
 }
 
 export interface Category {
