@@ -4,6 +4,8 @@ import { Phone, Smartphone, MapPin, ShieldCheck, Clock, Heart, Store, Sparkles }
 import { Product, Shop } from '../types';
 import { useAppDispatch, useAppSelector } from '../store';
 import { setSelectedProduct } from '../store/productsSlice';
+import { setAuthRole, setAuthTab, setShowAuthModal } from '../store/authSlice';
+import { addToast } from '../store/uiSlice';
 import { logActivity } from '../services/apiService';
 
 interface ProductCardProps {
@@ -25,7 +27,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
 }) => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { activeUser } = useAppSelector((state) => state.auth);
+  const { activeUser, activeShop } = useAppSelector((state) => state.auth);
   const [isHovered, setIsHovered] = useState(false);
   const [imgError, setImgError] = useState(false);
 
@@ -35,9 +37,17 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   const condition = product.condition || product.specs?.['Condition'] || 'Verified Pre-owned';
 
   const handleClick = () => {
+    if (!activeUser && !activeShop) {
+      dispatch(setAuthRole('customer'));
+      dispatch(setAuthTab('login'));
+      dispatch(setShowAuthModal(true));
+      dispatch(addToast({ message: 'Please log in to view full product details & seller info.', type: 'info' }));
+      return;
+    }
+
     logActivity({
       action: 'PRODUCT_CLICK',
-      details: `Clicked on similar product "${product.name}" (ID: ${product.id}, Price: ₹${effectivePrice.toLocaleString('en-IN')}) listed by "${seller?.name || 'Shop'}"`,
+      details: `Clicked on product "${product.name}" (ID: ${product.id}, Price: ₹${effectivePrice.toLocaleString('en-IN')}) listed by "${seller?.name || 'Shop'}"`,
       userId: activeUser?.id,
     });
     dispatch(setSelectedProduct(product));

@@ -3648,15 +3648,19 @@ export default function App() {
         } />
 
         <Route path="/product/:id" element={
-          <ProductDetailPage
-            getSellerShop={getSellerShop}
-            onCallSeller={handleCallSeller}
-            onWhatsAppSeller={handleWhatsAppSeller}
-            onGetDirections={handleGetDirections}
-            onToast={triggerToast}
-            isWishlisted={(id) => wishlistProductIds.includes(id)}
-            onToggleWishlist={handleToggleWishlist}
-          />
+          !activeUser && !activeShop ? (
+            <Navigate to="/" replace />
+          ) : (
+            <ProductDetailPage
+              getSellerShop={getSellerShop}
+              onCallSeller={handleCallSeller}
+              onWhatsAppSeller={handleWhatsAppSeller}
+              onGetDirections={handleGetDirections}
+              onToast={triggerToast}
+              isWishlisted={(id) => wishlistProductIds.includes(id)}
+              onToggleWishlist={handleToggleWishlist}
+            />
+          )
         } />
       </Routes>
 

@@ -17,6 +17,8 @@ import {
 import { Product, Shop } from '../types';
 import { useAppDispatch, useAppSelector } from '../store';
 import { setSelectedProduct } from '../store/productsSlice';
+import { setAuthRole, setAuthTab, setShowAuthModal } from '../store/authSlice';
+import { addToast } from '../store/uiSlice';
 import { followShop, unfollowShop, checkFollowStatus, logActivity } from '../services/apiService';
 import { ProductCard } from '../components/ProductCard';
 
@@ -45,7 +47,18 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   const products = useAppSelector((state) => state.products.items);
   const selectedProduct = useAppSelector((state) => state.products.selectedProduct);
   const { activeUser, activeShop } = useAppSelector((state) => state.auth);
-  
+
+  // Strict Login Gate Check: If user is not logged in, redirect to home & open AuthModal
+  useEffect(() => {
+    if (!activeUser && !activeShop) {
+      dispatch(setAuthRole('customer'));
+      dispatch(setAuthTab('login'));
+      dispatch(setShowAuthModal(true));
+      dispatch(addToast({ message: 'Please log in to view full product details & seller info.', type: 'info' }));
+      navigate('/', { replace: true });
+    }
+  }, [activeUser, activeShop, dispatch, navigate]);
+
   // Find product by URL param id or fallback to selectedProduct
   const product = products.find((p) => String(p.id) === String(id)) || selectedProduct;
 
