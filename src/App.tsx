@@ -1348,6 +1348,40 @@ export default function App() {
                 <span className="logo-subtitle">USED GADGETS DIRECTORY</span>
               </div>
             </div>
+
+            {/* Location Display Widget (Immediately after Logo) */}
+            <div 
+              className="navbar-location-selector"
+              onClick={(e) => {
+                e.stopPropagation();
+                setIsLocationModalOpen(true);
+              }}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.45rem',
+                cursor: 'pointer',
+                background: 'rgba(255, 255, 255, 0.09)',
+                padding: '0.35rem 0.75rem',
+                borderRadius: '10px',
+                border: '1px solid rgba(56, 189, 248, 0.4)',
+                transition: 'all 0.2s ease',
+                marginLeft: '0.4rem',
+                userSelect: 'none',
+                backdropFilter: 'blur(8px)',
+                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.18)'
+              }}
+              title="Click to Change Location"
+            >
+              <MapPin size={15} style={{ color: '#38bdf8', flexShrink: 0 }} />
+              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
+                <span style={{ fontSize: '0.6rem', color: '#38bdf8', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Location</span>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', maxWidth: '110px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {filters.userLocationName || 'Kochi'}
+                </span>
+              </div>
+              <ChevronRight size={13} style={{ color: '#94a3b8', marginLeft: '0.1rem', transform: 'rotate(90deg)' }} />
+            </div>
           </div>
 
           {/* Search bar inside header with Instagram-Style dropdown overlay (Customers only) */}
