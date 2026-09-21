@@ -731,3 +731,19 @@ export async function updateShop(shopId: string, data: any) {
   const json = await res.json();
   return json.data?.shop || json.shop || json;
 }
+
+export async function deleteProductApi(productId: string, token: string): Promise<{ success: boolean; message?: string }> {
+  const res = await fetch(`${API_BASE_URL}/products/${productId}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  const result = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(result.message || 'Failed to delete product listing');
+  }
+  return result;
+}
+

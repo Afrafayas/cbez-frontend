@@ -5,7 +5,7 @@ import { AuthModal } from './components/AuthModal';
 import { AddEditProductModal } from './components/AddEditProductModal';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { Footer } from './components/Footer';
-import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories } from './services/apiService';
+import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, deleteProductApi } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import React, { ChangeEvent, FormEvent } from 'react';
 import {
@@ -52,6 +52,7 @@ import {
 import {
   updateShop,
   editProduct,
+  deleteProduct,
   setSelectedProduct,
   setShowAddEditModal,
   setProductToEdit,
@@ -1049,18 +1050,25 @@ export default function App() {
     );
   };
 
-  const handleDeleteListing = (productId: string) => {
+  const handleDeleteListing = async (productId: string) => {
     const target = products.find(p => p.id === productId);
     if (!target) return;
 
-    // Task 3: Soft delete -> Mark as Sold Out instead of removing outright
-    const softDeleted: Product = {
-      ...target,
-      isSoldOut: true,
-      stock: 0
-    };
-    dispatch(editProduct(softDeleted));
-    triggerToast(`Listing "${target.name}" marked as Sold Out. Click "Restore" on the item to undo stock.`, 'warning');
+    if (!window.confirm(`Are you sure you want to delete "${target.name}" from your product inventory?`)) {
+      return;
+    }
+
+    const token = localStorage.getItem('mlx_token');
+    dispatch(deleteProduct(productId));
+    triggerToast(`Product listing "${target.name}" deleted successfully.`, 'info');
+
+    if (token) {
+      try {
+        await deleteProductApi(productId, token);
+      } catch (err: any) {
+        console.warn('Backend product delete sync warning:', err);
+      }
+    }
   };
 
   // Capture Lead & Open Link
