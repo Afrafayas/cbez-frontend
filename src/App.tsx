@@ -1799,6 +1799,13 @@ export default function App() {
                             key={product.id}
                             className="product-card"
                             onClick={() => {
+                              if (!activeUser && !activeShop) {
+                                dispatch(setAuthRole('customer'));
+                                dispatch(setAuthTab('login'));
+                                dispatch(setShowAuthModal(true));
+                                dispatch(addToast({ message: 'Please log in to view full product details & seller info.', type: 'info' }));
+                                return;
+                              }
                               logActivity({
                                 action: 'PRODUCT_CLICK',
                                 details: `Clicked on product "${product.name}" (ID: ${product.id}, Price: ₹${(product.offerPrice || product.price).toLocaleString('en-IN')}) listed by "${seller?.name || 'Shop'}"`,
@@ -2399,6 +2406,13 @@ export default function App() {
                     onCallSeller={handleCallSeller}
                     onWhatsAppSeller={handleWhatsAppSeller}
                     onSelectProduct={(product) => {
+                      if (!activeUser && !activeShop) {
+                        dispatch(setAuthRole('customer'));
+                        dispatch(setAuthTab('login'));
+                        dispatch(setShowAuthModal(true));
+                        dispatch(addToast({ message: 'Please log in to view full product details & seller info.', type: 'info' }));
+                        return;
+                      }
                       dispatch(setSelectedProduct(product));
                       navigate(`/product/${product.id}`);
                     }}
@@ -3642,6 +3656,13 @@ export default function App() {
               onCallSeller={handleCallSeller}
               onWhatsAppSeller={handleWhatsAppSeller}
               onSelectProduct={(product) => {
+                if (!activeUser && !activeShop) {
+                  dispatch(setAuthRole('customer'));
+                  dispatch(setAuthTab('login'));
+                  dispatch(setShowAuthModal(true));
+                  dispatch(addToast({ message: 'Please log in to view full product details & seller info.', type: 'info' }));
+                  return;
+                }
                 dispatch(setSelectedProduct(product));
                 navigate(`/product/${product.id}`);
               }}
@@ -3656,19 +3677,15 @@ export default function App() {
         } />
 
         <Route path="/product/:id" element={
-          !activeUser && !activeShop ? (
-            <Navigate to="/" replace />
-          ) : (
-            <ProductDetailPage
-              getSellerShop={getSellerShop}
-              onCallSeller={handleCallSeller}
-              onWhatsAppSeller={handleWhatsAppSeller}
-              onGetDirections={handleGetDirections}
-              onToast={triggerToast}
-              isWishlisted={(id) => wishlistProductIds.includes(id)}
-              onToggleWishlist={handleToggleWishlist}
-            />
-          )
+          <ProductDetailPage
+            getSellerShop={getSellerShop}
+            onCallSeller={handleCallSeller}
+            onWhatsAppSeller={handleWhatsAppSeller}
+            onGetDirections={handleGetDirections}
+            onToast={triggerToast}
+            isWishlisted={(id) => wishlistProductIds.includes(id)}
+            onToggleWishlist={handleToggleWishlist}
+          />
         } />
       </Routes>
 
