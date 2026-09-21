@@ -153,7 +153,8 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
           </div>
         </div>
 
-        {/* Location Display Widget (Immediately after Logo) */}
+        {/* Location Display Widget (Immediately after Logo - Signed in users only) */}
+        {Boolean(activeUser) && (
         <div 
           className="navbar-location-selector"
           onClick={() => setShowLocationModal(true)}
@@ -181,6 +182,7 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
           </div>
           <ChevronDown size={13} style={{ color: '#94a3b8', marginLeft: '0.1rem' }} />
         </div>
+        )}
 
         {/* Real-time Multi-word Search Bar */}
         <div className="search-bar-wrapper">

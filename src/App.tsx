@@ -1349,7 +1349,8 @@ export default function App() {
               </div>
             </div>
 
-            {/* Location Display Widget (Immediately after Logo) */}
+            {/* Location Display Widget (Immediately after Logo - Signed-in Users Only) */}
+            {Boolean(activeUser) && (
             <div 
               className="navbar-location-selector"
               onClick={(e) => {
@@ -1382,6 +1383,7 @@ export default function App() {
               </div>
               <ChevronRight size={13} style={{ color: '#94a3b8', marginLeft: '0.1rem', transform: 'rotate(90deg)' }} />
             </div>
+            )}
           </div>
 
           {/* Search bar inside header with Instagram-Style dropdown overlay (Customers only) */}
