@@ -29,6 +29,7 @@ import {
   Store,
   X,
   CheckCircle,
+  AlertTriangle,
   HelpCircle,
   Info,
   Watch,
@@ -168,18 +169,183 @@ interface ToastItemProps {
 }
 
 function ToastItem({ toast, onClose }: ToastItemProps) {
+  const [progress, setProgress] = React.useState(100);
+
   React.useEffect(() => {
-    const timer = setTimeout(() => {
-      onClose();
-    }, 4000); // Auto-dismiss after 4 seconds
-    return () => clearTimeout(timer);
+    const startTime = Date.now();
+    const duration = 4000;
+    const interval = setInterval(() => {
+      const elapsed = Date.now() - startTime;
+      const remainingPercent = Math.max(0, 100 - (elapsed / duration) * 100);
+      setProgress(remainingPercent);
+      if (elapsed >= duration) {
+        clearInterval(interval);
+        onClose();
+      }
+    }, 25);
+    return () => clearInterval(interval);
   }, [onClose]);
 
+  const config = React.useMemo(() => {
+    switch (toast.type) {
+      case 'success':
+        return {
+          icon: <CheckCircle size={18} style={{ color: '#22c55e' }} />,
+          badgeBg: 'rgba(34, 197, 94, 0.15)',
+          badgeBorder: 'rgba(34, 197, 94, 0.3)',
+          label: 'Success',
+          labelColor: '#4ade80',
+          accentGradient: 'linear-gradient(90deg, #10b981 0%, #22c55e 100%)',
+          glow: '0 8px 24px -4px rgba(34, 197, 94, 0.25)',
+          barColor: '#22c55e'
+        };
+      case 'warning':
+        return {
+          icon: <AlertTriangle size={18} style={{ color: '#f59e0b' }} />,
+          badgeBg: 'rgba(245, 158, 11, 0.15)',
+          badgeBorder: 'rgba(245, 158, 11, 0.3)',
+          label: 'Attention',
+          labelColor: '#fbbf24',
+          accentGradient: 'linear-gradient(90deg, #f59e0b 0%, #d97706 100%)',
+          glow: '0 8px 24px -4px rgba(245, 158, 11, 0.25)',
+          barColor: '#f59e0b'
+        };
+      case 'info':
+      default:
+        return {
+          icon: <Info size={18} style={{ color: '#ff6f00' }} />,
+          badgeBg: 'rgba(255, 111, 0, 0.15)',
+          badgeBorder: 'rgba(255, 111, 0, 0.3)',
+          label: 'Notice',
+          labelColor: '#ff8533',
+          accentGradient: 'linear-gradient(90deg, #ff6f00 0%, #ea580c 100%)',
+          glow: '0 8px 24px -4px rgba(255, 111, 0, 0.25)',
+          barColor: '#ff6f00'
+        };
+    }
+  }, [toast.type]);
+
   return (
-    <div className={`toast ${toast.type === 'success' ? 'success' : ''}`}>
-      {toast.type === 'success' ? <CheckCircle size={18} /> : <Info size={18} />}
-      <span>{toast.message}</span>
-      <button className="clear-filter-btn" style={{ marginLeft: '1rem', color: 'white' }} onClick={onClose}>×</button>
+    <div
+      style={{
+        background: 'rgba(15, 23, 42, 0.95)',
+        backdropFilter: 'blur(16px)',
+        border: '1px solid rgba(255, 255, 255, 0.1)',
+        borderRadius: '16px',
+        boxShadow: `0 16px 36px -6px rgba(0, 0, 0, 0.6), ${config.glow}`,
+        color: '#ffffff',
+        padding: '0.85rem 1rem 0.75rem',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '0.75rem',
+        minWidth: '280px',
+        maxWidth: '420px',
+        position: 'relative',
+        overflow: 'hidden',
+        pointerEvents: 'auto',
+        animation: 'toastSlideIn 0.35s cubic-bezier(0.16, 1, 0.3, 1)'
+      }}
+    >
+      {/* Top Accent Strip */}
+      <div
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          height: '3px',
+          background: config.accentGradient
+        }}
+      />
+
+      {/* Icon Badge */}
+      <div
+        style={{
+          width: '36px',
+          height: '36px',
+          borderRadius: '10px',
+          background: config.badgeBg,
+          border: `1px solid ${config.badgeBorder}`,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0
+        }}
+      >
+        {config.icon}
+      </div>
+
+      {/* Content */}
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div
+          style={{
+            fontSize: '0.65rem',
+            fontWeight: 800,
+            textTransform: 'uppercase',
+            letterSpacing: '0.06em',
+            color: config.labelColor,
+            marginBottom: '0.15rem'
+          }}
+        >
+          {config.label}
+        </div>
+        <div
+          style={{
+            fontSize: '0.84rem',
+            fontWeight: 600,
+            color: '#f8fafc',
+            lineHeight: 1.4,
+            wordBreak: 'break-word'
+          }}
+        >
+          {toast.message}
+        </div>
+      </div>
+
+      {/* Close button */}
+      <button
+        type="button"
+        onClick={onClose}
+        title="Dismiss"
+        style={{
+          background: 'rgba(255, 255, 255, 0.08)',
+          border: 'none',
+          borderRadius: '50%',
+          width: '26px',
+          height: '26px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          color: '#94a3b8',
+          cursor: 'pointer',
+          flexShrink: 0,
+          transition: 'all 0.15s ease'
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.2)';
+          e.currentTarget.style.color = '#ffffff';
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = 'rgba(255, 255, 255, 0.08)';
+          e.currentTarget.style.color = '#94a3b8';
+        }}
+      >
+        <X size={14} />
+      </button>
+
+      {/* Bottom Progress Timer Bar */}
+      <div
+        style={{
+          position: 'absolute',
+          bottom: 0,
+          left: 0,
+          height: '2px',
+          width: `${progress}%`,
+          background: config.barColor,
+          opacity: 0.7,
+          transition: 'width 0.05s linear'
+        }}
+      />
     </div>
   );
 }
@@ -378,6 +544,8 @@ export default function App() {
   const [isMobileFilterOpen, setIsMobileFilterOpen] = React.useState(false);
   const [currentSlide, setCurrentSlide] = React.useState(0);
   const [logoutConfirmType, setLogoutConfirmType] = React.useState<'seller' | 'customer' | null>(null);
+  const [productToDelete, setProductToDelete] = React.useState<Product | null>(null);
+  const [isDeletingProduct, setIsDeletingProduct] = React.useState<boolean>(false);
   const [viewingSellerProduct, setViewingSellerProduct] = React.useState<Product | null>(null);
   const [sellerProducts, setSellerProducts] = React.useState<Product[]>([]);
   const [isLoadingSellerProducts, setIsLoadingSellerProducts] = React.useState<boolean>(false);
@@ -511,13 +679,15 @@ export default function App() {
   const isAnyModalActive = Boolean(
     showAuthModal ||
     showAddEditModal ||
-    logoutConfirmType !== null
+    logoutConfirmType !== null ||
+    productToDelete !== null
   );
 
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && logoutConfirmType) {
-        setLogoutConfirmType(null);
+      if (e.key === 'Escape') {
+        if (logoutConfirmType) setLogoutConfirmType(null);
+        if (productToDelete && !isDeletingProduct) setProductToDelete(null);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -1190,22 +1360,25 @@ export default function App() {
     );
   };
 
-  const handleDeleteListing = async (productId: string) => {
+  const handleDeleteListing = (productId: string) => {
     const target = displayedSellerProducts.find(p => p.id === productId) || products.find(p => p.id === productId);
     if (!target) return;
+    setProductToDelete(target);
+  };
 
-    if (!window.confirm(`Are you sure you want to delete "${target.name}" from your product inventory?`)) {
-      return;
-    }
+  const handleConfirmDeleteProduct = async () => {
+    if (!productToDelete) return;
+    const target = productToDelete;
+    setIsDeletingProduct(true);
 
     const token = localStorage.getItem('mlx_token');
-    setSellerProducts(prev => prev.filter(p => p.id !== productId));
-    dispatch(deleteProduct(productId));
-    triggerToast(`Product listing "${target.name}" deleted successfully.`, 'info');
+    setSellerProducts(prev => prev.filter(p => p.id !== target.id));
+    dispatch(deleteProduct(target.id));
+    triggerToast(`Product listing "${target.name}" removed from inventory.`, 'info');
 
     if (token) {
       try {
-        await deleteProductApi(productId, token);
+        await deleteProductApi(target.id, token);
         fetchSellerProducts();
         if (activeShop?.id) {
           getShopSubscription(activeShop.id).then(subData => {
@@ -1216,6 +1389,8 @@ export default function App() {
         console.warn('Backend product delete sync warning:', err);
       }
     }
+    setIsDeletingProduct(false);
+    setProductToDelete(null);
   };
 
   // Capture Lead & Open Link
@@ -4128,6 +4303,223 @@ export default function App() {
           }
         }}
       />
+
+      {/* --- DELETE PRODUCT CONFIRMATION MODAL (MATCHING MLX THEME) --- */}
+      {productToDelete && (
+        <div
+          className="modal-overlay"
+          onClick={() => !isDeletingProduct && setProductToDelete(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 9999,
+            padding: '1rem'
+          }}
+        >
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#ffffff',
+              borderRadius: '24px',
+              maxWidth: '440px',
+              width: '100%',
+              padding: '2.25rem 2rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.35)',
+              textAlign: 'center',
+              position: 'relative',
+              overflow: 'hidden',
+              border: '1px solid #fed7aa'
+            }}
+          >
+            {/* Top MLX Brand Accent Strip (Red to Orange Gradient) */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '5px',
+                background: 'linear-gradient(90deg, #ef4444 0%, #ea580c 50%, #f59e0b 100%)'
+              }}
+            />
+
+            <button
+              type="button"
+              disabled={isDeletingProduct}
+              onClick={() => setProductToDelete(null)}
+              style={{
+                position: 'absolute',
+                top: '1.1rem',
+                right: '1.1rem',
+                background: '#f1f5f9',
+                border: 'none',
+                borderRadius: '50%',
+                width: '32px',
+                height: '32px',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#64748b',
+                cursor: isDeletingProduct ? 'not-allowed' : 'pointer'
+              }}
+            >
+              <X size={16} />
+            </button>
+
+            {/* Icon Badge */}
+            <div
+              style={{
+                width: '68px',
+                height: '68px',
+                borderRadius: '22px',
+                background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
+                border: '1.5px solid #fca5a5',
+                color: '#dc2626',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0.25rem auto 1.25rem',
+                boxShadow: '0 10px 25px -5px rgba(220, 38, 38, 0.25)'
+              }}
+            >
+              <Trash2 size={30} />
+            </div>
+
+            <h3 style={{ fontSize: '1.3rem', fontWeight: 800, color: '#0f172a', margin: '0 0 0.5rem' }}>
+              Delete Product Listing?
+            </h3>
+
+            {/* Target Product Summary Box */}
+            <div
+              style={{
+                background: '#f8fafc',
+                border: '1px solid #e2e8f0',
+                borderRadius: '14px',
+                padding: '0.75rem 1rem',
+                margin: '1rem 0 1.25rem',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '0.85rem',
+                textAlign: 'left'
+              }}
+            >
+              <div
+                style={{
+                  width: '44px',
+                  height: '44px',
+                  borderRadius: '10px',
+                  background: '#ffffff',
+                  border: '1px solid #cbd5e1',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  overflow: 'hidden',
+                  flexShrink: 0
+                }}
+              >
+                {productToDelete.images && productToDelete.images.length > 0 ? (
+                  <img
+                    src={productToDelete.images[0]}
+                    alt={productToDelete.name}
+                    style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+                  />
+                ) : (
+                  <Smartphone size={22} style={{ color: '#94a3b8' }} />
+                )}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div
+                  style={{
+                    fontSize: '0.9rem',
+                    fontWeight: 700,
+                    color: '#0f172a',
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis'
+                  }}
+                >
+                  {productToDelete.name}
+                </div>
+                <div style={{ fontSize: '0.78rem', color: '#64748b', display: 'flex', gap: '0.5rem', marginTop: '0.15rem' }}>
+                  <span>{productToDelete.brand}</span>
+                  <span>•</span>
+                  <span style={{ fontWeight: 700, color: '#ea580c' }}>₹{productToDelete.price.toLocaleString('en-IN')}</span>
+                </div>
+              </div>
+            </div>
+
+            <p style={{ fontSize: '0.85rem', color: '#64748b', margin: '0 0 1.75rem', lineHeight: 1.5 }}>
+              Are you sure you want to remove this item? Once deleted, buyers will no longer be able to find or inquire about this product in your store directory.
+            </p>
+
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1.2fr', gap: '0.75rem' }}>
+              <button
+                type="button"
+                disabled={isDeletingProduct}
+                onClick={() => setProductToDelete(null)}
+                style={{
+                  padding: '0.75rem 1rem',
+                  borderRadius: '12px',
+                  border: '1px solid #cbd5e1',
+                  background: '#f8fafc',
+                  color: '#334155',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  cursor: isDeletingProduct ? 'not-allowed' : 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = '#f1f5f9')}
+                onMouseLeave={(e) => (e.currentTarget.style.background = '#f8fafc')}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                disabled={isDeletingProduct}
+                onClick={handleConfirmDeleteProduct}
+                style={{
+                  padding: '0.75rem 1rem',
+                  borderRadius: '12px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.45rem',
+                  cursor: isDeletingProduct ? 'not-allowed' : 'pointer',
+                  boxShadow: '0 4px 14px rgba(220, 38, 38, 0.35)',
+                  transition: 'all 0.2s ease',
+                  opacity: isDeletingProduct ? 0.7 : 1
+                }}
+                onMouseEnter={(e) => !isDeletingProduct && (e.currentTarget.style.transform = 'translateY(-1px)')}
+                onMouseLeave={(e) => (e.currentTarget.style.transform = 'translateY(0)')}
+              >
+                {isDeletingProduct ? (
+                  <>
+                    <div style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.4)', borderTopColor: '#fff', borderRadius: '50%', animation: 'spin 0.6s linear infinite' }} />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 size={16} />
+                    <span>Yes, Delete</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* --- LOGOUT CONFIRMATION MODAL (BOTH FOR CUSTOMER AND SELLER) --- */}
       {logoutConfirmType && (

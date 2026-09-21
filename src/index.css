@@ -3629,3 +3629,15 @@ button, input, select, textarea, a, .product-card, .brand-logo, .logo-section, .
     height: 200px !important;
   }
 }
+
+/* --- ENHANCED MLX THEME TOASTER STYLES --- */
+@keyframes toastSlideIn {
+  from {
+    transform: translateX(110%) scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0) scale(1);
+    opacity: 1;
+  }
+}
