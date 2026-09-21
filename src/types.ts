@@ -1,6 +1,7 @@
 export interface SubscriptionPlan {
   price?: number;
   id: string;
+  ownerId?: string;
   name: string;
   description: string;
   productLimit: number;
@@ -25,6 +26,7 @@ export interface Shop {
     plan?: SubscriptionPlan;
   };
   id: string;
+  ownerId?: string;
   name: string;
   ownerName: string;
   phone: string;

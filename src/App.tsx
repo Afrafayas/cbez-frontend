@@ -1204,12 +1204,26 @@ export default function App() {
   };
 
   const handleCallSeller = (product: Product, seller: Shop) => {
+    const isSameUser = Boolean(
+      activeUser?.id &&
+      (seller.ownerId || seller.id) &&
+      (String(activeUser.id).trim().toLowerCase() === String(seller.ownerId || '').trim().toLowerCase() ||
+       String(activeUser.id).trim().toLowerCase() === String(seller.id).trim().toLowerCase())
+    );
+
     logActivity({
       action: 'CALL_CLICK',
-      details: `Call button clicked for product: "${product.name}" (Shop: "${seller.name}", Phone: ${seller.phone || 'N/A'}). Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
+      details: isSameUser
+        ? `Call button clicked for product: "${product.name}" (Self test by owner)`
+        : `Call button clicked for product: "${product.name}" (Shop: "${seller.name}", Phone: ${seller.phone || 'N/A'}). Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
       userId: activeUser?.id,
+      sellerId: seller.ownerId || seller.id,
     });
-    triggerLeadCapture(product, seller, 'call');
+
+    if (!isSameUser) {
+      triggerLeadCapture(product, seller, 'call');
+    }
+
     triggerToast(`📞 Direct Call lead logged! Connecting call with ${seller.name} (${seller.phone})...`, 'success');
     if (seller.phone) {
       window.location.href = `tel:${seller.phone}`;
@@ -1217,10 +1231,20 @@ export default function App() {
   };
 
   const handleWhatsAppSeller = (product: Product, seller: Shop) => {
+    const isSameUser = Boolean(
+      activeUser?.id &&
+      (seller.ownerId || seller.id) &&
+      (String(activeUser.id).trim().toLowerCase() === String(seller.ownerId || '').trim().toLowerCase() ||
+       String(activeUser.id).trim().toLowerCase() === String(seller.id).trim().toLowerCase())
+    );
+
     logActivity({
       action: 'WHATSAPP_CLICK',
-      details: `WhatsApp clicked for product: "${product.name}" (Shop: "${seller.name}"). Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
+      details: isSameUser
+        ? `WhatsApp clicked for product: "${product.name}" (Self test by owner)`
+        : `WhatsApp clicked for product: "${product.name}" (Shop: "${seller.name}"). Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
       userId: activeUser?.id,
+      sellerId: seller.ownerId || seller.id,
     });
     const rawNum = (seller.whatsapp || seller.phone || '').replace(/\D/g, '');
     if (!rawNum) {
@@ -1228,7 +1252,9 @@ export default function App() {
       return;
     }
 
-    triggerLeadCapture(product, seller, 'whatsapp');
+    if (!isSameUser) {
+      triggerLeadCapture(product, seller, 'whatsapp');
+    }
     const cleanPhone = rawNum.length === 10 ? `91${rawNum}` : rawNum;
     const name = activeUser ? activeUser.name : "Customer";
     const text = `Hi ${seller.ownerName || seller.name}, I saw your product "${product.name}" listed for ₹${(product.offerPrice || product.price).toLocaleString('en-IN')} on MLX Market. I am interested in buying it. Is it still available? - Sent by ${name}`;

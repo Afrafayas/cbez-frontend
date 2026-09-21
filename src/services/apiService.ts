@@ -635,6 +635,7 @@ export async function logActivity(data: {
   action: string;
   details?: string;
   userId?: string;
+  sellerId?: string;
 }): Promise<void> {
   try {
     const token = typeof window !== 'undefined' ? localStorage.getItem('mlx_token') : null;

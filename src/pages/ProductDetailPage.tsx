@@ -70,10 +70,20 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   useEffect(() => {
     if (product) {
       const sellerShop = getSellerShop(product.shopId);
+      const isSameUser = Boolean(
+        activeUser?.id &&
+        (sellerShop?.ownerId || sellerShop?.id) &&
+        (String(activeUser.id).trim().toLowerCase() === String(sellerShop.ownerId || '').trim().toLowerCase() ||
+         String(activeUser.id).trim().toLowerCase() === String(sellerShop.id).trim().toLowerCase())
+      );
+
       logActivity({
         action: 'PRODUCT_CLICK',
-        details: `Clicked on product "${product.name}" (ID: ${product.id}, Price: ₹${(product.offerPrice || product.price).toLocaleString('en-IN')}) listed by "${sellerShop?.name || 'Shop'}"`,
+        details: isSameUser
+          ? `Clicked on product "${product.name}" (ID: ${product.id}, Price: ₹${(product.offerPrice || product.price).toLocaleString('en-IN')}) (Self view by owner)`
+          : `Clicked on product "${product.name}" (ID: ${product.id}, Price: ₹${(product.offerPrice || product.price).toLocaleString('en-IN')}) listed by "${sellerShop?.name || 'Shop'}"`,
         userId: activeUser?.id,
+        sellerId: sellerShop?.ownerId || sellerShop?.id,
       });
     }
   }, [product?.id]);

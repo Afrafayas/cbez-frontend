@@ -45,10 +45,20 @@ export const ProductCard: React.FC<ProductCardProps> = ({
       return;
     }
 
+    const isSameUser = Boolean(
+      activeUser?.id &&
+      (seller?.ownerId || seller?.id) &&
+      (String(activeUser.id).trim().toLowerCase() === String(seller.ownerId || '').trim().toLowerCase() ||
+       String(activeUser.id).trim().toLowerCase() === String(seller.id).trim().toLowerCase())
+    );
+
     logActivity({
       action: 'PRODUCT_CLICK',
-      details: `Clicked on product "${product.name}" (ID: ${product.id}, Price: ₹${effectivePrice.toLocaleString('en-IN')}) listed by "${seller?.name || 'Shop'}"`,
+      details: isSameUser
+        ? `Clicked on product "${product.name}" (ID: ${product.id}, Price: ₹${effectivePrice.toLocaleString('en-IN')}) (Self view by owner)`
+        : `Clicked on product "${product.name}" (ID: ${product.id}, Price: ₹${effectivePrice.toLocaleString('en-IN')}) listed by "${seller?.name || 'Shop'}"`,
       userId: activeUser?.id,
+      sellerId: seller?.ownerId || seller?.id,
     });
     dispatch(setSelectedProduct(product));
     navigate(`/product/${product.id}`);
