@@ -5,7 +5,7 @@ import { AuthModal } from './components/AuthModal';
 import { AddEditProductModal } from './components/AddEditProductModal';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { Footer } from './components/Footer';
-import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, reverseGeocodeCoords, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, deleteProductApi } from './services/apiService';
+import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, reverseGeocodeCoords, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, deleteProductApi, getSellerProducts } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import React, { ChangeEvent, FormEvent } from 'react';
 import {
@@ -379,6 +379,47 @@ export default function App() {
   const [currentSlide, setCurrentSlide] = React.useState(0);
   const [logoutConfirmType, setLogoutConfirmType] = React.useState<'seller' | 'customer' | null>(null);
   const [viewingSellerProduct, setViewingSellerProduct] = React.useState<Product | null>(null);
+  const [sellerProducts, setSellerProducts] = React.useState<Product[]>([]);
+  const [isLoadingSellerProducts, setIsLoadingSellerProducts] = React.useState<boolean>(false);
+
+  const fetchSellerProducts = React.useCallback(async () => {
+    if (!activeShop) return;
+    const token = localStorage.getItem('mlx_token');
+    if (!token) return;
+    setIsLoadingSellerProducts(true);
+    try {
+      const mine = await getSellerProducts(token);
+      if (Array.isArray(mine)) {
+        setSellerProducts(mine);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch seller products:', err);
+    } finally {
+      setIsLoadingSellerProducts(false);
+    }
+  }, [activeShop]);
+
+  React.useEffect(() => {
+    if (activeShop) {
+      fetchSellerProducts();
+    } else {
+      setSellerProducts([]);
+    }
+  }, [activeShop?.id, fetchSellerProducts]);
+
+  React.useEffect(() => {
+    if (activeShop && location.pathname === '/seller-dashboard') {
+      fetchSellerProducts();
+    }
+  }, [activeShop, location.pathname, fetchSellerProducts]);
+
+  const displayedSellerProducts = React.useMemo(() => {
+    if (!activeShop) return [];
+    if (sellerProducts.length > 0) {
+      return sellerProducts;
+    }
+    return products.filter(p => p.shopId === activeShop.id || String(p.shopId) === String(activeShop.id));
+  }, [sellerProducts, products, activeShop]);
   const [shopFollowers, setShopFollowers] = React.useState<Array<{ id: string; name: string; email?: string; phone?: string; followedAt: string }>>([]);
   const [shopFollowersCount, setShopFollowersCount] = React.useState<number>(0);
   const [shopSubscriptionUsage, setShopSubscriptionUsage] = React.useState<{
@@ -1139,6 +1180,7 @@ export default function App() {
       isSoldOut: nextSoldOutState,
       stock: nextStock
     };
+    setSellerProducts(prev => prev.map(p => p.id === product.id ? updated : p));
     dispatch(editProduct(updated));
     triggerToast(
       nextSoldOutState
@@ -1149,7 +1191,7 @@ export default function App() {
   };
 
   const handleDeleteListing = async (productId: string) => {
-    const target = products.find(p => p.id === productId);
+    const target = displayedSellerProducts.find(p => p.id === productId) || products.find(p => p.id === productId);
     if (!target) return;
 
     if (!window.confirm(`Are you sure you want to delete "${target.name}" from your product inventory?`)) {
@@ -1157,12 +1199,19 @@ export default function App() {
     }
 
     const token = localStorage.getItem('mlx_token');
+    setSellerProducts(prev => prev.filter(p => p.id !== productId));
     dispatch(deleteProduct(productId));
     triggerToast(`Product listing "${target.name}" deleted successfully.`, 'info');
 
     if (token) {
       try {
         await deleteProductApi(productId, token);
+        fetchSellerProducts();
+        if (activeShop?.id) {
+          getShopSubscription(activeShop.id).then(subData => {
+            if (subData?.usage) setShopSubscriptionUsage(subData.usage);
+          }).catch(() => {});
+        }
       } catch (err: any) {
         console.warn('Backend product delete sync warning:', err);
       }
@@ -2726,7 +2775,7 @@ export default function App() {
               <div className="profile-stats-row">
                 <div className="profile-stat-box">
                   <div className="profile-stat-num">
-                    {products.filter(p => p.shopId === activeShop?.id).length}
+                    {displayedSellerProducts.length}
                   </div>
                   <div className="profile-stat-lbl">Active Listings</div>
                 </div>
@@ -2748,7 +2797,7 @@ export default function App() {
                   productLimit: 10,
                   price: 0
                 };
-                const activeCount = shopSubscriptionUsage?.currentProducts ?? activeShop?.subscriptionUsage?.currentProducts ?? (activeShop ? products.filter(p => p.shopId === activeShop.id).length : 0);
+                const activeCount = shopSubscriptionUsage?.currentProducts ?? activeShop?.subscriptionUsage?.currentProducts ?? displayedSellerProducts.length;
                 const maxLimit = shopSubscriptionUsage?.productLimit ?? activeShop?.subscriptionUsage?.productLimit ?? activePlanObj.productLimit ?? 10;
                 const slotsLeft = shopSubscriptionUsage?.remaining ?? activeShop?.subscriptionUsage?.remaining ?? Math.max(0, maxLimit - activeCount);
                 const isPending = Boolean(activeShop && !activeShop.verified);
@@ -2975,7 +3024,7 @@ export default function App() {
                           My Used Devices Inventory
                         </h3>
                         <span style={{ fontSize: '0.75rem', background: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe', padding: '0.15rem 0.6rem', borderRadius: '20px', fontWeight: 700 }}>
-                          {products.filter(p => p.shopId === activeShop?.id).length} Active Listings
+                          {displayedSellerProducts.length} Active Listings
                         </span>
                       </div>
                       <p style={{ margin: 0, fontSize: '0.82rem', color: '#64748b' }}>
@@ -3006,7 +3055,7 @@ export default function App() {
                   </div>
 
                   {/* Seller Inventory Search & Filter Controls */}
-                  {products.filter(p => p.shopId === activeShop?.id).length > 0 && (
+                  {displayedSellerProducts.length > 0 && (
                     <div
                       style={{
                         display: 'flex',
@@ -3078,7 +3127,7 @@ export default function App() {
 
                   <div className="listings-list">
                     {(() => {
-                      const sellerAllProducts = products.filter(p => p.shopId === activeShop?.id);
+                      const sellerAllProducts = displayedSellerProducts;
                       const filteredSellerProducts = sellerAllProducts.filter(p => {
                         if (!sellerSearchQuery) return true;
                         const q = sellerSearchQuery.toLowerCase();
@@ -3090,6 +3139,25 @@ export default function App() {
                       const startIndex = (sellerListPage - 1) * sellerListPerPage;
                       const endIndex = Math.min(startIndex + sellerListPerPage, totalSellerItems);
                       const paginatedSellerProducts = filteredSellerProducts.slice(startIndex, endIndex);
+
+                      if (isLoadingSellerProducts && displayedSellerProducts.length === 0) {
+                        return (
+                          <div style={{ textAlign: 'center', padding: '3.5rem 1rem', color: '#64748b' }}>
+                            <div style={{
+                              width: '32px',
+                              height: '32px',
+                              margin: '0 auto 1rem auto',
+                              border: '3px solid #e2e8f0',
+                              borderTopColor: '#ea580c',
+                              borderRadius: '50%',
+                              animation: 'spin 0.8s linear infinite'
+                            }} />
+                            <p style={{ fontSize: '0.88rem', fontWeight: 600, color: '#64748b' }}>
+                              Loading your store inventory...
+                            </p>
+                          </div>
+                        );
+                      }
 
                       if (sellerAllProducts.length === 0) {
                         return (
@@ -4049,7 +4117,17 @@ export default function App() {
 <Footer />
 
       {/* --- ADD / EDIT PRODUCT MODAL --- */}
-      <AddEditProductModal onToast={triggerToast} />
+      <AddEditProductModal
+        onToast={triggerToast}
+        onProductSaved={() => {
+          fetchSellerProducts();
+          if (activeShop?.id) {
+            getShopSubscription(activeShop.id).then(subData => {
+              if (subData?.usage) setShopSubscriptionUsage(subData.usage);
+            }).catch(() => {});
+          }
+        }}
+      />
 
       {/* --- LOGOUT CONFIRMATION MODAL (BOTH FOR CUSTOMER AND SELLER) --- */}
       {logoutConfirmType && (

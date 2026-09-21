@@ -9,9 +9,10 @@ import { CompactBrandSelect } from './CompactBrandSelect';
 
 interface AddEditProductModalProps {
   onToast: (msg: string, type?: 'success' | 'info') => void;
+  onProductSaved?: (product?: Product, isEdit?: boolean) => void;
 }
 
-export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToast }) => {
+export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToast, onProductSaved }) => {
   const dispatch = useAppDispatch();
   const { showAddEditModal, productToEdit, items: products, subscriptionPlans, categories: storeCategories } = useAppSelector(state => state.products);
   const activeShop = useAppSelector(state => state.auth.activeShop);
@@ -69,7 +70,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
     status: 'ACTIVE' as const
   };
 
-  const shopProductsCount = activeShop ? products.filter(p => p.shopId === activeShop.id).length : 0;
+  const shopProductsCount = activeShop?.subscriptionUsage?.currentProducts ?? (activeShop ? products.filter(p => p.shopId === activeShop.id).length : 0);
   const remainingSlots = Math.max(0, (currentPlan.productLimit ?? 10) - shopProductsCount);
   const isLimitReached = shopProductsCount >= (currentPlan.productLimit ?? 10);
   const isShopPending = Boolean(activeShop && (!activeShop.verified || activeShop.status === 'PENDING'));
@@ -452,11 +453,13 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
             };
             dispatch(editProduct(finalProduct));
             onToast(`Product "${finalProduct.name}" updated successfully!`, 'success');
+            onProductSaved?.(finalProduct, true);
             dispatch(setShowAddEditModal(false));
           })
           .catch(() => {
             dispatch(editProduct(productPayload));
             onToast(`Product "${productPayload.name}" updated in local session.`, 'success');
+            onProductSaved?.(productPayload, true);
             dispatch(setShowAddEditModal(false));
           })
           .finally(() => {
@@ -465,6 +468,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
       } else {
         dispatch(editProduct(productPayload));
         onToast(`Product "${productPayload.name}" updated successfully!`, 'success');
+        onProductSaved?.(productPayload, true);
         dispatch(setShowAddEditModal(false));
       }
     } else {
@@ -492,6 +496,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
             };
             dispatch(addProduct(finalProduct));
             onToast(`New product "${finalProduct.name}" listed live!`, 'success');
+            onProductSaved?.(finalProduct, false);
             dispatch(setShowAddEditModal(false));
           })
           .catch((err) => {
@@ -503,6 +508,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
       } else {
         dispatch(addProduct(productPayload));
         onToast(`New product "${productPayload.name}" listed live!`, 'success');
+        onProductSaved?.(productPayload, false);
         dispatch(setShowAddEditModal(false));
       }
     }
