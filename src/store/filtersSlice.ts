@@ -29,16 +29,16 @@ const getInitialUserLocation = () => {
         return {
           userLatitude: typeof parsed.latitude === 'number' ? parsed.latitude : null,
           userLongitude: typeof parsed.longitude === 'number' ? parsed.longitude : null,
-          userLocationName: parsed.locationName || 'Kochi',
+          userLocationName: parsed.locationName || 'Select Location',
           radiusKm: typeof parsed.radiusKm === 'number' ? parsed.radiusKm : 100,
         };
       } catch (e) {}
     }
   }
   return {
-    userLatitude: 9.9312,
-    userLongitude: 76.2673,
-    userLocationName: 'Kochi',
+    userLatitude: null,
+    userLongitude: null,
+    userLocationName: 'Select Location',
     radiusKm: 100,
   };
 };
