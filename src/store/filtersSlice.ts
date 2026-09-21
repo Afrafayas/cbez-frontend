@@ -14,7 +14,36 @@ interface FiltersState {
   filterVerifiedOnly: boolean;
   filterMinRating: string;
   sortBy: 'featured' | 'price-asc' | 'price-desc' | 'stock' | 'rating' | 'newest' | 'alphabetical';
+  userLatitude: number | null;
+  userLongitude: number | null;
+  userLocationName: string;
+  radiusKm: number;
 }
+
+const getInitialUserLocation = () => {
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('mlx_user_location');
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        return {
+          userLatitude: typeof parsed.latitude === 'number' ? parsed.latitude : null,
+          userLongitude: typeof parsed.longitude === 'number' ? parsed.longitude : null,
+          userLocationName: parsed.locationName || 'Kochi',
+          radiusKm: typeof parsed.radiusKm === 'number' ? parsed.radiusKm : 100,
+        };
+      } catch (e) {}
+    }
+  }
+  return {
+    userLatitude: 9.9312,
+    userLongitude: 76.2673,
+    userLocationName: 'Kochi',
+    radiusKm: 100,
+  };
+};
+
+const initialLoc = getInitialUserLocation();
 
 const initialState: FiltersState = {
   searchQuery: '',
@@ -30,6 +59,10 @@ const initialState: FiltersState = {
   filterVerifiedOnly: false,
   filterMinRating: '0',
   sortBy: 'featured',
+  userLatitude: initialLoc.userLatitude,
+  userLongitude: initialLoc.userLongitude,
+  userLocationName: initialLoc.userLocationName,
+  radiusKm: initialLoc.radiusKm,
 };
 
 const filtersSlice = createSlice({
@@ -75,6 +108,33 @@ const filtersSlice = createSlice({
     setSortBy(state, action: PayloadAction<'featured' | 'price-asc' | 'price-desc' | 'stock' | 'rating' | 'newest' | 'alphabetical'>) {
       state.sortBy = action.payload;
     },
+    setUserLocation(state, action: PayloadAction<{ latitude: number | null; longitude: number | null; locationName: string; radiusKm?: number }>) {
+      state.userLatitude = action.payload.latitude;
+      state.userLongitude = action.payload.longitude;
+      state.userLocationName = action.payload.locationName;
+      if (action.payload.radiusKm !== undefined) {
+        state.radiusKm = action.payload.radiusKm;
+      }
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('mlx_user_location', JSON.stringify({
+          latitude: action.payload.latitude,
+          longitude: action.payload.longitude,
+          locationName: action.payload.locationName,
+          radiusKm: state.radiusKm,
+        }));
+      }
+    },
+    setRadiusKm(state, action: PayloadAction<number>) {
+      state.radiusKm = action.payload;
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('mlx_user_location', JSON.stringify({
+          latitude: state.userLatitude,
+          longitude: state.userLongitude,
+          locationName: state.userLocationName,
+          radiusKm: action.payload,
+        }));
+      }
+    },
     clearFilters(state) {
       state.searchQuery = '';
       state.searchCategory = 'All Categories';
@@ -107,6 +167,8 @@ export const {
   setFilterVerifiedOnly,
   setFilterMinRating,
   setSortBy,
+  setUserLocation,
+  setRadiusKm,
   clearFilters,
 } = filtersSlice.actions;
 

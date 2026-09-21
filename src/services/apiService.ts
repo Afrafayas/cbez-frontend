@@ -10,6 +10,9 @@ export async function getProducts(params?: {
   city?: string;
   sortBy?: string;
   shopId?: string;
+  lat?: number | null;
+  lng?: number | null;
+  radiusKm?: number;
 }): Promise<Product[]> {
   const query = new URLSearchParams();
   if (params?.search) query.append('search', params.search);
@@ -20,6 +23,9 @@ export async function getProducts(params?: {
   if (params?.city) query.append('city', params.city);
   if (params?.sortBy) query.append('sortBy', params.sortBy);
   if (params?.shopId) query.append('shopId', params.shopId);
+  if (params?.lat !== undefined && params?.lat !== null) query.append('lat', params.lat.toString());
+  if (params?.lng !== undefined && params?.lng !== null) query.append('lng', params.lng.toString());
+  if (params?.radiusKm) query.append('radiusKm', params.radiusKm.toString());
 
   const res = await fetch(`${API_BASE_URL}/products?${query.toString()}`);
   if (!res.ok) throw new Error('Failed to fetch products');

@@ -5,7 +5,7 @@ import { AuthModal } from './components/AuthModal';
 import { AddEditProductModal } from './components/AddEditProductModal';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { Footer } from './components/Footer';
-import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, deleteProductApi } from './services/apiService';
+import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, reverseGeocodeCoords, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, deleteProductApi } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import React, { ChangeEvent, FormEvent } from 'react';
 import {
@@ -274,6 +274,97 @@ export default function App() {
     filters.filterCity,
     filters.sortBy,
   ]);
+
+  // --- LOCATION STATE & HANDLERS ---
+  const [isLocationModalOpen, setIsLocationModalOpen] = React.useState(false);
+  const [customAddressInput, setCustomAddressInput] = React.useState('');
+  const [isLocatingUser, setIsLocatingUser] = React.useState(false);
+
+  // Sync logged in user profile location to Redux state on login/init
+  React.useEffect(() => {
+    if (activeUser && activeUser.latitude && activeUser.longitude) {
+      if (activeUser.latitude !== filters.userLatitude || activeUser.longitude !== filters.userLongitude) {
+        reverseGeocodeCoords(activeUser.latitude, activeUser.longitude)
+          .then(geo => {
+            const name = geo.city || geo.district || geo.formattedAddress || 'My Saved Location';
+            dispatch(setUserLocation({ latitude: activeUser.latitude!, longitude: activeUser.longitude!, locationName: name }));
+          })
+          .catch(() => {
+            dispatch(setUserLocation({ latitude: activeUser.latitude!, longitude: activeUser.longitude!, locationName: 'Saved Profile Location' }));
+          });
+      }
+    }
+  }, [activeUser?.id]);
+
+  const handleSelectLocation = async (lat: number, lng: number, name: string) => {
+    dispatch(setUserLocation({ latitude: lat, longitude: lng, locationName: name }));
+    if (activeUser?.id) {
+      try {
+        const updated = await updateUser(activeUser.id, { latitude: lat, longitude: lng });
+        if (updated) {
+          dispatch(setActiveUser({ ...activeUser, latitude: lat, longitude: lng }));
+        }
+      } catch (err) {
+        console.warn('Failed to update user location profile:', err);
+      }
+    }
+    dispatch(addToast({ id: Date.now(), message: `📍 Location updated to ${name}`, type: 'success' }));
+    setIsLocationModalOpen(false);
+  };
+
+  const handleDetectGPSLocation = () => {
+    if (!navigator.geolocation) {
+      dispatch(addToast({ id: Date.now(), message: 'Geolocation is not supported by your browser', type: 'warning' }));
+      return;
+    }
+    setIsLocatingUser(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const { latitude, longitude } = pos.coords;
+        try {
+          const geo = await reverseGeocodeCoords(latitude, longitude);
+          const name = geo.city || geo.district || geo.formattedAddress || 'GPS Location';
+          await handleSelectLocation(latitude, longitude, name);
+        } catch {
+          await handleSelectLocation(latitude, longitude, 'GPS Location');
+        } finally {
+          setIsLocatingUser(false);
+        }
+      },
+      (err) => {
+        setIsLocatingUser(false);
+        dispatch(addToast({ id: Date.now(), message: `GPS error: ${err.message || 'Unable to get location'}`, type: 'warning' }));
+      },
+      { timeout: 10000, enableHighAccuracy: true }
+    );
+  };
+
+  const handleGeocodeSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!customAddressInput.trim()) return;
+    setIsLocatingUser(true);
+    try {
+      const geo = await geocodeAddress(customAddressInput.trim());
+      await handleSelectLocation(geo.latitude, geo.longitude, geo.formattedAddress || customAddressInput.trim());
+    } catch (err: any) {
+      dispatch(addToast({ id: Date.now(), message: err.message || 'Failed to locate address', type: 'warning' }));
+    } finally {
+      setIsLocatingUser(false);
+    }
+  };
+
+  const PRESET_CITIES = [
+    { name: 'Kochi', lat: 9.9312, lng: 76.2673 },
+    { name: 'Calicut', lat: 11.2588, lng: 75.7804 },
+    { name: 'Trivandrum', lat: 8.5241, lng: 76.9366 },
+    { name: 'Thrissur', lat: 10.5276, lng: 76.2144 },
+    { name: 'Palakkad', lat: 10.7867, lng: 76.6548 },
+    { name: 'Malappuram', lat: 11.0720, lng: 76.0740 },
+    { name: 'Kannur', lat: 11.8745, lng: 75.3704 },
+    { name: 'Kottayam', lat: 9.5916, lng: 76.5222 },
+    { name: 'Kollam', lat: 8.8932, lng: 76.6141 },
+    { name: 'Wayanad', lat: 11.6854, lng: 76.1320 },
+  ];
 
   // --- LOCAL COMPONENT STATES (FOR FORM INPUTS) ---
   const [isSearchFocused, setIsSearchFocused] = React.useState(false);
