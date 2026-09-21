@@ -560,7 +560,7 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
                   style={{
                     padding: '0.75rem 1.25rem',
                     borderRadius: '12px',
-                    background: '#2563eb',
+                    background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', boxShadow: '0 2px 10px rgba(249, 115, 22, 0.3)',
                     color: '#ffffff',
                     fontWeight: 700,
                     fontSize: '0.85rem',

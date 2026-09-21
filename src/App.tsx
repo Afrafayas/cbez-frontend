@@ -238,7 +238,7 @@ export default function App() {
           sortBy: filters.sortBy,
           lat: filters.userLatitude ?? undefined,
           lng: filters.userLongitude ?? undefined,
-          radiusKm: filters.radiusKm || 100,
+          radiusKm: filters.radiusKm || 10,
         });
         const [liveShops, livePlans, liveCats] = await Promise.all([
           getShops().catch(() => []),
@@ -1371,7 +1371,7 @@ export default function App() {
                 background: 'rgba(255, 255, 255, 0.09)',
                 padding: '0.35rem 0.75rem',
                 borderRadius: '10px',
-                border: '1px solid rgba(56, 189, 248, 0.4)',
+                border: '1px solid rgba(249, 115, 22, 0.4)',
                 transition: 'all 0.2s ease',
                 marginLeft: '0.4rem',
                 userSelect: 'none',
@@ -1380,9 +1380,9 @@ export default function App() {
               }}
               title={`Selected Location: ${filters.userLocationName || "None"} (Click to update)`}
             >
-              <MapPin size={15} style={{ color: '#38bdf8', flexShrink: 0 }} />
+              <MapPin size={15} style={{ color: '#f97316', flexShrink: 0 }} />
               <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
-                <span style={{ fontSize: '0.6rem', color: '#38bdf8', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Location</span>
+                <span style={{ fontSize: '0.6rem', color: '#f97316', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Location</span>
                 <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {filters.userLocationName || 'Kochi'}
                 </span>
@@ -3851,8 +3851,8 @@ export default function App() {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: 'rgba(15, 23, 42, 0.75)',
-            backdropFilter: 'blur(8px)',
+            backgroundColor: 'rgba(15, 23, 42, 0.8)',
+            backdropFilter: 'blur(10px)',
             padding: '1rem'
           }}
         >
@@ -3861,34 +3861,58 @@ export default function App() {
             onClick={(e) => e.stopPropagation()}
             style={{
               maxWidth: '480px',
-              width: '90%',
-              borderRadius: '16px',
+              width: '92%',
+              borderRadius: '20px',
               background: '#0f172a',
-              border: '1px solid rgba(255,255,255,0.15)',
+              border: '1px solid rgba(249, 115, 22, 0.25)',
               color: '#ffffff',
-              padding: '1.5rem',
-              boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+              padding: '1.75rem',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 30px rgba(249, 115, 22, 0.1)',
             }}
           >
+            {/* Modal Header */}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
-                <MapPin size={22} style={{ color: '#38bdf8' }} />
-                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#ffffff' }}>Update Location</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
+                <div style={{
+                  padding: '0.5rem',
+                  borderRadius: '12px',
+                  background: 'rgba(249, 115, 22, 0.15)',
+                  color: '#f97316',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}>
+                  <MapPin size={22} />
+                </div>
+                <div>
+                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#ffffff' }}>Update Location</h3>
+                  <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
+                    Products will filter within <strong style={{ color: '#f97316' }}>10 KM</strong> of your area
+                  </p>
+                </div>
               </div>
               <button
                 type="button"
                 onClick={() => setIsLocationModalOpen(false)}
-                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '0.2rem' }}
+                style={{
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: 'none',
+                  color: '#94a3b8',
+                  cursor: 'pointer',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transition: 'all 0.2s ease'
+                }}
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
-            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 0, marginBottom: '1.25rem' }}>
-              Select your location to view products available within <strong>100 KM</strong> of your area.
-            </p>
-
-            {/* GPS Auto Detect Button */}
+            {/* GPS Auto Detect Button (Theme Orange Gradient) */}
             <button
               type="button"
               onClick={handleDetectGPSLocation}
@@ -3898,17 +3922,18 @@ export default function App() {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                gap: '0.6rem',
-                padding: '0.75rem 1rem',
-                borderRadius: '10px',
-                background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
+                gap: '0.65rem',
+                padding: '0.85rem 1rem',
+                borderRadius: '12px',
+                background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
                 color: '#ffffff',
-                fontWeight: 600,
-                fontSize: '0.9rem',
+                fontWeight: 700,
+                fontSize: '0.92rem',
                 border: 'none',
                 cursor: isLocatingUser ? 'wait' : 'pointer',
-                marginBottom: '1.25rem',
-                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
+                marginBottom: '1.35rem',
+                boxShadow: '0 4px 15px rgba(249, 115, 22, 0.35)',
+                transition: 'all 0.2s ease'
               }}
             >
               <MapPin size={18} />
@@ -3916,37 +3941,40 @@ export default function App() {
             </button>
 
             {/* City Preset Pills */}
-            <div style={{ marginBottom: '1.25rem' }}>
-              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            <div style={{ marginBottom: '1.35rem' }}>
+              <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', display: 'block', marginBottom: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 Popular Cities in Kerala
               </label>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
-                {PRESET_CITIES.map(city => (
-                  <button
-                    key={city.name}
-                    type="button"
-                    onClick={() => handleSelectLocation(city.lat, city.lng, city.name)}
-                    style={{
-                      padding: '0.4rem 0.75rem',
-                      borderRadius: '8px',
-                      background: filters.userLocationName === city.name ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255,255,255,0.06)',
-                      border: filters.userLocationName === city.name ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
-                      color: filters.userLocationName === city.name ? '#38bdf8' : '#e2e8f0',
-                      fontSize: '0.82rem',
-                      fontWeight: 500,
-                      cursor: 'pointer',
-                      transition: 'all 0.15s ease',
-                    }}
-                  >
-                    {city.name}
-                  </button>
-                ))}
+                {PRESET_CITIES.map(city => {
+                  const isSelected = filters.userLocationName === city.name;
+                  return (
+                    <button
+                      key={city.name}
+                      type="button"
+                      onClick={() => handleSelectLocation(city.lat, city.lng, city.name)}
+                      style={{
+                        padding: '0.45rem 0.85rem',
+                        borderRadius: '10px',
+                        background: isSelected ? 'rgba(249, 115, 22, 0.2)' : 'rgba(255, 255, 255, 0.06)',
+                        border: isSelected ? '1.5px solid #f97316' : '1px solid rgba(255, 255, 255, 0.12)',
+                        color: isSelected ? '#f97316' : '#e2e8f0',
+                        fontSize: '0.82rem',
+                        fontWeight: isSelected ? 700 : 500,
+                        cursor: 'pointer',
+                        transition: 'all 0.15s ease',
+                      }}
+                    >
+                      {city.name}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
             {/* Address Search Form */}
             <form onSubmit={handleGeocodeSearch}>
-              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', display: 'block', marginBottom: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 SEARCH OTHER TOWN OR AREA (e.g. Kottakkal, Kakkanad)
               </label>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
@@ -3957,27 +3985,31 @@ export default function App() {
                   onChange={(e) => setCustomAddressInput(e.target.value)}
                   style={{
                     flex: 1,
-                    padding: '0.65rem 0.85rem',
-                    borderRadius: '8px',
-                    background: 'rgba(255,255,255,0.06)',
-                    border: '1px solid rgba(255,255,255,0.15)',
+                    padding: '0.75rem 1rem',
+                    borderRadius: '12px',
+                    background: '#1e293b',
+                    border: '1px solid rgba(255, 255, 255, 0.15)',
                     color: '#ffffff',
                     fontSize: '0.85rem',
                     outline: 'none',
+                    transition: 'border 0.2s ease'
                   }}
                 />
                 <button
                   type="submit"
                   disabled={isLocatingUser || !customAddressInput.trim()}
                   style={{
-                    padding: '0.65rem 1rem',
-                    borderRadius: '8px',
-                    background: '#2563eb',
+                    padding: '0.75rem 1.25rem',
+                    borderRadius: '12px',
+                    background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
                     color: '#ffffff',
-                    fontWeight: 600,
+                    fontWeight: 700,
                     fontSize: '0.85rem',
                     border: 'none',
-                    cursor: 'pointer',
+                    cursor: (isLocatingUser || !customAddressInput.trim()) ? 'not-allowed' : 'pointer',
+                    opacity: (isLocatingUser || !customAddressInput.trim()) ? 0.6 : 1,
+                    boxShadow: '0 2px 10px rgba(249, 115, 22, 0.3)',
+                    transition: 'all 0.2s ease'
                   }}
                 >
                   Locate
