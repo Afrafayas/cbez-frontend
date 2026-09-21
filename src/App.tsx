@@ -1350,7 +1350,7 @@ export default function App() {
             </div>
 
             {/* Location Display Widget (Immediately after Logo - Signed-in Users Only) */}
-            {Boolean(activeUser) && (
+            {Boolean(activeUser && !activeShop) && (
             <div 
               className="navbar-location-selector"
               onClick={(e) => {
@@ -3831,7 +3831,25 @@ export default function App() {
 
             {/* --- LOCATION PICKER MODAL --- */}
       {isLocationModalOpen && (
-        <div className="modal-backdrop" onClick={() => setIsLocationModalOpen(false)} style={{ zIndex: 1100 }}>
+        <div 
+          className="modal-backdrop location-modal-fixed-overlay" 
+          onClick={() => setIsLocationModalOpen(false)} 
+          style={{ 
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            inset: 0,
+            zIndex: 99999,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(15, 23, 42, 0.75)',
+            backdropFilter: 'blur(8px)',
+            padding: '1rem'
+          }}
+        >
           <div
             className="modal-content location-picker-modal"
             onClick={(e) => e.stopPropagation()}
@@ -3849,7 +3867,7 @@ export default function App() {
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
                 <MapPin size={22} style={{ color: '#38bdf8' }} />
-                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#ffffff' }}>Select Location</h3>
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#ffffff' }}>Update Location</h3>
               </div>
               <button
                 type="button"

@@ -153,8 +153,8 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
           </div>
         </div>
 
-        {/* Location Display Widget (Immediately after Logo - Signed in users only) */}
-        {Boolean(activeUser) && (
+        {/* Location Display Widget (Immediately after Logo - Customer Users Only) */}
+        {Boolean(activeUser && !activeShop) && (
         <div 
           className="navbar-location-selector"
           onClick={() => setShowLocationModal(true)}
@@ -428,12 +428,16 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
       {showLocationModal && (
         <div style={{
           position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
           inset: 0,
-          zIndex: 9999,
+          zIndex: 99999,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          backgroundColor: 'rgba(0, 0, 0, 0.75)',
+          backgroundColor: 'rgba(15, 23, 42, 0.75)',
           backdropFilter: 'blur(8px)',
           padding: '1rem'
         }}>
@@ -469,7 +473,7 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
                   <MapPin size={20} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#ffffff' }}>Select Your Location</h3>
+                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#ffffff' }}>Update Location</h3>
                   <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>Products will filter within 100 KM of your area</p>
                 </div>
               </div>
