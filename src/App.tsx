@@ -236,6 +236,9 @@ export default function App() {
           maxPrice: filters.filterMaxPrice,
           city: filters.filterCity,
           sortBy: filters.sortBy,
+          lat: filters.userLatitude ?? undefined,
+          lng: filters.userLongitude ?? undefined,
+          radiusKm: filters.radiusKm || 100,
         });
         const [liveShops, livePlans, liveCats] = await Promise.all([
           getShops().catch(() => []),
@@ -274,6 +277,9 @@ export default function App() {
     filters.filterMaxPrice,
     filters.filterCity,
     filters.sortBy,
+    filters.userLatitude,
+    filters.userLongitude,
+    filters.radiusKm,
   ]);
 
   // --- LOCATION STATE & HANDLERS ---
