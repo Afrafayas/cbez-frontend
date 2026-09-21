@@ -82,13 +82,13 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setActiveImgIdx(0);
+  }, [id]);
+
+  useEffect(() => {
     if (product) {
       dispatch(setSelectedProduct(product));
     }
-    return () => {
-      dispatch(setSelectedProduct(null));
-    };
-  }, [id, product, dispatch]);
+  }, [product?.id, dispatch]);
 
   // Load Follow status for shop
   useEffect(() => {
