@@ -20,7 +20,7 @@ export async function getProducts(params?: {
   if (params?.brand && params.brand !== 'all') query.append('brand', params.brand);
   if (params?.minPrice) query.append('minPrice', params.minPrice.toString());
   if (params?.maxPrice) query.append('maxPrice', params.maxPrice.toString());
-  if (params?.city) query.append('city', params.city);
+  if (params?.city && params.city !== 'all' && params.city !== 'All Cities' && params.city !== 'All') query.append('city', params.city);
   if (params?.sortBy) query.append('sortBy', params.sortBy);
   if (params?.shopId) query.append('shopId', params.shopId);
   if (params?.lat !== undefined && params?.lat !== null) query.append('lat', params.lat.toString());
