@@ -474,7 +474,7 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
                 </div>
                 <div>
                   <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#ffffff' }}>Update Location</h3>
-                  <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>Products will filter within 100 KM of your area</p>
+                  <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>Products will filter within 10 KM of your area</p>
                 </div>
               </div>
               <button
@@ -532,7 +532,7 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
 
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
                 <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }}></div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>OR SEARCH CITY / ADDRESS</span>
+                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>OR SEARCH OTHER TOWN / AREA (E.G. KOTTAKKAL)</span>
                 <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }}></div>
               </div>
 
@@ -540,7 +540,7 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
               <form onSubmit={handleManualLocationSubmit} style={{ display: 'flex', gap: '0.5rem' }}>
                 <input
                   type="text"
-                  placeholder="Enter city or area (e.g. Kochi, Kozhikode)..."
+                  placeholder="Type any town (e.g. Kottakkal, Kakkanad)..."
                   value={locationInput}
                   onChange={(e) => setLocationInput(e.target.value)}
                   style={{
@@ -569,7 +569,7 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
                     opacity: (isGeocoding || !locationInput.trim()) ? 0.6 : 1
                   }}
                 >
-                  {isGeocoding ? 'Resolving...' : 'Set'}
+                  {isGeocoding ? 'Resolving...' : 'Locate Area'}
                 </button>
               </form>
 

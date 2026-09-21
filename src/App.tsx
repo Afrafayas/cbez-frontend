@@ -3947,12 +3947,12 @@ export default function App() {
             {/* Address Search Form */}
             <form onSubmit={handleGeocodeSearch}>
               <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Search City or Address
+                SEARCH OTHER TOWN OR AREA (e.g. Kottakkal, Kakkanad)
               </label>
               <div style={{ display: 'flex', gap: '0.5rem' }}>
                 <input
                   type="text"
-                  placeholder="Enter city or area (e.g. Kakkanad, Kochi)"
+                  placeholder="Type any town (e.g. Kottakkal, Kakkanad)..."
                   value={customAddressInput}
                   onChange={(e) => setCustomAddressInput(e.target.value)}
                   style={{
