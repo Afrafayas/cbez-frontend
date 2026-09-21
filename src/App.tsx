@@ -75,6 +75,7 @@ import {
   setFilterVerifiedOnly,
   setFilterMinRating,
   setSortBy,
+  setUserLocation,
   clearFilters
 } from './store/filtersSlice';
 import {
@@ -308,13 +309,13 @@ export default function App() {
         console.warn('Failed to update user location profile:', err);
       }
     }
-    dispatch(addToast({ id: Date.now(), message: `📍 Location updated to ${name}`, type: 'success' }));
+    dispatch(addToast({ message: `📍 Location updated to ${name}`, type: 'success' }));
     setIsLocationModalOpen(false);
   };
 
   const handleDetectGPSLocation = () => {
     if (!navigator.geolocation) {
-      dispatch(addToast({ id: Date.now(), message: 'Geolocation is not supported by your browser', type: 'warning' }));
+      dispatch(addToast({ message: 'Geolocation is not supported by your browser', type: 'warning' }));
       return;
     }
     setIsLocatingUser(true);
@@ -333,7 +334,7 @@ export default function App() {
       },
       (err) => {
         setIsLocatingUser(false);
-        dispatch(addToast({ id: Date.now(), message: `GPS error: ${err.message || 'Unable to get location'}`, type: 'warning' }));
+        dispatch(addToast({ message: `GPS error: ${err.message || 'Unable to get location'}`, type: 'warning' }));
       },
       { timeout: 10000, enableHighAccuracy: true }
     );
@@ -347,7 +348,7 @@ export default function App() {
       const geo = await geocodeAddress(customAddressInput.trim());
       await handleSelectLocation(geo.latitude, geo.longitude, geo.formattedAddress || customAddressInput.trim());
     } catch (err: any) {
-      dispatch(addToast({ id: Date.now(), message: err.message || 'Failed to locate address', type: 'warning' }));
+      dispatch(addToast({ message: err.message || 'Failed to locate address', type: 'warning' }));
     } finally {
       setIsLocatingUser(false);
     }
@@ -3792,7 +3793,142 @@ export default function App() {
       />
 
 
-      <Footer />
+            {/* --- LOCATION PICKER MODAL --- */}
+      {isLocationModalOpen && (
+        <div className="modal-backdrop" onClick={() => setIsLocationModalOpen(false)} style={{ zIndex: 1100 }}>
+          <div
+            className="modal-content location-picker-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              maxWidth: '480px',
+              width: '90%',
+              borderRadius: '16px',
+              background: '#0f172a',
+              border: '1px solid rgba(255,255,255,0.15)',
+              color: '#ffffff',
+              padding: '1.5rem',
+              boxShadow: '0 20px 40px rgba(0,0,0,0.5)',
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+                <MapPin size={22} style={{ color: '#38bdf8' }} />
+                <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 700, color: '#ffffff' }}>Select Location</h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsLocationModalOpen(false)}
+                style={{ background: 'transparent', border: 'none', color: '#94a3b8', cursor: 'pointer', padding: '0.2rem' }}
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <p style={{ fontSize: '0.85rem', color: '#94a3b8', marginTop: 0, marginBottom: '1.25rem' }}>
+              Select your location to view products available within <strong>100 KM</strong> of your area.
+            </p>
+
+            {/* GPS Auto Detect Button */}
+            <button
+              type="button"
+              onClick={handleDetectGPSLocation}
+              disabled={isLocatingUser}
+              style={{
+                width: '100%',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.6rem',
+                padding: '0.75rem 1rem',
+                borderRadius: '10px',
+                background: 'linear-gradient(135deg, #0284c7 0%, #2563eb 100%)',
+                color: '#ffffff',
+                fontWeight: 600,
+                fontSize: '0.9rem',
+                border: 'none',
+                cursor: isLocatingUser ? 'wait' : 'pointer',
+                marginBottom: '1.25rem',
+                boxShadow: '0 4px 14px rgba(37, 99, 235, 0.35)',
+              }}
+            >
+              <MapPin size={18} />
+              <span>{isLocatingUser ? 'Detecting Location...' : 'Use My Current Location (GPS)'}</span>
+            </button>
+
+            {/* City Preset Pills */}
+            <div style={{ marginBottom: '1.25rem' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Popular Cities in Kerala
+              </label>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
+                {PRESET_CITIES.map(city => (
+                  <button
+                    key={city.name}
+                    type="button"
+                    onClick={() => handleSelectLocation(city.lat, city.lng, city.name)}
+                    style={{
+                      padding: '0.4rem 0.75rem',
+                      borderRadius: '8px',
+                      background: filters.userLocationName === city.name ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255,255,255,0.06)',
+                      border: filters.userLocationName === city.name ? '1px solid #38bdf8' : '1px solid rgba(255,255,255,0.1)',
+                      color: filters.userLocationName === city.name ? '#38bdf8' : '#e2e8f0',
+                      fontSize: '0.82rem',
+                      fontWeight: 500,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s ease',
+                    }}
+                  >
+                    {city.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Address Search Form */}
+            <form onSubmit={handleGeocodeSearch}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#64748b', display: 'block', marginBottom: '0.5rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                Search City or Address
+              </label>
+              <div style={{ display: 'flex', gap: '0.5rem' }}>
+                <input
+                  type="text"
+                  placeholder="Enter city or area (e.g. Kakkanad, Kochi)"
+                  value={customAddressInput}
+                  onChange={(e) => setCustomAddressInput(e.target.value)}
+                  style={{
+                    flex: 1,
+                    padding: '0.65rem 0.85rem',
+                    borderRadius: '8px',
+                    background: 'rgba(255,255,255,0.06)',
+                    border: '1px solid rgba(255,255,255,0.15)',
+                    color: '#ffffff',
+                    fontSize: '0.85rem',
+                    outline: 'none',
+                  }}
+                />
+                <button
+                  type="submit"
+                  disabled={isLocatingUser || !customAddressInput.trim()}
+                  style={{
+                    padding: '0.65rem 1rem',
+                    borderRadius: '8px',
+                    background: '#2563eb',
+                    color: '#ffffff',
+                    fontWeight: 600,
+                    fontSize: '0.85rem',
+                    border: 'none',
+                    cursor: 'pointer',
+                  }}
+                >
+                  Locate
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+<Footer />
 
       {/* --- ADD / EDIT PRODUCT MODAL --- */}
       <AddEditProductModal onToast={triggerToast} />

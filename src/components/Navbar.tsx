@@ -7,8 +7,7 @@ import {
   setFilterCity, 
   setSelectedCategory, 
   setFilterMaxBudget,
-  setUserLocation,
-  setRadiusKm
+  setUserLocation
 } from '../store/filtersSlice';
 import { setAuthRole, setAuthTab, setShowAuthModal, setActiveShop, setActiveUser } from '../store/authSlice';
 import { setDashboardTab } from '../store/uiSlice';
@@ -27,7 +26,7 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
   const navigate = useNavigate();
   const location = useLocation();
 
-  const { searchQuery, userLocationName, userLatitude, userLongitude, radiusKm } = useAppSelector(state => state.filters);
+  const { searchQuery, userLocationName, radiusKm } = useAppSelector(state => state.filters);
   const { activeShop, activeUser } = useAppSelector(state => state.auth);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
@@ -97,7 +96,7 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
           setIsDetectingLocation(false);
         }
       },
-      (error) => {
+      () => {
         setIsDetectingLocation(false);
         onToast('Unable to retrieve GPS location. Please select a city manually.', 'info');
       },
