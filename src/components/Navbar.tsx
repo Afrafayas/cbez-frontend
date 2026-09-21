@@ -171,12 +171,12 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
             marginLeft: '0.2rem',
             userSelect: 'none'
           }}
-          title="Click to Change Location"
+          title={`Selected Location: ${userLocationName || "None"} (Click to update)`}
         >
           <MapPin size={15} style={{ color: '#f97316', flexShrink: 0 }} />
           <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
             <span style={{ fontSize: '0.62rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Location</span>
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', maxWidth: '110px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
               {userLocationName || 'Kochi'}
             </span>
           </div>

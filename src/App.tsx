@@ -1372,12 +1372,12 @@ export default function App() {
                 backdropFilter: 'blur(8px)',
                 boxShadow: '0 2px 8px rgba(0, 0, 0, 0.18)'
               }}
-              title="Click to Change Location"
+              title={`Selected Location: ${filters.userLocationName || "None"} (Click to update)`}
             >
               <MapPin size={15} style={{ color: '#38bdf8', flexShrink: 0 }} />
               <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
                 <span style={{ fontSize: '0.6rem', color: '#38bdf8', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Location</span>
-                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', maxWidth: '110px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                   {filters.userLocationName || 'Kochi'}
                 </span>
               </div>
