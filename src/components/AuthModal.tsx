@@ -733,7 +733,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 <MessageCircle size={30} color="#ffffff" />
               </div>
               <h2 style={{ fontSize: '1.45rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
-                Login
+                {authRole === 'seller' ? 'Dealer Login' : 'Customer Login'}
               </h2>
               <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '0.4rem', lineHeight: '1.4' }}>
                 Enter your WhatsApp mobile number to continue
@@ -791,7 +791,50 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 )}
               </button>
 
-
+              {/* Login as Dealer / Customer Switch Link */}
+              <div style={{ textAlign: 'center', marginTop: '1.25rem', paddingTop: '0.85rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                {authRole === 'customer' ? (
+                  <button
+                    type="button"
+                    onClick={() => dispatch(setAuthRole('seller'))}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#ff9e40',
+                      fontSize: '0.82rem',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      fontWeight: 600,
+                      padding: 0
+                    }}
+                  >
+                    <span>Login as Dealer</span>
+                    <ArrowRight size={14} />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => dispatch(setAuthRole('customer'))}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#94a3b8',
+                      fontSize: '0.82rem',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem',
+                      fontWeight: 600,
+                      padding: 0
+                    }}
+                  >
+                    <ArrowLeft size={14} />
+                    <span>Login as Customer</span>
+                  </button>
+                )}
+              </div>
             </form>
           </div>
         )}
@@ -978,7 +1021,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 {isSeller ? <Store size={28} color="#ffffff" /> : <User size={28} color="#ffffff" />}
               </div>
               <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
-                {isSeller ? 'Register Seller Shop' : 'Create Customer Account'}
+                {isSeller ? 'Register Dealer Shop' : 'Create Customer Account'}
               </h2>
               <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.3rem' }}>
                 {isSeller ? 'Trusted Kerala Used Electronics Marketplace' : 'Buy verified used gadgets directly from local stores'}
