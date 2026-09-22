@@ -108,12 +108,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
     }
   }, [activeShop, activeUser, resetAllForms]);
 
-  // Scroll modal to top whenever authStep changes
+  // Scroll modal to top whenever authStep or authRole changes
   useEffect(() => {
     if (modalContentRef.current) {
       modalContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
     }
-  }, [authStep]);
+  }, [authStep, authRole]);
 
   // Countdown timer for resending OTP
   useEffect(() => {
@@ -826,6 +826,67 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 </button>
               </div>
             </form>
+
+            {/* SWITCH BETWEEN CUSTOMER AND SELLER (OLD FORM STYLE) */}
+            <div style={{
+              marginTop: '1.25rem',
+              paddingTop: '1rem',
+              borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+              textAlign: 'center',
+            }}>
+              {authRole === 'customer' ? (
+                <div>
+                  <span style={{ fontSize: '0.82rem', color: '#94a3b8', display: 'block', marginBottom: '0.45rem', fontWeight: 500 }}>
+                    Are you a Shop Owner?
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => dispatch(setAuthRole('seller'))}
+                    style={{
+                      background: 'rgba(255, 111, 0, 0.12)',
+                      border: '1px solid rgba(255, 111, 0, 0.4)',
+                      color: '#ff9e40',
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                      padding: '0.6rem 1.1rem',
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 4px 12px rgba(255, 111, 0, 0.12)'
+                    }}
+                  >
+                    <Store size={16} />
+                    <span>Partner Sign In / Register Here</span>
+                    <ArrowRight size={15} />
+                  </button>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => dispatch(setAuthRole('customer'))}
+                  style={{
+                    background: '#0f172a',
+                    border: '1px solid #334155',
+                    color: '#cbd5e1',
+                    fontWeight: 600,
+                    fontSize: '0.82rem',
+                    padding: '0.5rem 1rem',
+                    borderRadius: '10px',
+                    cursor: 'pointer',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.45rem',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  <User size={15} />
+                  <span>Switch back to Customer Sign In</span>
+                </button>
+              )}
+            </div>
           </div>
         )}
 
@@ -1400,6 +1461,72 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 )}
               </button>
             </form>
+
+            {/* SWITCH BETWEEN CUSTOMER AND SELLER REGISTRATION (OLD FORM STYLE) */}
+            <div style={{
+              marginTop: '1.5rem',
+              paddingTop: '1.1rem',
+              borderTop: '1px solid rgba(255, 255, 255, 0.08)',
+              textAlign: 'center',
+            }}>
+              {authRole === 'customer' ? (
+                <div>
+                  <span style={{ fontSize: '0.82rem', color: '#94a3b8', display: 'block', marginBottom: '0.45rem', fontWeight: 500 }}>
+                    Are you a Shop Owner / Store Seller?
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => dispatch(setAuthRole('seller'))}
+                    style={{
+                      background: 'rgba(255, 111, 0, 0.12)',
+                      border: '1px solid rgba(255, 111, 0, 0.4)',
+                      color: '#ff9e40',
+                      fontWeight: 700,
+                      fontSize: '0.85rem',
+                      padding: '0.6rem 1.1rem',
+                      borderRadius: '12px',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.5rem',
+                      transition: 'all 0.2s ease',
+                      boxShadow: '0 4px 12px rgba(255, 111, 0, 0.12)'
+                    }}
+                  >
+                    <Store size={16} />
+                    <span>Register as Seller / Store Partner</span>
+                    <ArrowRight size={15} />
+                  </button>
+                </div>
+              ) : (
+                <div>
+                  <span style={{ fontSize: '0.82rem', color: '#94a3b8', display: 'block', marginBottom: '0.45rem', fontWeight: 500 }}>
+                    Looking to buy or browse gadgets?
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => dispatch(setAuthRole('customer'))}
+                    style={{
+                      background: '#0f172a',
+                      border: '1px solid #334155',
+                      color: '#cbd5e1',
+                      fontWeight: 600,
+                      fontSize: '0.82rem',
+                      padding: '0.5rem 1rem',
+                      borderRadius: '10px',
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.45rem',
+                      transition: 'all 0.2s ease',
+                    }}
+                  >
+                    <User size={15} />
+                    <span>Switch back to Customer Registration</span>
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
         )}
 
