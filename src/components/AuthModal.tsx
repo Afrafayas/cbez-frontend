@@ -70,6 +70,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [otpCountdown, setOtpCountdown] = useState(0);
   const [isExistingAccount, setIsExistingAccount] = useState<boolean | null>(null);
+  const [otpHasError, setOtpHasError] = useState(false);
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
   // Legacy login state
@@ -87,8 +88,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
     setAuthStep('phone');
     setOtpPhone('+91 ');
     setOtpDigits(['', '', '', '', '', '']);
+      setOtpHasError(false);
     setOtpCountdown(0);
     setIsExistingAccount(null);
+    setOtpHasError(false);
   }, []);
 
   // Reset forms every time showAuthModal opens (becomes true)
@@ -164,9 +167,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   };
 
   // --- STEP 2: VERIFY OTP HANDLER ---
-  const handleVerifyOtp = async (e?: FormEvent) => {
+  const handleVerifyOtp = async (e?: FormEvent, customCode?: string) => {
     if (e) e.preventDefault();
-    const code = otpDigits.join('').trim();
+    const code = (customCode || otpDigits.join('')).trim();
     if (code.length !== 6) {
       onToast('Please enter the full 6-digit OTP code received on WhatsApp', 'info');
       return;
@@ -239,14 +242,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         setAuthStep('details');
       }
     } catch (err: any) {
-      onToast(err.message || 'Invalid or expired OTP. Please try again.', 'info');
+      setOtpHasError(true);
+      onToast(err.message || 'Invalid or expired OTP. Please check and try again.', 'info');
+      setTimeout(() => otpInputRefs.current[0]?.focus(), 100);
     } finally {
       setIsVerifyingOtp(false);
     }
   };
 
-  // Handle individual OTP digit input
+  // Handle OTP paste (Step 2)
+  const handleOtpPaste = (e: React.ClipboardEvent<HTMLInputElement>) => {
+    e.preventDefault();
+    const pasted = e.clipboardData.getData('text').replace(/[^0-9]/g, '').slice(0, 6);
+    if (!pasted) return;
+    setOtpHasError(false);
+    const copy = ['', '', '', '', '', ''];
+    for (let i = 0; i < pasted.length; i++) {
+      copy[i] = pasted[i];
+    }
+    setOtpDigits(copy);
+    const nextIdx = Math.min(pasted.length, 5);
+    otpInputRefs.current[nextIdx]?.focus();
+    if (pasted.length === 6) {
+      handleVerifyOtp(undefined, pasted);
+    }
+  };
+
+  // Handle individual OTP digit input (Step 2)
   const handleOtpDigitChange = (index: number, val: string) => {
+    setOtpHasError(false);
     const cleaned = val.replace(/[^0-9]/g, '');
     if (!cleaned) {
       const copy = [...otpDigits];
@@ -262,8 +286,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         copy[index + i] = cleaned[i];
       }
       setOtpDigits(copy);
+      const fullPasted = copy.join('');
       const nextIndex = Math.min(index + cleaned.length, 5);
       otpInputRefs.current[nextIndex]?.focus();
+      if (fullPasted.length === 6) {
+        handleVerifyOtp(undefined, fullPasted);
+      }
       return;
     }
 
@@ -273,12 +301,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
 
     if (index < 5 && cleaned) {
       otpInputRefs.current[index + 1]?.focus();
+    } else if (index === 5 && cleaned) {
+      const fullCode = copy.join('');
+      if (fullCode.length === 6) {
+        handleVerifyOtp(undefined, fullCode);
+      }
     }
   };
 
   const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
+    if (e.key === 'Backspace') {
+      if (!otpDigits[index] && index > 0) {
+        otpInputRefs.current[index - 1]?.focus();
+      }
+    } else if (e.key === 'ArrowLeft' && index > 0) {
       otpInputRefs.current[index - 1]?.focus();
+    } else if (e.key === 'ArrowRight' && index < 5) {
+      otpInputRefs.current[index + 1]?.focus();
     }
   };
 
@@ -919,8 +958,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
             </div>
 
             <form onSubmit={handleVerifyOtp} className="modal-form">
-              {/* 6-DIGIT OTP INPUTS */}
-              <div style={{ display: 'flex', gap: '0.45rem', justifyContent: 'center', marginBottom: '1.25rem' }}>
+              {/* 6-DIGIT OTP INPUTS (STEP 2) */}
+              <div 
+                style={{ 
+                  display: 'flex', 
+                  gap: '0.48rem', 
+                  justifyContent: 'center', 
+                  marginBottom: '1.25rem',
+                  padding: '0.5rem 0'
+                }}
+              >
                 {otpDigits.map((digit, idx) => (
                   <input
                     key={idx}
@@ -928,25 +975,38 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                     type="text"
                     inputMode="numeric"
                     maxLength={1}
+                    autoComplete="one-time-code"
                     value={digit}
+                    onPaste={handleOtpPaste}
                     onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
                     onKeyDown={(e) => handleOtpKeyDown(idx, e)}
                     style={{
-                      width: '46px',
-                      height: '54px',
+                      width: '48px',
+                      height: '56px',
                       textAlign: 'center',
-                      fontSize: '1.4rem',
+                      fontSize: '1.45rem',
                       fontWeight: 800,
-                      background: 'rgba(255, 255, 255, 0.06)',
-                      border: digit ? '2px solid #10b981' : '1.5px solid rgba(255, 255, 255, 0.15)',
-                      borderRadius: '12px',
+                      background: otpHasError ? 'rgba(239, 68, 68, 0.12)' : 'rgba(255, 255, 255, 0.06)',
+                      border: otpHasError 
+                        ? '2px solid #ef4444' 
+                        : digit 
+                        ? '2px solid #10b981' 
+                        : '1.5px solid rgba(255, 255, 255, 0.16)',
+                      borderRadius: '14px',
                       color: '#ffffff',
                       outline: 'none',
-                      transition: 'border 0.2s ease'
+                      boxShadow: digit ? '0 0 12px rgba(16, 185, 129, 0.25)' : 'none',
+                      transition: 'all 0.2s ease'
                     }}
                   />
                 ))}
               </div>
+
+              {otpHasError && (
+                <div style={{ textAlign: 'center', color: '#f87171', fontSize: '0.78rem', marginBottom: '1rem', fontWeight: 600 }}>
+                  ⚠️ Invalid or expired OTP. Please check the code received on WhatsApp.
+                </div>
+              )}
 
               {/* ACTION: VERIFY OTP */}
               <button
