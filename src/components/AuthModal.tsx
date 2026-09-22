@@ -3,7 +3,6 @@ import { X, Loader2, Store, ArrowRight, User, MapPin, Search, CheckCircle2, Mess
 import { useAppDispatch, useAppSelector } from '../store';
 import { 
   setShowAuthModal, 
-   
   setAuthRole, 
   setActiveUser, 
   setActiveShop 
@@ -60,6 +59,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const { showAuthModal, authRole, activeShop, activeUser } = useAppSelector(state => state.auth);
   const { subscriptionPlans } = useAppSelector(state => state.products);
 
+  const modalContentRef = useRef<HTMLDivElement>(null);
+
   // Flow step: 'phone' (Step 1), 'otp' (Step 2), 'details' (Step 4), 'legacy' (password login fallback)
   const [authStep, setAuthStep] = useState<'phone' | 'otp' | 'details' | 'legacy'>('phone');
   
@@ -73,7 +74,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const [otpHasError, setOtpHasError] = useState(false);
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
-  // Legacy login state
+  // Registration & Legacy login state
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -88,7 +89,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
     setAuthStep('phone');
     setOtpPhone('+91 ');
     setOtpDigits(['', '', '', '', '', '']);
-      setOtpHasError(false);
     setOtpCountdown(0);
     setIsExistingAccount(null);
     setOtpHasError(false);
@@ -107,6 +107,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
       resetAllForms();
     }
   }, [activeShop, activeUser, resetAllForms]);
+
+  // Scroll modal to top whenever authStep changes
+  useEffect(() => {
+    if (modalContentRef.current) {
+      modalContentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [authStep]);
 
   // Countdown timer for resending OTP
   useEffect(() => {
@@ -128,6 +135,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const handleSendOtp = async (e?: FormEvent) => {
     if (e) e.preventDefault();
     const rawDigits = otpPhone.replace(/[^0-9]/g, '');
+    
     if (!rawDigits || rawDigits.length < 9) {
       onToast('Please enter a valid mobile number', 'info');
       return;
@@ -143,6 +151,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
       setIsExistingAccount(Boolean(res.isExistingUser));
       setOtpCountdown(30);
       setOtpDigits(['', '', '', '', '', '']);
+      setOtpHasError(false);
       setAuthStep('otp');
       onToast(res.message || 'OTP sent successfully to your WhatsApp number!', 'success');
 
@@ -177,6 +186,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
 
     try {
       setIsVerifyingOtp(true);
+      setOtpHasError(false);
       const res = await verifyOtpApi({
         phone: otpPhone.trim(),
         otp: code,
@@ -196,8 +206,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
             id: userObj?.id || `shop-${Date.now()}`,
             name: userObj?.name || 'Seller Shop',
             ownerName: userObj?.name || 'Shop Owner',
-            phone: userObj?.phone || `+91 ${cleanDigits}`,
-            whatsapp: userObj?.phone || cleanDigits,
+            phone: userObj?.phone || otpPhone.trim(),
+            whatsapp: userObj?.phone || otpPhone.trim(),
             address: 'Kerala Store',
             city: 'Kochi',
             category: 'Mobiles & Tablets',
@@ -218,7 +228,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
             id: userObj?.id || `user-${Date.now()}`,
             name: userObj?.name || 'Customer User',
             email: userObj?.email || `${cleanDigits}@cbez.in`,
-            phone: userObj?.phone || `+91 ${cleanDigits}`,
+            phone: userObj?.phone || otpPhone.trim(),
             latitude: userObj?.latitude ?? null,
             longitude: userObj?.longitude ?? null,
           };
@@ -232,13 +242,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         return;
       }
 
-      // Step 4: If NOT an existing user, transition to details collecting page
+      // Step 4: If NOT an existing user, transition to the original registration form
       if (res.isNewUser) {
-        onToast('Phone number verified! Please complete your profile details.', 'success');
+        onToast('Phone number verified! Please complete your registration details.', 'success');
         setRegForm(prev => ({
           ...prev,
-          phone: `+91 ${cleanDigits}`,
-          whatsapp: `+91 ${cleanDigits}`,
+          phone: otpPhone.trim(),
+          whatsapp: otpPhone.trim(),
         }));
         setAuthStep('details');
       }
@@ -466,18 +476,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
 
   if (!showAuthModal) return null;
 
-  // --- STEP 4 / LEGACY REGISTRATION SUBMIT HANDLER ---
+  // --- STEP 4: ORIGINAL REGISTRATION SUBMIT HANDLER ---
   const handleRegSubmit = async (e: FormEvent) => {
     e.preventDefault();
+
+    if (!regForm.email) {
+      onToast('Email address is required', 'info');
+      return;
+    }
 
     try {
       setIsSubmitting(true);
       if (authRole === 'customer') {
         const resData = await registerUser({
-          email: regForm.email || undefined,
-          password: regForm.password || undefined,
+          email: regForm.email,
+          password: regForm.password || 'cbez_otp_pass',
           name: regForm.name || 'Customer User',
-          phone: regForm.phone || otpPhone,
+          phone: regForm.phone || otpPhone.trim(),
           role: 'customer',
           latitude: regForm.latitude,
           longitude: regForm.longitude,
@@ -494,32 +509,33 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           id: userObj?.id || `user-${Date.now()}`,
           name: userObj?.name || regForm.name || 'Customer User',
           email: userObj?.email || regForm.email || '',
-          phone: userObj?.phone || regForm.phone || otpPhone,
+          phone: userObj?.phone || regForm.phone || otpPhone.trim(),
           latitude: userObj?.latitude ?? regForm.latitude ?? null,
           longitude: userObj?.longitude ?? regForm.longitude ?? null,
         };
         dispatch(setActiveUser(user));
         onToast(`Customer account created! Welcome ${user.name}`, 'success');
+        handleCloseModal();
         navigate('/');
       } else {
         // Seller Registration
         const sellerName = regForm.ownerName || regForm.name;
-        if (!sellerName || !regForm.shopName) {
-          onToast('Please enter Shop Business Name and Owner Name.', 'info');
+        if (!sellerName || !regForm.shopName || !regForm.address) {
+          onToast('Please fill out all required fields: Name, Shop Name, and Business Address.', 'info');
           setIsSubmitting(false);
           return;
         }
 
         const resData = await registerUser({
-          email: regForm.email || undefined,
-          password: regForm.password || undefined,
+          email: regForm.email,
+          password: regForm.password || 'cbez_otp_pass',
           name: regForm.shopName || sellerName,
-          phone: regForm.phone || otpPhone,
+          phone: regForm.phone || otpPhone.trim(),
           role: 'seller',
           shopName: regForm.shopName,
           ownerName: sellerName,
-          whatsapp: regForm.whatsapp || regForm.phone || otpPhone,
-          address: regForm.address || 'Kerala Store',
+          whatsapp: regForm.whatsapp || regForm.phone || otpPhone.trim(),
+          address: regForm.address,
           city: regForm.city || 'Kochi',
           category: regForm.category || 'Mobiles & Tablets',
           district: regForm.district || 'Ernakulam',
@@ -548,9 +564,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           id: userObj?.id || `shop-${Date.now()}`,
           name: regForm.shopName,
           ownerName: sellerName,
-          phone: regForm.phone || otpPhone,
-          whatsapp: regForm.whatsapp || regForm.phone || otpPhone,
-          address: regForm.address || 'Kerala Store',
+          phone: regForm.phone || otpPhone.trim(),
+          whatsapp: regForm.whatsapp || regForm.phone || otpPhone.trim(),
+          address: regForm.address,
           city: regForm.city || 'Kochi',
           category: regForm.category || 'Mobiles & Tablets',
           district: regForm.district || 'Ernakulam',
@@ -575,9 +591,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         dispatch(setActiveShop(newShop));
         dispatch(setDashboardTab('listings'));
         onToast(`Merchant Shop Registered: ${newShop.name} (Status: PENDING Admin Approval)`, 'success');
+        handleCloseModal();
         navigate('/seller-dashboard');
       }
-      handleCloseModal();
     } catch (err: any) {
       onToast(err.message || 'Registration failed', 'info');
     } finally {
@@ -606,27 +622,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
       const tokenVal = resData.data?.token || resData.token;
       const actualRole = userObj?.role || (userObj?.shop ? 'seller' : 'customer');
 
-      if (authRole === 'seller' && actualRole !== 'seller') {
-        localStorage.removeItem('mlx_token');
-        setIsSubmitting(false);
-        onToast('This account is registered as a Customer. Please sign in via Customer Sign In.', 'info');
-        dispatch(setAuthRole('customer'));
-        return;
-      }
-
-      if (authRole === 'customer' && actualRole === 'seller') {
-        localStorage.removeItem('mlx_token');
-        setIsSubmitting(false);
-        onToast('This account is registered as a Merchant Store. Please sign in via Seller Login.', 'info');
-        dispatch(setAuthRole('seller'));
-        return;
-      }
-
       if (tokenVal) {
         localStorage.setItem('mlx_token', tokenVal);
       }
 
-      if (actualRole === 'seller') {
+      if (actualRole === 'seller' || userObj?.shop) {
         const shop: Shop = userObj?.shop || {
           id: userObj?.id || `shop-${Date.now()}`,
           name: userObj?.name || 'Seller Shop',
@@ -641,9 +641,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           joinedDate: 'Today',
           status: userObj?.shop?.verified ? 'APPROVED' : 'PENDING'
         };
+        dispatch(setActiveUser(null));
+        dispatch(setAuthRole('seller'));
         dispatch(setActiveShop(shop));
         dispatch(setDashboardTab('listings'));
         onToast(`Merchant Shop Signed In: ${shop.name}`, 'success');
+        handleCloseModal();
         navigate('/seller-dashboard');
       } else {
         const user: CustomerUser = {
@@ -654,11 +657,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           latitude: userObj?.latitude ?? null,
           longitude: userObj?.longitude ?? null,
         };
+        dispatch(setActiveShop(null));
+        dispatch(setAuthRole('customer'));
         dispatch(setActiveUser(user));
         onToast(`Welcome back, ${user.name}!`, 'success');
+        handleCloseModal();
         navigate('/');
       }
-      handleCloseModal();
     } catch (err: any) {
       onToast(err.message || 'Login failed. Please check credentials.', 'info');
     } finally {
@@ -671,6 +676,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   return (
     <div className="modal-overlay" onClick={handleCloseModal}>
       <div
+        ref={modalContentRef}
         className="modal-content"
         onClick={(e) => e.stopPropagation()}
         style={{
@@ -681,7 +687,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           borderRadius: '24px',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.75)',
           border: '1px solid rgba(255, 111, 0, 0.25)',
-          padding: '2rem 1.75rem',
+          padding: '2.25rem 1.75rem',
           position: 'relative',
           maxHeight: '90vh',
           overflowY: 'auto'
@@ -824,7 +830,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         )}
 
         {/* ========================================================= */}
-        {/* STEP 2: OTP ENTERED TAB (User Request: Step 2)            */}
+        {/* STEP 2: OTP ENTERED TAB (Theme Matched to Website)       */}
         {/* ========================================================= */}
         {authStep === 'otp' && (
           <div>
@@ -875,8 +881,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                   fontSize: '0.72rem', 
                   padding: '0.2rem 0.6rem', 
                   borderRadius: '10px',
-                  background: isExistingAccount ? 'rgba(34, 197, 94, 0.15)' : 'rgba(59, 130, 246, 0.15)',
-                  color: isExistingAccount ? '#4ade80' : '#60a5fa',
+                  background: isExistingAccount ? 'rgba(34, 197, 94, 0.15)' : 'rgba(255, 111, 0, 0.15)',
+                  color: isExistingAccount ? '#4ade80' : '#ff9e40',
                   fontWeight: 700
                 }}>
                   {isExistingAccount ? 'Existing User Detected (Direct Sign In)' : 'New User (Profile Setup Next)'}
@@ -999,7 +1005,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         )}
 
         {/* ========================================================= */}
-        {/* STEP 4: DETAILS COLLECTING PAGE (New User Setup)          */}
+        {/* STEP 4: ORIGINAL REGISTRATION FORM (THE FIRST FORM)       */}
         {/* ========================================================= */}
         {authStep === 'details' && (
           <div>
@@ -1008,21 +1014,25 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 width: '56px',
                 height: '56px',
                 borderRadius: '16px',
-                background: isSeller ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 margin: '0 auto 0.85rem auto',
-                boxShadow: isSeller ? '0 10px 25px rgba(255, 111, 0, 0.4)' : '0 10px 25px rgba(37, 99, 235, 0.4)'
+                boxShadow: '0 10px 25px rgba(255, 111, 0, 0.4)'
               }}>
                 {isSeller ? <Store size={28} color="#ffffff" /> : <User size={28} color="#ffffff" />}
               </div>
               <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
-                {isSeller ? 'Complete Store Details' : 'Complete Customer Profile'}
+                {isSeller ? 'Register Seller Shop' : 'Create Customer Account'}
               </h2>
               <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.3rem' }}>
-                Verified Phone: <strong style={{ color: '#4ade80' }}>{regForm.phone || otpPhone}</strong>
+                {isSeller ? 'Trusted Kerala Used Electronics Marketplace' : 'Buy verified used gadgets directly from local stores'}
               </p>
+              <div style={{ display: 'inline-flex', alignItems: 'center', gap: '0.35rem', marginTop: '0.4rem', fontSize: '0.74rem', background: 'rgba(34, 197, 94, 0.15)', color: '#4ade80', padding: '0.2rem 0.65rem', borderRadius: '12px', fontWeight: 700 }}>
+                <CheckCircle2 size={13} />
+                <span>Verified WhatsApp: {regForm.phone || otpPhone}</span>
+              </div>
             </div>
 
             <form onSubmit={handleRegSubmit} className="modal-form">
@@ -1040,20 +1050,39 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                     />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Email Address (Optional)</label>
+                    <label className="form-label">Email Address *</label>
                     <input
                       type="email"
                       className="form-input-text"
+                      required
                       placeholder="e.g. rahul@gmail.com"
                       value={regForm.email}
                       onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
                     />
                   </div>
+                  <div className="form-group">
+                    <label className="form-label">Password (Optional)</label>
+                    <input
+                      type="password"
+                      className="form-input-text"
+                      placeholder="••••••••"
+                      value={regForm.password}
+                      onChange={(e) => setRegForm({ ...regForm, password: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Phone Number *</label>
+                    <PhoneInputWithCountry
+                      required
+                      value={regForm.phone}
+                      onChange={(val) => setRegForm({ ...regForm, phone: val })}
+                    />
+                  </div>
 
                   {/* CUSTOMER LOCATION SELECTION SECTION */}
-                  <div className="form-group" style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1.5px dashed #3b82f6', padding: '1rem', borderRadius: '14px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                  <div className="form-group" style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1.5px dashed #ff9e40', padding: '1rem', borderRadius: '14px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
                     <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                      <label className="form-label" style={{ fontWeight: 700, color: '#60a5fa', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                      <label className="form-label" style={{ fontWeight: 700, color: '#ff9e40', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                         <MapPin size={16} />
                         <span>Your Location Coordinates (Optional)</span>
                       </label>
@@ -1078,9 +1107,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                           minWidth: '150px',
                           padding: '0.55rem 0.8rem',
                           borderRadius: '10px',
-                          border: '1px solid #3b82f6',
-                          background: 'rgba(59, 130, 246, 0.15)',
-                          color: '#60a5fa',
+                          border: '1px solid #ff9e40',
+                          background: 'rgba(255, 111, 0, 0.15)',
+                          color: '#ff9e40',
                           fontWeight: 700,
                           fontSize: '0.78rem',
                           display: 'flex',
@@ -1131,7 +1160,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 </>
               ) : (
                 <>
-                  {/* SELLER DETAILS FORM */}
+                  {/* SELLER ORIGINAL REGISTRATION FORM */}
                   <div className="form-group">
                     <label className="form-label">Shop Business Name *</label>
                     <input type="text" className="form-input-text" required placeholder="e.g. Kochi iStore Mobiles" value={regForm.shopName} onChange={(e) => setRegForm({ ...regForm, shopName: e.target.value })} />
@@ -1185,30 +1214,42 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                     </div>
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Email Address (Optional)</label>
-                    <input type="email" className="form-input-text" placeholder="e.g. store@gmail.com" value={regForm.email} onChange={(e) => setRegForm({ ...regForm, email: e.target.value })} />
+                    <label className="form-label">Email Address *</label>
+                    <input type="email" className="form-input-text" required placeholder="e.g. store@gmail.com" value={regForm.email} onChange={(e) => setRegForm({ ...regForm, email: e.target.value })} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Store Address (Optional)</label>
-                    <input type="text" className="form-input-text" placeholder="Shop No, Building, Street, Kerala" value={regForm.address} onChange={(e) => setRegForm({ ...regForm, address: e.target.value })} />
+                    <label className="form-label">Password (Optional)</label>
+                    <input type="password" className="form-input-text" placeholder="••••••••" value={regForm.password} onChange={(e) => setRegForm({ ...regForm, password: e.target.value })} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Category</label>
-                    <select className="form-select-box" value={regForm.category} onChange={(e) => setRegForm({ ...regForm, category: e.target.value })}>
-                      <option value="Mobiles & Tablets">Mobiles & Tablets</option>
-                      <option value="Laptops & Computers">Laptops & Computers</option>
-                      <option value="Cameras & Optics">Cameras & Optics</option>
-                      <option value="Audio & Sound">Audio & Sound</option>
-                      <option value="Gaming & Consoles">Gaming & Consoles</option>
-                      <option value="Smart Watches & Wearables">Smart Watches & Wearables</option>
-                      <option value="Accessories">Accessories</option>
-                    </select>
+                    <label className="form-label">Call Phone Number *</label>
+                    <PhoneInputWithCountry required value={regForm.phone} onChange={(val) => setRegForm({ ...regForm, phone: val })} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">City</label>
+                    <label className="form-label">WhatsApp Number (Optional)</label>
+                    <PhoneInputWithCountry value={regForm.whatsapp} onChange={(val) => setRegForm({ ...regForm, whatsapp: val })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">City (Optional)</label>
                     <select className="form-select-box" value={regForm.city} onChange={(e) => setRegForm({ ...regForm, city: e.target.value })}>
                       {CITIES.filter(c => c !== "All Cities").map(c => <option key={c} value={c}>{c}</option>)}
                     </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">District (Optional)</label>
+                    <input type="text" className="form-input-text" placeholder="e.g. Ernakulam" value={regForm.district} onChange={(e) => setRegForm({ ...regForm, district: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Country (Optional)</label>
+                    <input type="text" className="form-input-text" placeholder="India" value={regForm.country} onChange={(e) => setRegForm({ ...regForm, country: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Aadhaar Card Number (Optional)</label>
+                    <input type="text" className="form-input-text" placeholder="12-digit Aadhaar Number" value={regForm.aadhaarNumber} onChange={(e) => setRegForm({ ...regForm, aadhaarNumber: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">PAN Card Number (Optional)</label>
+                    <input type="text" className="form-input-text" placeholder="10-character PAN Number" value={regForm.panNumber} onChange={(e) => setRegForm({ ...regForm, panNumber: e.target.value })} />
                   </div>
 
                   {/* MANDATORY LOCATION SELECTION SECTION */}
@@ -1226,7 +1267,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                     </div>
 
                     <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.75rem' }}>
-                      Select shop location using GPS or address map search:
+                      Please select your shop location using GPS or address map search:
                     </p>
 
                     <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
@@ -1239,7 +1280,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                           minWidth: '150px',
                           padding: '0.55rem 0.8rem',
                           borderRadius: '10px',
-                          border: '1px solid #ff6f00',
+                          border: '1px solid #ff9e40',
                           background: 'rgba(255, 111, 0, 0.15)',
                           color: '#ff9e40',
                           fontWeight: 700,
@@ -1275,7 +1316,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                         }}
                       >
                         <Search size={14} />
-                        <span>Search Address / City</span>
+                        <span>Search Map Address</span>
                       </button>
                     </div>
 
@@ -1284,6 +1325,43 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                         📍 <strong>Shop Coordinates:</strong> Lat: {regForm.latitude.toFixed(5)}, Lng: {regForm.longitude.toFixed(5)}
                       </div>
                     )}
+                  </div>
+
+                  <div className="form-group">
+                    <label className="form-label">Market Business Address *</label>
+                    <textarea className="form-textarea" required rows={2} placeholder="MG Road, Broadway Corner" value={regForm.address} onChange={(e) => setRegForm({ ...regForm, address: e.target.value })}></textarea>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Category</label>
+                    <select className="form-select-box" value={regForm.category} onChange={(e) => setRegForm({ ...regForm, category: e.target.value })}>
+                      <option value="Mobiles & Tablets">Mobiles & Tablets</option>
+                      <option value="Laptops & Computers">Laptops & Computers</option>
+                      <option value="Cameras & Optics">Cameras & Optics</option>
+                      <option value="Audio & Sound">Audio & Sound</option>
+                      <option value="Gaming & Consoles">Gaming & Consoles</option>
+                      <option value="Smart Watches & Wearables">Smart Watches & Wearables</option>
+                      <option value="Accessories">Accessories</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">GST Number (Optional)</label>
+                    <input type="text" className="form-input-text" placeholder="e.g. 32AAAAA0000A1Z5" value={regForm.gstNumber} onChange={(e) => setRegForm({ ...regForm, gstNumber: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Website URL (Optional)</label>
+                    <input type="text" className="form-input-text" placeholder="https://yourstore.com" value={regForm.websiteUrl} onChange={(e) => setRegForm({ ...regForm, websiteUrl: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Business Opening Hours (Optional)</label>
+                    <input type="text" className="form-input-text" placeholder="e.g. 9:30 AM - 8:30 PM (Mon-Sat)" value={regForm.businessHours} onChange={(e) => setRegForm({ ...regForm, businessHours: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Business Description (Optional)</label>
+                    <input type="text" className="form-input-text" placeholder="e.g. Authorised Multi-brand mobile & laptop sales" value={regForm.businessDescription} onChange={(e) => setRegForm({ ...regForm, businessDescription: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Alternate Contact Phone (Optional)</label>
+                    <input type="text" className="form-input-text" placeholder="e.g. +91 98460 00000" value={regForm.alternatePhone} onChange={(e) => setRegForm({ ...regForm, alternatePhone: e.target.value })} />
                   </div>
                 </>
               )}
@@ -1295,16 +1373,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 style={{
                   width: '100%',
                   marginTop: '1.25rem',
-                  padding: '0.88rem',
+                  padding: '0.9rem',
                   justifyContent: 'center',
                   display: 'flex',
                   alignItems: 'center',
                   gap: '0.5rem',
-                  borderRadius: '12px',
+                  borderRadius: '14px',
                   fontWeight: 700,
                   fontSize: '0.96rem',
-                  background: isSeller ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-                  boxShadow: isSeller ? '0 4px 18px rgba(255, 111, 0, 0.35)' : '0 4px 18px rgba(37, 99, 235, 0.35)',
+                  background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
+                  boxShadow: '0 4px 18px rgba(255, 111, 0, 0.4)',
                   opacity: isSubmitting ? 0.75 : 1,
                   cursor: isSubmitting ? 'not-allowed' : 'pointer'
                 }}
@@ -1312,12 +1390,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 {isSubmitting ? (
                   <>
                     <Loader2 className="animate-spin" size={19} />
-                    <span>Completing Registration...</span>
+                    <span>Submitting Registration...</span>
                   </>
                 ) : (
                   <>
                     <CheckCircle2 size={18} />
-                    <span>Complete Registration & Continue</span>
+                    <span>{authRole === 'customer' ? 'Register Customer Account' : 'Submit Shop Registration for Approval'}</span>
                   </>
                 )}
               </button>
@@ -1355,12 +1433,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 width: '56px',
                 height: '56px',
                 borderRadius: '16px',
-                background: isSeller ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 margin: '0 auto 1rem auto',
-                boxShadow: isSeller ? '0 10px 25px rgba(255, 111, 0, 0.4)' : '0 10px 25px rgba(37, 99, 235, 0.4)'
+                boxShadow: '0 10px 25px rgba(255, 111, 0, 0.4)'
               }}>
                 {isSeller ? <Store size={28} color="#ffffff" /> : <User size={28} color="#ffffff" />}
               </div>
@@ -1412,8 +1490,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                   borderRadius: '12px',
                   fontWeight: 700,
                   fontSize: '0.95rem',
-                  background: isSeller ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-                  boxShadow: isSeller ? '0 4px 18px rgba(255, 111, 0, 0.35)' : '0 4px 18px rgba(37, 99, 235, 0.35)',
+                  background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
+                  boxShadow: '0 4px 18px rgba(255, 111, 0, 0.35)',
                   opacity: isSubmitting ? 0.75 : 1,
                   cursor: isSubmitting ? 'not-allowed' : 'pointer'
                 }}
