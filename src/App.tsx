@@ -5,7 +5,7 @@ import { AuthModal } from './components/AuthModal';
 import { AddEditProductModal } from './components/AddEditProductModal';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { Footer } from './components/Footer';
-import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, reverseGeocodeCoords, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, deleteProductApi, getSellerProducts } from './services/apiService';
+import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, reverseGeocodeCoords, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, deleteProductApi, getSellerProducts, updateSellerProduct } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import React, { ChangeEvent, FormEvent } from 'react';
 import {
@@ -545,6 +545,7 @@ export default function App() {
   const [currentSlide, setCurrentSlide] = React.useState(0);
   const [logoutConfirmType, setLogoutConfirmType] = React.useState<'seller' | 'customer' | null>(null);
   const [productToDelete, setProductToDelete] = React.useState<Product | null>(null);
+  const [togglingStockId, setTogglingStockId] = React.useState<string | null>(null);
   const [isDeletingProduct, setIsDeletingProduct] = React.useState<boolean>(false);
   const [viewingSellerProduct, setViewingSellerProduct] = React.useState<Product | null>(null);
   const [sellerProducts, setSellerProducts] = React.useState<Product[]>([]);
@@ -1053,7 +1054,8 @@ export default function App() {
     const matchesPrice = product.price >= min && product.price <= max;
 
     // 6. Sidebar Stock Availability Filter
-    const matchesStock = !filters.filterInStockOnly || product.stock > 0;
+    const isProductSoldOut = (product.stock !== undefined && product.stock <= 0) || Boolean(product.isSoldOut);
+    const matchesStock = !filters.filterInStockOnly || !isProductSoldOut;
 
     // 7. B2C City Location Filter (Bypassed if typing a specific product search query)
     const matchesCity = !!rawQuery || filters.filterCity === 'All Cities' ||
@@ -1341,8 +1343,9 @@ export default function App() {
   };
 
 
-  const handleToggleSoldOut = (product: Product) => {
-    const isCurrentlySoldOut = product.isSoldOut || product.stock <= 0;
+  const handleToggleSoldOut = async (product: Product) => {
+    if (togglingStockId === product.id) return;
+    const isCurrentlySoldOut = (product.stock !== undefined && product.stock <= 0) || Boolean(product.isSoldOut);
     const nextSoldOutState = !isCurrentlySoldOut;
     const nextStock = nextSoldOutState ? 0 : (product.stock > 0 ? product.stock : 1);
     const updated: Product = {
@@ -1350,14 +1353,31 @@ export default function App() {
       isSoldOut: nextSoldOutState,
       stock: nextStock
     };
+
+    // 1. Optimistic UI update
     setSellerProducts(prev => prev.map(p => p.id === product.id ? updated : p));
     dispatch(editProduct(updated));
     triggerToast(
       nextSoldOutState
         ? `Marked "${product.name}" as Sold Out 🔴`
         : `Restored "${product.name}" to In Stock 🟢`,
-      'info'
+      nextSoldOutState ? 'warning' : 'success'
     );
+
+    // 2. Persist to backend database via API
+    const token = localStorage.getItem('mlx_token');
+    if (token) {
+      setTogglingStockId(product.id);
+      try {
+        await updateSellerProduct(product.id, { stock: nextStock }, token);
+        await fetchSellerProducts();
+      } catch (err: any) {
+        console.warn('Backend stock toggle warning:', err);
+        triggerToast(err.message || 'Failed to sync stock change to server', 'warning');
+      } finally {
+        setTogglingStockId(null);
+      }
+    }
   };
 
   const handleDeleteListing = (productId: string) => {
@@ -3406,19 +3426,26 @@ export default function App() {
                               <div className="listing-actions" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
                                 <button
                                   type="button"
+                                  disabled={togglingStockId === product.id}
                                   onClick={() => handleToggleSoldOut(product)}
                                   style={{
                                     padding: '0.35rem 0.7rem',
                                     borderRadius: '6px',
                                     fontSize: '0.78rem',
                                     fontWeight: 700,
-                                    cursor: 'pointer',
-                                    border: (product.stock <= 0 || product.isSoldOut) ? '1px solid #fca5a5' : '1px solid #bbf7d0',
-                                    background: (product.stock <= 0 || product.isSoldOut) ? '#fef2f2' : '#f0fdf4',
-                                    color: (product.stock <= 0 || product.isSoldOut) ? '#dc2626' : '#16a34a'
+                                    cursor: togglingStockId === product.id ? 'wait' : 'pointer',
+                                    opacity: togglingStockId === product.id ? 0.7 : 1,
+                                    border: ((product.stock !== undefined && product.stock <= 0) || product.isSoldOut) ? '1px solid #fca5a5' : '1px solid #bbf7d0',
+                                    background: ((product.stock !== undefined && product.stock <= 0) || product.isSoldOut) ? '#fef2f2' : '#f0fdf4',
+                                    color: ((product.stock !== undefined && product.stock <= 0) || product.isSoldOut) ? '#dc2626' : '#16a34a',
+                                    transition: 'all 0.15s ease'
                                   }}
                                 >
-                                  {(product.stock <= 0 || product.isSoldOut) ? '🔴 Sold Out (Restore)' : '🟢 In Stock'}
+                                  {togglingStockId === product.id
+                                    ? 'Updating...'
+                                    : ((product.stock !== undefined && product.stock <= 0) || product.isSoldOut)
+                                      ? '🔴 Sold Out (Restore)'
+                                      : '🟢 In Stock'}
                                 </button>
                                 <button
                                   className="btn-icon-action view"
