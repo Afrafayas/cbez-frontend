@@ -186,11 +186,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         role: authRole,
       });
 
-      // Step 3: If already an existing user, log in directly and navigate home/dashboard
+      // Step 3: If already an existing user, navigate to home/dashboard (Seller -> /seller-dashboard, Customer -> /)
       if (!res.isNewUser && res.data?.token) {
         const tokenVal = res.data.token;
         const userObj = res.data.user;
-        const actualRole = userObj?.role || authRole;
+        const actualRole = userObj?.role || (userObj?.shop ? 'seller' : authRole);
 
         localStorage.setItem('mlx_token', tokenVal);
 
@@ -209,9 +209,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
             joinedDate: 'Today',
             status: userObj?.shop?.verified ? 'APPROVED' : 'PENDING'
           };
+          dispatch(setActiveUser(null));
+          dispatch(setAuthRole('seller'));
           dispatch(setActiveShop(shop));
           dispatch(setDashboardTab('listings'));
           onToast(`Welcome back, ${shop.name}! Store signed in.`, 'success');
+          handleCloseModal();
           navigate('/seller-dashboard');
         } else {
           const user: CustomerUser = {
@@ -222,12 +225,13 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
             latitude: userObj?.latitude ?? null,
             longitude: userObj?.longitude ?? null,
           };
+          dispatch(setActiveShop(null));
+          dispatch(setAuthRole('customer'));
           dispatch(setActiveUser(user));
           onToast(`Welcome back, ${user.name}!`, 'success');
+          handleCloseModal();
           navigate('/');
         }
-
-        handleCloseModal();
         return;
       }
 
