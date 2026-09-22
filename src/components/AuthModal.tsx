@@ -756,21 +756,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                   onChange={(val) => setOtpPhone(val)}
                   placeholder="98765 43210"
                 />
-                <div style={{ 
-                  marginTop: '0.65rem', 
-                  display: 'flex', 
-                  alignItems: 'center', 
-                  gap: '0.5rem', 
-                  fontSize: '0.75rem', 
-                  color: '#94a3b8',
-                  background: 'rgba(255, 111, 0, 0.08)',
-                  border: '1px solid rgba(255, 111, 0, 0.2)',
-                  padding: '0.55rem 0.8rem',
-                  borderRadius: '12px'
-                }}>
-                  <MessageCircle size={15} color="#ff9e40" />
-                  <span>A 6-digit OTP code will be sent to this WhatsApp number.</span>
-                </div>
+
               </div>
 
               {/* ACTION: SEND OTP */}
