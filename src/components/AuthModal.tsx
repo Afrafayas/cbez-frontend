@@ -128,17 +128,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const handleSendOtp = async (e?: FormEvent) => {
     if (e) e.preventDefault();
     const rawDigits = otpPhone.replace(/[^0-9]/g, '');
-    const cleanDigits = rawDigits.startsWith('91') && rawDigits.length > 10 ? rawDigits.slice(2) : rawDigits;
-    
-    if (!cleanDigits || cleanDigits.length < 10) {
-      onToast('Please enter a valid 10-digit mobile number', 'info');
+    if (!rawDigits || rawDigits.length < 9) {
+      onToast('Please enter a valid mobile number', 'info');
       return;
     }
 
     try {
       setIsSendingOtp(true);
       const res = await sendOtpApi({
-        phone: cleanDigits,
+        phone: otpPhone.trim(),
         role: authRole,
       });
 
@@ -151,8 +149,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
       // Pre-fill phone into registration form in case user is new
       setRegForm(prev => ({
         ...prev,
-        phone: `+91 ${cleanDigits}`,
-        whatsapp: `+91 ${cleanDigits}`
+        phone: otpPhone.trim(),
+        whatsapp: otpPhone.trim()
       }));
 
       // Focus first OTP input box after slight delay
@@ -175,13 +173,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
       return;
     }
 
-    const rawDigits = otpPhone.replace(/[^0-9]/g, '');
-    const cleanDigits = rawDigits.startsWith('91') && rawDigits.length > 10 ? rawDigits.slice(2) : rawDigits;
+    const cleanDigits = otpPhone.replace(/[^0-9]/g, '');
 
     try {
       setIsVerifyingOtp(true);
       const res = await verifyOtpApi({
-        phone: cleanDigits,
+        phone: otpPhone.trim(),
         otp: code,
         role: authRole,
       });
