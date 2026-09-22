@@ -683,7 +683,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           color: '#f8fafc',
           borderRadius: '24px',
           boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.75)',
-          border: '1px solid rgba(255, 255, 255, 0.12)',
+          border: '1px solid rgba(255, 111, 0, 0.25)',
           padding: '2rem 1.75rem',
           position: 'relative',
           maxHeight: '90vh',
@@ -714,108 +714,38 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         </button>
 
         {/* ========================================================= */}
-        {/* STEP 1: PHONE NUMBER & ROLE (User Request: Step 1)        */}
+        {/* STEP 1: ONLY PHONE NUMBER (Theme Matched to Website)      */}
         {/* ========================================================= */}
         {authStep === 'phone' && (
           <div>
-            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+            <div style={{ textAlign: 'center', marginBottom: '1.75rem' }}>
               <div style={{
                 width: '60px',
                 height: '60px',
                 borderRadius: '18px',
-                background: isSeller ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 margin: '0 auto 1rem auto',
-                boxShadow: isSeller ? '0 10px 25px rgba(255, 111, 0, 0.4)' : '0 10px 25px rgba(37, 99, 235, 0.4)'
+                boxShadow: '0 10px 25px rgba(255, 111, 0, 0.4)'
               }}>
-                {isSeller ? <Store size={30} color="#ffffff" /> : <User size={30} color="#ffffff" />}
+                <MessageCircle size={30} color="#ffffff" />
               </div>
               <h2 style={{ fontSize: '1.45rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
-                {isSeller ? 'Merchant Partner Portal' : 'Customer Sign In & Register'}
+                {isSeller ? 'Store Sign In & Register' : 'Sign In / Register'}
               </h2>
               <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '0.4rem', lineHeight: '1.4' }}>
-                Enter your WhatsApp mobile number to sign in or create an account
+                Enter your WhatsApp mobile number to continue
               </p>
             </div>
 
-            {/* MANDATORY ROLE SELECTION */}
-            <div style={{ marginBottom: '1.3rem' }}>
-              <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', fontWeight: 700, fontSize: '0.82rem', color: '#cbd5e1' }}>
-                <span>Select Account Role <span style={{ color: '#ef4444' }}>*</span></span>
-                <span style={{ fontSize: '0.72rem', color: isSeller ? '#ff9e40' : '#60a5fa', fontWeight: 600 }}>
-                  Active: {isSeller ? 'Merchant Store' : 'Buyer / Customer'}
-                </span>
-              </label>
-
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
-                {/* Customer Option */}
-                <button
-                  type="button"
-                  onClick={() => dispatch(setAuthRole('customer'))}
-                  style={{
-                    padding: '0.85rem 0.75rem',
-                    borderRadius: '14px',
-                    border: !isSeller ? '2px solid #3b82f6' : '1.5px solid rgba(255, 255, 255, 0.1)',
-                    background: !isSeller ? 'rgba(59, 130, 246, 0.16)' : 'rgba(255, 255, 255, 0.03)',
-                    color: !isSeller ? '#ffffff' : '#94a3b8',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '0.4rem',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    position: 'relative'
-                  }}
-                >
-                  {!isSeller && (
-                    <div style={{ position: 'absolute', top: '6px', right: '8px', color: '#60a5fa' }}>
-                      <CheckCircle2 size={14} />
-                    </div>
-                  )}
-                  <User size={22} color={!isSeller ? '#60a5fa' : '#64748b'} />
-                  <span style={{ fontWeight: 700, fontSize: '0.86rem' }}>Customer</span>
-                  <span style={{ fontSize: '0.7rem', color: !isSeller ? '#93c5fd' : '#64748b' }}>Buy verified gadgets</span>
-                </button>
-
-                {/* Seller Option */}
-                <button
-                  type="button"
-                  onClick={() => dispatch(setAuthRole('seller'))}
-                  style={{
-                    padding: '0.85rem 0.75rem',
-                    borderRadius: '14px',
-                    border: isSeller ? '2px solid #ff6f00' : '1.5px solid rgba(255, 255, 255, 0.1)',
-                    background: isSeller ? 'rgba(255, 111, 0, 0.16)' : 'rgba(255, 255, 255, 0.03)',
-                    color: isSeller ? '#ffffff' : '#94a3b8',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    gap: '0.4rem',
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    position: 'relative'
-                  }}
-                >
-                  {isSeller && (
-                    <div style={{ position: 'absolute', top: '6px', right: '8px', color: '#ff9e40' }}>
-                      <CheckCircle2 size={14} />
-                    </div>
-                  )}
-                  <Store size={22} color={isSeller ? '#ff9e40' : '#64748b'} />
-                  <span style={{ fontWeight: 700, fontSize: '0.86rem' }}>Seller / Store</span>
-                  <span style={{ fontSize: '0.7rem', color: isSeller ? '#fdba74' : '#64748b' }}>Sell & manage shop</span>
-                </button>
-              </div>
-            </div>
-
-            {/* ONLY PHONE NUMBER ON LOGIN AND REGISTRATION DIALOG (STEP 1) */}
+            {/* ONLY PHONE NUMBER ON LOGIN AND REGISTRATION DIALOG */}
             <form onSubmit={handleSendOtp} className="modal-form" autoComplete="off">
-              <div className="form-group" style={{ marginBottom: '1.1rem' }}>
-                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, fontSize: '0.84rem' }}>
+              <div className="form-group" style={{ marginBottom: '1.25rem' }}>
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, fontSize: '0.84rem', color: '#e2e8f0' }}>
                   <span>WhatsApp Mobile Number</span>
-                  <span style={{ color: '#ef4444' }}>*</span>
+                  <span style={{ color: '#ff6f00' }}>*</span>
                 </label>
                 <PhoneInputWithCountry
                   required
@@ -824,18 +754,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                   placeholder="98765 43210"
                 />
                 <div style={{ 
-                  marginTop: '0.55rem', 
+                  marginTop: '0.65rem', 
                   display: 'flex', 
                   alignItems: 'center', 
-                  gap: '0.45rem', 
+                  gap: '0.5rem', 
                   fontSize: '0.75rem', 
                   color: '#94a3b8',
-                  background: 'rgba(16, 185, 129, 0.08)',
-                  border: '1px solid rgba(16, 185, 129, 0.2)',
-                  padding: '0.45rem 0.75rem',
-                  borderRadius: '10px'
+                  background: 'rgba(255, 111, 0, 0.08)',
+                  border: '1px solid rgba(255, 111, 0, 0.2)',
+                  padding: '0.55rem 0.8rem',
+                  borderRadius: '12px'
                 }}>
-                  <MessageCircle size={15} color="#10b981" />
+                  <MessageCircle size={15} color="#ff9e40" />
                   <span>A 6-digit OTP code will be sent to this WhatsApp number.</span>
                 </div>
               </div>
@@ -847,7 +777,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 className="btn-primary"
                 style={{
                   width: '100%',
-                  padding: '0.88rem',
+                  padding: '0.9rem',
                   justifyContent: 'center',
                   display: 'flex',
                   alignItems: 'center',
@@ -855,12 +785,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                   borderRadius: '14px',
                   fontWeight: 700,
                   fontSize: '0.96rem',
-                  background: isSeller 
-                    ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' 
-                    : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-                  boxShadow: isSeller 
-                    ? '0 6px 20px rgba(255, 111, 0, 0.35)' 
-                    : '0 6px 20px rgba(37, 99, 235, 0.35)',
+                  background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
+                  boxShadow: '0 6px 20px rgba(255, 111, 0, 0.4)',
                   opacity: isSendingOtp ? 0.75 : 1,
                   cursor: isSendingOtp ? 'not-allowed' : 'pointer'
                 }}
@@ -930,12 +856,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 width: '56px',
                 height: '56px',
                 borderRadius: '16px',
-                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 margin: '0 auto 0.85rem auto',
-                boxShadow: '0 10px 25px rgba(16, 185, 129, 0.35)'
+                boxShadow: '0 10px 25px rgba(255, 111, 0, 0.35)'
               }}>
                 <MessageCircle size={28} color="#ffffff" />
               </div>
@@ -994,12 +920,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                       border: otpHasError 
                         ? '2px solid #ef4444' 
                         : digit 
-                        ? '2px solid #10b981' 
+                        ? '2px solid #ff9e40' 
                         : '1.5px solid rgba(255, 255, 255, 0.16)',
                       borderRadius: '14px',
                       color: '#ffffff',
                       outline: 'none',
-                      boxShadow: digit ? '0 0 12px rgba(16, 185, 129, 0.25)' : 'none',
+                      boxShadow: digit ? '0 0 12px rgba(255, 111, 0, 0.3)' : 'none',
                       transition: 'all 0.2s ease'
                     }}
                   />
@@ -1027,8 +953,8 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                   borderRadius: '14px',
                   fontWeight: 700,
                   fontSize: '0.96rem',
-                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
-                  boxShadow: '0 6px 20px rgba(16, 185, 129, 0.35)',
+                  background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
+                  boxShadow: '0 6px 20px rgba(255, 111, 0, 0.4)',
                   opacity: (isVerifyingOtp || otpDigits.join('').length !== 6) ? 0.6 : 1,
                   cursor: (isVerifyingOtp || otpDigits.join('').length !== 6) ? 'not-allowed' : 'pointer'
                 }}
@@ -1058,7 +984,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                     style={{
                       background: 'none',
                       border: 'none',
-                      color: '#10b981',
+                      color: '#ff9e40',
                       fontWeight: 700,
                       cursor: 'pointer',
                       display: 'inline-flex',
