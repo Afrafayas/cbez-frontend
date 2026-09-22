@@ -70,7 +70,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const [isSendingOtp, setIsSendingOtp] = useState(false);
   const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
   const [otpCountdown, setOtpCountdown] = useState(0);
-  const [isExistingAccount, setIsExistingAccount] = useState<boolean | null>(null);
   const [otpHasError, setOtpHasError] = useState(false);
   const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -90,7 +89,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
     setOtpPhone('+91 ');
     setOtpDigits(['', '', '', '', '', '']);
     setOtpCountdown(0);
-    setIsExistingAccount(null);
     setOtpHasError(false);
   }, []);
 
@@ -148,7 +146,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         role: authRole,
       });
 
-      setIsExistingAccount(Boolean(res.isExistingUser));
       setOtpCountdown(30);
       setOtpDigits(['', '', '', '', '', '']);
       setOtpHasError(false);
@@ -844,20 +841,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
               <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '0.35rem' }}>
                 Enter the 6-digit code sent to <strong style={{ color: '#ffffff' }}>{otpPhone}</strong>
               </p>
-              {isExistingAccount !== null && (
-                <span style={{ 
-                  display: 'inline-block', 
-                  marginTop: '0.4rem', 
-                  fontSize: '0.72rem', 
-                  padding: '0.2rem 0.6rem', 
-                  borderRadius: '10px',
-                  background: isExistingAccount ? 'rgba(34, 197, 94, 0.15)' : 'rgba(255, 111, 0, 0.15)',
-                  color: isExistingAccount ? '#4ade80' : '#ff9e40',
-                  fontWeight: 700
-                }}>
-                  {isExistingAccount ? 'Existing User Detected (Direct Sign In)' : 'New User (Profile Setup Next)'}
-                </span>
-              )}
+
             </div>
 
             <form onSubmit={handleVerifyOtp} className="modal-form">
