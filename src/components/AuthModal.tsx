@@ -808,23 +808,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 )}
               </button>
 
-              {/* Alternative option for existing password accounts */}
-              <div style={{ textAlign: 'center', marginTop: '1.25rem', paddingTop: '0.85rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                <button
-                  type="button"
-                  onClick={() => setAuthStep('legacy')}
-                  style={{
-                    background: 'none',
-                    border: 'none',
-                    color: '#94a3b8',
-                    fontSize: '0.79rem',
-                    cursor: 'pointer',
-                    textDecoration: 'underline'
-                  }}
-                >
-                  Prefer email & password? Classic Sign In →
-                </button>
-              </div>
+
             </form>
           </div>
         )}
