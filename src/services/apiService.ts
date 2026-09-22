@@ -285,6 +285,34 @@ export async function deleteSubscriptionPlan(id: string, token?: string): Promis
 }
 
 /* Auth APIs */
+export async function sendOtpApi(data: { phone: string; role?: string }) {
+  const res = await fetch(`${API_BASE_URL}/auth/otp/send`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const resData = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(resData.message) ? resData.message.join(', ') : resData.message;
+    throw new Error(errorMsg || 'Failed to send OTP');
+  }
+  return resData;
+}
+
+export async function verifyOtpApi(data: { phone: string; otp: string; role?: string }) {
+  const res = await fetch(`${API_BASE_URL}/auth/otp/verify`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  });
+  const resData = await res.json();
+  if (!res.ok) {
+    const errorMsg = Array.isArray(resData.message) ? resData.message.join(', ') : resData.message;
+    throw new Error(errorMsg || 'Failed to verify OTP');
+  }
+  return resData;
+}
+
 export async function loginUser(credentials: { email?: string; phone?: string; password: string }) {
   const res = await fetch(`${API_BASE_URL}/auth/login`, {
     method: 'POST',
@@ -298,7 +326,7 @@ export async function loginUser(credentials: { email?: string; phone?: string; p
 
 export async function registerUser(userData: {
   email?: string;
-  password: string;
+  password?: string;
   name: string;
   phone?: string;
   role?: string;

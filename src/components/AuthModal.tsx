@@ -1,9 +1,9 @@
-import React, { useState, useEffect, FormEvent } from 'react';
-import { X, Loader2, Store, ArrowRight, User, MapPin, Search } from 'lucide-react';
+import React, { useState, useEffect, useRef, FormEvent } from 'react';
+import { X, Loader2, Store, ArrowRight, User, MapPin, Search, CheckCircle2, MessageCircle, ArrowLeft, RefreshCw } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { 
   setShowAuthModal, 
-  setAuthTab, 
+   
   setAuthRole, 
   setActiveUser, 
   setActiveShop 
@@ -11,7 +11,15 @@ import {
 import { addShop } from '../store/productsSlice';
 import { Shop, User as CustomerUser, SubscriptionPlan } from '../types';
 import { CITIES } from '../data/mockData';
-import { registerUser, loginUser, getActiveSubscriptionPlans, geocodeAddress, reverseGeocodeCoords } from '../services/apiService';
+import { 
+  registerUser, 
+  loginUser, 
+  sendOtpApi, 
+  verifyOtpApi, 
+  getActiveSubscriptionPlans, 
+  geocodeAddress, 
+  reverseGeocodeCoords 
+} from '../services/apiService';
 import { PhoneInputWithCountry } from './PhoneInputWithCountry';
 import { useNavigate } from 'react-router-dom';
 import { setDashboardTab } from '../store/uiSlice';
@@ -49,9 +57,22 @@ const INITIAL_REG_FORM = {
 export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const { showAuthModal, authTab, authRole, activeShop, activeUser } = useAppSelector(state => state.auth);
+  const { showAuthModal, authRole, activeShop, activeUser } = useAppSelector(state => state.auth);
   const { subscriptionPlans } = useAppSelector(state => state.products);
 
+  // Flow step: 'phone' (Step 1), 'otp' (Step 2), 'details' (Step 4), 'legacy' (password login fallback)
+  const [authStep, setAuthStep] = useState<'phone' | 'otp' | 'details' | 'legacy'>('phone');
+  
+  // OTP state
+  const [otpPhone, setOtpPhone] = useState('+91 ');
+  const [otpDigits, setOtpDigits] = useState(['', '', '', '', '', '']);
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isVerifyingOtp, setIsVerifyingOtp] = useState(false);
+  const [otpCountdown, setOtpCountdown] = useState(0);
+  const [isExistingAccount, setIsExistingAccount] = useState<boolean | null>(null);
+  const otpInputRefs = useRef<(HTMLInputElement | null)[]>([]);
+
+  // Legacy login state
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -63,27 +84,205 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
     setLoginEmail('');
     setLoginPassword('');
     setRegForm(INITIAL_REG_FORM);
+    setAuthStep('phone');
+    setOtpPhone('+91 ');
+    setOtpDigits(['', '', '', '', '', '']);
+    setOtpCountdown(0);
+    setIsExistingAccount(null);
   }, []);
 
-  // 1. Reset forms every time showAuthModal opens (becomes true)
+  // Reset forms every time showAuthModal opens (becomes true)
   useEffect(() => {
     if (showAuthModal) {
       resetAllForms();
     }
   }, [showAuthModal, resetAllForms]);
 
-  // 2. Reset forms whenever user or shop logs out
+  // Reset forms whenever user or shop logs out
   useEffect(() => {
     if (!activeShop && !activeUser) {
       resetAllForms();
     }
   }, [activeShop, activeUser, resetAllForms]);
 
+  // Countdown timer for resending OTP
+  useEffect(() => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (otpCountdown > 0) {
+      timer = setTimeout(() => setOtpCountdown(prev => prev - 1), 1000);
+    }
+    return () => {
+      if (timer) clearTimeout(timer);
+    };
+  }, [otpCountdown]);
+
   const handleCloseModal = () => {
     resetAllForms();
     dispatch(setShowAuthModal(false));
   };
 
+  // --- STEP 1: SEND OTP HANDLER ---
+  const handleSendOtp = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
+    const rawDigits = otpPhone.replace(/[^0-9]/g, '');
+    const cleanDigits = rawDigits.startsWith('91') && rawDigits.length > 10 ? rawDigits.slice(2) : rawDigits;
+    
+    if (!cleanDigits || cleanDigits.length < 10) {
+      onToast('Please enter a valid 10-digit mobile number', 'info');
+      return;
+    }
+
+    try {
+      setIsSendingOtp(true);
+      const res = await sendOtpApi({
+        phone: cleanDigits,
+        role: authRole,
+      });
+
+      setIsExistingAccount(Boolean(res.isExistingUser));
+      setOtpCountdown(30);
+      setOtpDigits(['', '', '', '', '', '']);
+      setAuthStep('otp');
+      onToast(res.message || 'OTP sent successfully to your WhatsApp number!', 'success');
+
+      // Pre-fill phone into registration form in case user is new
+      setRegForm(prev => ({
+        ...prev,
+        phone: `+91 ${cleanDigits}`,
+        whatsapp: `+91 ${cleanDigits}`
+      }));
+
+      // Focus first OTP input box after slight delay
+      setTimeout(() => {
+        otpInputRefs.current[0]?.focus();
+      }, 150);
+    } catch (err: any) {
+      onToast(err.message || 'Failed to send WhatsApp OTP. Please try again.', 'info');
+    } finally {
+      setIsSendingOtp(false);
+    }
+  };
+
+  // --- STEP 2: VERIFY OTP HANDLER ---
+  const handleVerifyOtp = async (e?: FormEvent) => {
+    if (e) e.preventDefault();
+    const code = otpDigits.join('').trim();
+    if (code.length !== 6) {
+      onToast('Please enter the full 6-digit OTP code received on WhatsApp', 'info');
+      return;
+    }
+
+    const rawDigits = otpPhone.replace(/[^0-9]/g, '');
+    const cleanDigits = rawDigits.startsWith('91') && rawDigits.length > 10 ? rawDigits.slice(2) : rawDigits;
+
+    try {
+      setIsVerifyingOtp(true);
+      const res = await verifyOtpApi({
+        phone: cleanDigits,
+        otp: code,
+        role: authRole,
+      });
+
+      // Step 3: If already an existing user, log in directly and navigate home/dashboard
+      if (!res.isNewUser && res.data?.token) {
+        const tokenVal = res.data.token;
+        const userObj = res.data.user;
+        const actualRole = userObj?.role || authRole;
+
+        localStorage.setItem('mlx_token', tokenVal);
+
+        if (actualRole === 'seller' || userObj?.shop) {
+          const shop: Shop = userObj?.shop || {
+            id: userObj?.id || `shop-${Date.now()}`,
+            name: userObj?.name || 'Seller Shop',
+            ownerName: userObj?.name || 'Shop Owner',
+            phone: userObj?.phone || `+91 ${cleanDigits}`,
+            whatsapp: userObj?.phone || cleanDigits,
+            address: 'Kerala Store',
+            city: 'Kochi',
+            category: 'Mobiles & Tablets',
+            verified: Boolean(userObj?.shop?.verified),
+            rating: 5.0,
+            joinedDate: 'Today',
+            status: userObj?.shop?.verified ? 'APPROVED' : 'PENDING'
+          };
+          dispatch(setActiveShop(shop));
+          dispatch(setDashboardTab('listings'));
+          onToast(`Welcome back, ${shop.name}! Store signed in.`, 'success');
+          navigate('/seller-dashboard');
+        } else {
+          const user: CustomerUser = {
+            id: userObj?.id || `user-${Date.now()}`,
+            name: userObj?.name || 'Customer User',
+            email: userObj?.email || `${cleanDigits}@cbez.in`,
+            phone: userObj?.phone || `+91 ${cleanDigits}`,
+            latitude: userObj?.latitude ?? null,
+            longitude: userObj?.longitude ?? null,
+          };
+          dispatch(setActiveUser(user));
+          onToast(`Welcome back, ${user.name}!`, 'success');
+          navigate('/');
+        }
+
+        handleCloseModal();
+        return;
+      }
+
+      // Step 4: If NOT an existing user, transition to details collecting page
+      if (res.isNewUser) {
+        onToast('Phone number verified! Please complete your profile details.', 'success');
+        setRegForm(prev => ({
+          ...prev,
+          phone: `+91 ${cleanDigits}`,
+          whatsapp: `+91 ${cleanDigits}`,
+        }));
+        setAuthStep('details');
+      }
+    } catch (err: any) {
+      onToast(err.message || 'Invalid or expired OTP. Please try again.', 'info');
+    } finally {
+      setIsVerifyingOtp(false);
+    }
+  };
+
+  // Handle individual OTP digit input
+  const handleOtpDigitChange = (index: number, val: string) => {
+    const cleaned = val.replace(/[^0-9]/g, '');
+    if (!cleaned) {
+      const copy = [...otpDigits];
+      copy[index] = '';
+      setOtpDigits(copy);
+      return;
+    }
+
+    // If pasted multiple digits
+    if (cleaned.length > 1) {
+      const copy = [...otpDigits];
+      for (let i = 0; i < 6 && index + i < 6 && i < cleaned.length; i++) {
+        copy[index + i] = cleaned[i];
+      }
+      setOtpDigits(copy);
+      const nextIndex = Math.min(index + cleaned.length, 5);
+      otpInputRefs.current[nextIndex]?.focus();
+      return;
+    }
+
+    const copy = [...otpDigits];
+    copy[index] = cleaned[0];
+    setOtpDigits(copy);
+
+    if (index < 5 && cleaned) {
+      otpInputRefs.current[index + 1]?.focus();
+    }
+  };
+
+  const handleOtpKeyDown = (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Backspace' && !otpDigits[index] && index > 0) {
+      otpInputRefs.current[index - 1]?.focus();
+    }
+  };
+
+  // Image file handler for seller registration
   const handleLogoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -130,7 +329,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
     reader.readAsDataURL(file);
   };
 
-
+  // Location handlers
   const handleUseCurrentLocation = () => {
     if (!navigator.geolocation) {
       onToast('Geolocation is not supported by your browser. Please search address manually.', 'info');
@@ -181,24 +380,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
       return;
     }
 
+    setIsLocating(true);
     try {
-      setIsLocating(true);
-      const res = await geocodeAddress(`${query}, ${regForm.city || ''}, ${regForm.country || 'India'}`);
-      setRegForm(prev => ({
-        ...prev,
-        latitude: res.latitude,
-        longitude: res.longitude,
-        address: prev.address || res.formattedAddress,
-      }));
-      onToast(`Map location found: (${res.latitude.toFixed(4)}, ${res.longitude.toFixed(4)})`, 'success');
-    } catch (err: any) {
-      onToast(err.message || 'Could not find coordinates for entered address. Try refining street name.', 'info');
+      const geo = await geocodeAddress(query);
+      if (geo) {
+        setRegForm(prev => ({
+          ...prev,
+          latitude: geo.latitude,
+          longitude: geo.longitude,
+          address: geo.formattedAddress || prev.address,
+        }));
+        onToast(`Coordinates found: (${geo.latitude.toFixed(4)}, ${geo.longitude.toFixed(4)})`, 'success');
+      } else {
+        onToast('Could not resolve exact coordinates for this address. Please try another query.', 'info');
+      }
+    } catch {
+      onToast('Failed to locate coordinates. Please try again.', 'info');
     } finally {
       setIsLocating(false);
     }
   };
 
-
+  // Load subscription plans for sellers
   useEffect(() => {
     async function loadPlans() {
       try {
@@ -223,6 +426,126 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
 
   if (!showAuthModal) return null;
 
+  // --- STEP 4 / LEGACY REGISTRATION SUBMIT HANDLER ---
+  const handleRegSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+
+    try {
+      setIsSubmitting(true);
+      if (authRole === 'customer') {
+        const resData = await registerUser({
+          email: regForm.email || undefined,
+          password: regForm.password || undefined,
+          name: regForm.name || 'Customer User',
+          phone: regForm.phone || otpPhone,
+          role: 'customer',
+          latitude: regForm.latitude,
+          longitude: regForm.longitude,
+        });
+
+        const tokenVal = resData?.token || resData?.data?.token;
+        const userObj = resData?.user || resData?.data?.user;
+
+        if (tokenVal) {
+          localStorage.setItem('mlx_token', tokenVal);
+        }
+
+        const user: CustomerUser = {
+          id: userObj?.id || `user-${Date.now()}`,
+          name: userObj?.name || regForm.name || 'Customer User',
+          email: userObj?.email || regForm.email || '',
+          phone: userObj?.phone || regForm.phone || otpPhone,
+          latitude: userObj?.latitude ?? regForm.latitude ?? null,
+          longitude: userObj?.longitude ?? regForm.longitude ?? null,
+        };
+        dispatch(setActiveUser(user));
+        onToast(`Customer account created! Welcome ${user.name}`, 'success');
+        navigate('/');
+      } else {
+        // Seller Registration
+        const sellerName = regForm.ownerName || regForm.name;
+        if (!sellerName || !regForm.shopName) {
+          onToast('Please enter Shop Business Name and Owner Name.', 'info');
+          setIsSubmitting(false);
+          return;
+        }
+
+        const resData = await registerUser({
+          email: regForm.email || undefined,
+          password: regForm.password || undefined,
+          name: regForm.shopName || sellerName,
+          phone: regForm.phone || otpPhone,
+          role: 'seller',
+          shopName: regForm.shopName,
+          ownerName: sellerName,
+          whatsapp: regForm.whatsapp || regForm.phone || otpPhone,
+          address: regForm.address || 'Kerala Store',
+          city: regForm.city || 'Kochi',
+          category: regForm.category || 'Mobiles & Tablets',
+          district: regForm.district || 'Ernakulam',
+          country: regForm.country || 'India',
+          aadhaarNumber: regForm.aadhaarNumber,
+          panNumber: regForm.panNumber,
+          profileImage: regForm.profileImage,
+          subscriptionPlanId: regForm.subscriptionPlanId || activePlans[0]?.id,
+          latitude: regForm.latitude,
+          longitude: regForm.longitude,
+          gstNumber: regForm.gstNumber,
+          websiteUrl: regForm.websiteUrl,
+          businessHours: regForm.businessHours,
+          businessDescription: regForm.businessDescription,
+          alternatePhone: regForm.alternatePhone,
+        });
+
+        const tokenVal = resData?.token || resData?.data?.token;
+        const userObj = resData?.user || resData?.data?.user;
+
+        if (tokenVal) {
+          localStorage.setItem('mlx_token', tokenVal);
+        }
+
+        const newShop: Shop = userObj?.shop || {
+          id: userObj?.id || `shop-${Date.now()}`,
+          name: regForm.shopName,
+          ownerName: sellerName,
+          phone: regForm.phone || otpPhone,
+          whatsapp: regForm.whatsapp || regForm.phone || otpPhone,
+          address: regForm.address || 'Kerala Store',
+          city: regForm.city || 'Kochi',
+          category: regForm.category || 'Mobiles & Tablets',
+          district: regForm.district || 'Ernakulam',
+          country: regForm.country || 'India',
+          aadhaarNumber: regForm.aadhaarNumber,
+          panNumber: regForm.panNumber,
+          profileImage: regForm.profileImage,
+          subscriptionPlanId: regForm.subscriptionPlanId || activePlans[0]?.id || 'plan-free',
+          latitude: regForm.latitude,
+          longitude: regForm.longitude,
+          gstNumber: regForm.gstNumber,
+          websiteUrl: regForm.websiteUrl,
+          businessHours: regForm.businessHours,
+          businessDescription: regForm.businessDescription,
+          alternatePhone: regForm.alternatePhone,
+          verified: false,
+          status: 'PENDING',
+          rating: 5.0,
+          joinedDate: 'Today'
+        };
+        dispatch(addShop(newShop));
+        dispatch(setActiveShop(newShop));
+        dispatch(setDashboardTab('listings'));
+        onToast(`Merchant Shop Registered: ${newShop.name} (Status: PENDING Admin Approval)`, 'success');
+        navigate('/seller-dashboard');
+      }
+      handleCloseModal();
+    } catch (err: any) {
+      onToast(err.message || 'Registration failed', 'info');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // --- LEGACY EMAIL/PASSWORD LOGIN HANDLER ---
   const handleLoginSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!loginEmail || !loginPassword) {
@@ -239,14 +562,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         : { phone: cleanInput, email: cleanInput, password: loginPassword };
 
       const resData = await loginUser(payload);
-
       const userObj = resData.data?.user || resData.user;
       const tokenVal = resData.data?.token || resData.token;
-
       const actualRole = userObj?.role || (userObj?.shop ? 'seller' : 'customer');
 
-      // --- STRICT ROLE VALIDATION ---
-      // 1. If user is in "Seller Login" tab but account is a Customer
       if (authRole === 'seller' && actualRole !== 'seller') {
         localStorage.removeItem('mlx_token');
         setIsSubmitting(false);
@@ -255,7 +574,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         return;
       }
 
-      // 2. If user is in "Customer Sign In" tab but account is a Seller
       if (authRole === 'customer' && actualRole === 'seller') {
         localStorage.removeItem('mlx_token');
         setIsSubmitting(false);
@@ -264,7 +582,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         return;
       }
 
-      // Safe to persist authentication token once role is verified
       if (tokenVal) {
         localStorage.setItem('mlx_token', tokenVal);
       }
@@ -299,9 +616,9 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         };
         dispatch(setActiveUser(user));
         onToast(`Welcome back, ${user.name}!`, 'success');
+        navigate('/');
       }
-      resetAllForms();
-      dispatch(setShowAuthModal(false));
+      handleCloseModal();
     } catch (err: any) {
       onToast(err.message || 'Login failed. Please check credentials.', 'info');
     } finally {
@@ -309,134 +626,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
     }
   };
 
-  const handleRegSubmit = async (e: FormEvent) => {
-    e.preventDefault();
-    if (!regForm.email || !regForm.password) {
-      onToast('Email address and Password are required', 'info');
-      return;
-    }
-
-    try {
-      setIsSubmitting(true);
-      if (authRole === 'customer') {
-        const resData = await registerUser({
-          email: regForm.email,
-          password: regForm.password,
-          name: regForm.name,
-          phone: regForm.phone,
-          role: 'customer',
-          latitude: regForm.latitude,
-          longitude: regForm.longitude,
-        });
-
-        const tokenVal = resData?.token || resData?.data?.token;
-        const userObj = resData?.user || resData?.data?.user;
-
-        if (tokenVal) {
-          localStorage.setItem('mlx_token', tokenVal);
-        }
-
-        const user: CustomerUser = {
-          id: userObj?.id || `user-${Date.now()}`,
-          name: userObj?.name || regForm.name,
-          email: userObj?.email || regForm.email,
-          phone: userObj?.phone || regForm.phone,
-          latitude: userObj?.latitude ?? regForm.latitude ?? null,
-          longitude: userObj?.longitude ?? regForm.longitude ?? null,
-        };
-        dispatch(setActiveUser(user));
-        onToast(`Customer account created! Welcome ${user.name}`, 'success');
-      } else {
-        // Enforce only Name, Shop Name, Phone, Email, Address, Password as required
-        const sellerName = regForm.ownerName || regForm.name;
-        if (
-          !sellerName ||
-          !regForm.shopName ||
-          !regForm.phone ||
-          !regForm.email ||
-          !regForm.address ||
-          !regForm.password
-        ) {
-          onToast('Please fill out all required fields: Name, Shop Name, Phone, Email, Address, and Password.', 'info');
-          setIsSubmitting(false);
-          return;
-        }
-
-        const resData = await registerUser({
-          email: regForm.email,
-          password: regForm.password,
-          name: regForm.shopName || regForm.name || regForm.ownerName,
-          phone: regForm.phone,
-          role: 'seller',
-          shopName: regForm.shopName,
-          ownerName: regForm.ownerName,
-          whatsapp: regForm.whatsapp || regForm.phone,
-          address: regForm.address,
-          city: regForm.city,
-          category: regForm.category,
-          district: regForm.district,
-          country: regForm.country,
-          aadhaarNumber: regForm.aadhaarNumber,
-          panNumber: regForm.panNumber,
-          profileImage: regForm.profileImage,
-          subscriptionPlanId: regForm.subscriptionPlanId,
-          latitude: regForm.latitude,
-          longitude: regForm.longitude,
-          gstNumber: regForm.gstNumber,
-          websiteUrl: regForm.websiteUrl,
-          businessHours: regForm.businessHours,
-          businessDescription: regForm.businessDescription,
-          alternatePhone: regForm.alternatePhone,
-        });
-
-        const tokenVal = resData?.token || resData?.data?.token;
-        const userObj = resData?.user || resData?.data?.user;
-
-        if (tokenVal) {
-          localStorage.setItem('mlx_token', tokenVal);
-        }
-
-        const newShop: Shop = userObj?.shop || {
-          id: userObj?.id || `shop-${Date.now()}`,
-          name: regForm.shopName,
-          ownerName: regForm.ownerName,
-          phone: regForm.phone,
-          whatsapp: regForm.whatsapp || regForm.phone,
-          address: regForm.address,
-          city: regForm.city,
-          category: regForm.category,
-          district: regForm.district,
-          country: regForm.country,
-          aadhaarNumber: regForm.aadhaarNumber,
-          panNumber: regForm.panNumber,
-          profileImage: regForm.profileImage,
-          subscriptionPlanId: regForm.subscriptionPlanId || activePlans[0]?.id || 'plan-free',
-          latitude: regForm.latitude,
-          longitude: regForm.longitude,
-          gstNumber: regForm.gstNumber,
-          websiteUrl: regForm.websiteUrl,
-          businessHours: regForm.businessHours,
-          businessDescription: regForm.businessDescription,
-          alternatePhone: regForm.alternatePhone,
-          verified: false, // PENDING ADMIN APPROVAL
-          status: 'PENDING',
-          rating: 5.0,
-          joinedDate: 'Today'
-        };
-        dispatch(addShop(newShop));
-        dispatch(setActiveShop(newShop));
-        dispatch(setDashboardTab('listings'));
-        onToast(`Merchant Shop Registered: ${newShop.name} (Status: PENDING Admin Approval)`, 'success');
-        navigate('/seller-dashboard');
-      }
-      resetAllForms();
-      dispatch(setShowAuthModal(false));
-    } catch (err: any) {
-      onToast(err.message || 'Registration failed', 'info');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
+  const isSeller = authRole === 'seller';
 
   return (
     <div className="modal-overlay" onClick={handleCloseModal}>
@@ -444,15 +634,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         className="modal-content"
         onClick={(e) => e.stopPropagation()}
         style={{
-          maxWidth: '460px',
+          maxWidth: authStep === 'details' ? '540px' : '460px',
           width: '92%',
           background: '#0f172a',
           color: '#f8fafc',
           borderRadius: '24px',
-          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7)',
-          border: '1px solid rgba(255, 255, 255, 0.1)',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.75)',
+          border: '1px solid rgba(255, 255, 255, 0.12)',
           padding: '2rem 1.75rem',
-          position: 'relative'
+          position: 'relative',
+          maxHeight: '90vh',
+          overflowY: 'auto'
         }}
       >
         <button
@@ -471,581 +663,803 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            cursor: 'pointer'
+            cursor: 'pointer',
+            zIndex: 10
           }}
         >
           <X size={18} />
         </button>
 
-        <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
-          <div style={{
-            width: '56px',
-            height: '56px',
-            borderRadius: '16px',
-            background: authRole === 'seller' ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            margin: '0 auto 1rem auto',
-            boxShadow: authRole === 'seller' ? '0 10px 25px rgba(255, 111, 0, 0.4)' : '0 10px 25px rgba(37, 99, 235, 0.4)'
-          }}>
-            {authRole === 'seller' ? <Store size={28} color="#ffffff" /> : <User size={28} color="#ffffff" />}
-          </div>
-          <h2 style={{ fontSize: '1.45rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
-            {authRole === 'seller' ? (authTab === 'login' ? 'Merchant Partner Portal' : 'Register Seller Shop') : (authTab === 'login' ? 'Customer Sign In' : 'Create Customer Account')}
-          </h2>
-          <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '0.35rem' }}>
-            {authRole === 'seller' ? 'Trusted Kerala Used Electronics Marketplace' : 'Buy verified used gadgets directly from local stores'}
-          </p>
-        </div>
-
-
-
-        {/* Tab Navigation: Login / Register */}
-        <div style={{ display: 'flex', borderBottom: '1px solid rgba(255, 255, 255, 0.1)', marginBottom: '1.5rem' }}>
-          <button
-            type="button"
-            onClick={() => {
-              resetAllForms();
-              dispatch(setAuthTab('login'));
-            }}
-            style={{
-              flex: 1,
-              padding: '0.65rem',
-              background: 'none',
-              border: 'none',
-              borderBottom: authTab === 'login' ? '2.5px solid #ff9e40' : '2.5px solid transparent',
-              color: authTab === 'login' ? '#ffffff' : '#94a3b8',
-              fontWeight: 700,
-              fontSize: '0.88rem',
-              cursor: 'pointer'
-            }}
-          >
-            Sign In
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              resetAllForms();
-              dispatch(setAuthTab('register'));
-            }}
-            style={{
-              flex: 1,
-              padding: '0.65rem',
-              background: 'none',
-              border: 'none',
-              borderBottom: authTab === 'register' ? '2.5px solid #ff9e40' : '2.5px solid transparent',
-              color: authTab === 'register' ? '#ffffff' : '#94a3b8',
-              fontWeight: 700,
-              fontSize: '0.88rem',
-              cursor: 'pointer'
-            }}
-          >
-            Register
-          </button>
-        </div>
-
-        {authTab === 'login' ? (
-          <form onSubmit={handleLoginSubmit} className="modal-form" autoComplete="off">
-            <div className="form-group">
-              <label className="form-label">Email Address / Phone *</label>
-              <input
-                type="text"
-                className="form-input-text"
-                required
-                placeholder={authRole === 'seller' ? "e.g. store@gmail.com" : "e.g. rahul@gmail.com"}
-                value={loginEmail}
-                onChange={(e) => setLoginEmail(e.target.value)}
-                autoComplete="off"
-              />
-            </div>
-            <div className="form-group">
-              <label className="form-label">Password *</label>
-              <input
-                type="password"
-                className="form-input-text"
-                required
-                placeholder="••••••••"
-                value={loginPassword}
-                onChange={(e) => setLoginPassword(e.target.value)}
-                autoComplete="new-password"
-              />
-            </div>
-            <button
-              type="submit"
-              className="btn-primary"
-              disabled={isSubmitting}
-              style={{
-                width: '100%',
-                marginTop: '1rem',
-                padding: '0.85rem',
-                justifyContent: 'center',
+        {/* ========================================================= */}
+        {/* STEP 1: PHONE NUMBER & ROLE (User Request: Step 1)        */}
+        {/* ========================================================= */}
+        {authStep === 'phone' && (
+          <div>
+            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+              <div style={{
+                width: '60px',
+                height: '60px',
+                borderRadius: '18px',
+                background: isSeller ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '0.5rem',
-                borderRadius: '12px',
-                fontWeight: 700,
-                fontSize: '0.95rem',
-                background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
-                boxShadow: '0 4px 18px rgba(255, 111, 0, 0.35)',
-                opacity: isSubmitting ? 0.75 : 1,
-                cursor: isSubmitting ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="animate-spin" size={19} />
-                  <span>Processing...</span>
-                </>
-              ) : (
-                authRole === 'customer' ? 'Customer Sign In' : 'Shop Partner Sign In'
-              )}
-            </button>
-            <div style={{ textAlign: 'center', marginTop: '0.85rem', fontSize: '0.83rem', color: '#94a3b8' }}>
-              Don't have an account?{' '}
-              <a href="#" onClick={(e) => { e.preventDefault(); dispatch(setAuthTab('register')); }} style={{ color: '#ff9e40', fontWeight: 700, textDecoration: 'none' }}>
-                Register Here
-              </a>
-            </div>
-
-            <div style={{ textAlign: 'center', marginTop: '0.65rem', paddingTop: '0.65rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)', fontSize: '0.8rem', color: '#94a3b8' }}>
-              {authRole === 'seller' ? (
-                <>
-                  Looking for buyer portal?{' '}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      resetAllForms();
-                      dispatch(setAuthRole('customer'));
-                    }}
-                    style={{ background: 'none', border: 'none', color: '#60a5fa', fontWeight: 700, cursor: 'pointer', padding: 0 }}
-                  >
-                    Switch to Customer Sign In →
-                  </button>
-                </>
-              ) : (
-                <>
-                  Are you a store merchant?{' '}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      resetAllForms();
-                      dispatch(setAuthRole('seller'));
-                    }}
-                    style={{ background: 'none', border: 'none', color: '#ff9e40', fontWeight: 700, cursor: 'pointer', padding: 0 }}
-                  >
-                    Switch to Seller Login →
-                  </button>
-                </>
-              )}
-            </div>
-          </form>
-        ) : (
-          <form onSubmit={handleRegSubmit} className="modal-form">
-            {authRole === 'customer' ? (
-              <>
-                <div className="form-group">
-                  <label className="form-label">Full Name *</label>
-                  <input type="text" className="form-input-text" required placeholder="e.g. Rahul Kumar" value={regForm.name} onChange={(e) => setRegForm({ ...regForm, name: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Email Address *</label>
-                  <input type="email" className="form-input-text" required placeholder="e.g. rahul@gmail.com" value={regForm.email} onChange={(e) => setRegForm({ ...regForm, email: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Password *</label>
-                  <input type="password" className="form-input-text" required placeholder="••••••••" value={regForm.password} onChange={(e) => setRegForm({ ...regForm, password: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Phone Number *</label>
-                  <PhoneInputWithCountry required value={regForm.phone} onChange={(val) => setRegForm({ ...regForm, phone: val })} />
-                </div>
-
-                {/* CUSTOMER LOCATION SELECTION SECTION */}
-                <div className="form-group" style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1.5px dashed #3b82f6', padding: '1rem', borderRadius: '14px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                    <label className="form-label" style={{ fontWeight: 700, color: '#60a5fa', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <MapPin size={16} />
-                      <span>Your Location Coordinates (Optional)</span>
-                    </label>
-                    {typeof regForm.latitude === 'number' && typeof regForm.longitude === 'number' && !isNaN(regForm.latitude) && !isNaN(regForm.longitude) && (
-                      <span style={{ fontSize: '0.72rem', background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', padding: '0.2rem 0.6rem', borderRadius: '12px', fontWeight: 700 }}>
-                        ✓ Coordinates Set
-                      </span>
-                    )}
-                  </div>
-
-                  <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.75rem' }}>
-                    Detect GPS location or search address to locate nearby verified stores and local deals:
-                  </p>
-
-                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-                    <button
-                      type="button"
-                      disabled={isLocating}
-                      onClick={handleUseCurrentLocation}
-                      style={{
-                        flex: 1,
-                        minWidth: '150px',
-                        padding: '0.55rem 0.8rem',
-                        borderRadius: '10px',
-                        border: '1px solid #3b82f6',
-                        background: 'rgba(59, 130, 246, 0.15)',
-                        color: '#60a5fa',
-                        fontWeight: 700,
-                        fontSize: '0.78rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.4rem',
-                        cursor: isLocating ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      {isLocating ? <Loader2 className="animate-spin" size={14} /> : <MapPin size={14} />}
-                      <span>Use Current GPS Location</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      disabled={isLocating}
-                      onClick={handleSearchLocationCoordinates}
-                      style={{
-                        padding: '0.55rem 0.8rem',
-                        borderRadius: '10px',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        color: '#f8fafc',
-                        fontWeight: 600,
-                        fontSize: '0.78rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.4rem',
-                        cursor: isLocating ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      <Search size={14} />
-                      <span>Search Address / City</span>
-                    </button>
-                  </div>
-
-                  {typeof regForm.latitude === 'number' && typeof regForm.longitude === 'number' && !isNaN(regForm.latitude) && !isNaN(regForm.longitude) ? (
-                    <div style={{ fontSize: '0.78rem', background: 'rgba(0, 0, 0, 0.3)', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#e2e8f0' }}>
-                      📍 <strong>Selected Coordinates:</strong> Lat: {regForm.latitude.toFixed(5)}, Lng: {regForm.longitude.toFixed(5)}
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: '0.76rem', color: '#94a3b8', fontStyle: 'italic' }}>
-                      ℹ️ Optional: GPS coordinates can be selected now or updated anytime in your profile.
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <>
-                
-                <div className="form-group">
-                  <label className="form-label">Shop Business Name *</label>
-                  <input type="text" className="form-input-text" required placeholder="e.g. Kochi iStore Mobiles" value={regForm.shopName} onChange={(e) => setRegForm({ ...regForm, shopName: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Owner Name *</label>
-                  <input type="text" className="form-input-text" required placeholder="e.g. Afraf Fayas" value={regForm.ownerName} onChange={(e) => setRegForm({ ...regForm, ownerName: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Profile / Logo Image (Optional)</label>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(255, 255, 255, 0.04)', padding: '0.85rem', borderRadius: '14px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                    {regForm.profileImage ? (
-                      <div style={{ position: 'relative', width: '64px', height: '64px', borderRadius: '16px', overflow: 'hidden', border: '2px solid #ff9e40', flexShrink: 0 }}>
-                        <img src={regForm.profileImage} alt="Shop Logo Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                      </div>
-                    ) : (
-                      <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'rgba(255, 255, 255, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', flexShrink: 0 }}>
-                        <Store size={28} />
-                      </div>
-                    )}
-                    <div style={{ flex: 1 }}>
-                      <input
-                        type="file"
-                        id="logoFileInput"
-                        accept="image/*"
-                        style={{ display: 'none' }}
-                        onChange={handleLogoFileSelect}
-                      />
-                      <label
-                        htmlFor="logoFileInput"
-                        style={{
-                          display: 'inline-flex',
-                          alignItems: 'center',
-                          gap: '0.4rem',
-                          background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
-                          color: '#ffffff',
-                          padding: '0.5rem 0.9rem',
-                          borderRadius: '10px',
-                          fontSize: '0.8rem',
-                          fontWeight: 700,
-                          cursor: 'pointer',
-                          marginBottom: '0.3rem'
-                        }}
-                      >
-                        📷 {regForm.profileImage ? 'Change Photo' : 'Upload Shop Logo / Photo'}
-                      </label>
-                      <p style={{ fontSize: '0.73rem', color: '#94a3b8', margin: 0 }}>
-                        Supports JPG, PNG, WEBP (Auto-compressed)
-                      </p>
-                    </div>
-                  </div>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Email Address *</label>
-                  <input type="email" className="form-input-text" required placeholder="e.g. store@gmail.com" value={regForm.email} onChange={(e) => setRegForm({ ...regForm, email: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Password *</label>
-                  <input type="password" className="form-input-text" required placeholder="••••••••" value={regForm.password} onChange={(e) => setRegForm({ ...regForm, password: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Call Phone Number *</label>
-                  <PhoneInputWithCountry required value={regForm.phone} onChange={(val) => setRegForm({ ...regForm, phone: val })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">WhatsApp Number (Optional)</label>
-                  <PhoneInputWithCountry value={regForm.whatsapp} onChange={(val) => setRegForm({ ...regForm, whatsapp: val })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">City (Optional)</label>
-                  <select className="form-select-box" value={regForm.city} onChange={(e) => setRegForm({ ...regForm, city: e.target.value })}>
-                    {CITIES.filter(c => c !== "All Cities").map(c => <option key={c} value={c}>{c}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label className="form-label">District (Optional)</label>
-                  <input type="text" className="form-input-text" placeholder="e.g. Ernakulam" value={regForm.district} onChange={(e) => setRegForm({ ...regForm, district: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Country (Optional)</label>
-                  <input type="text" className="form-input-text" placeholder="India" value={regForm.country} onChange={(e) => setRegForm({ ...regForm, country: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Aadhaar Card Number (Optional)</label>
-                  <input type="text" className="form-input-text" placeholder="12-digit Aadhaar Number" value={regForm.aadhaarNumber} onChange={(e) => setRegForm({ ...regForm, aadhaarNumber: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">PAN Card Number (Optional)</label>
-                  <input type="text" className="form-input-text" placeholder="10-character PAN Number" value={regForm.panNumber} onChange={(e) => setRegForm({ ...regForm, panNumber: e.target.value })} />
-                </div>
-
-                {/* MANDATORY LOCATION SELECTION SECTION */}
-                <div className="form-group" style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1.5px dashed #ff9e40', padding: '1rem', borderRadius: '14px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                    <label className="form-label" style={{ fontWeight: 700, color: '#ff9e40', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                      <MapPin size={16} />
-                      <span>Shop Map Coordinates (Optional)</span>
-                    </label>
-                    {regForm.latitude !== undefined && regForm.longitude !== undefined && (
-                      <span style={{ fontSize: '0.72rem', background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', padding: '0.2rem 0.6rem', borderRadius: '12px', fontWeight: 700 }}>
-                        ✓ Coordinates Set
-                      </span>
-                    )}
-                  </div>
-
-                  <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.75rem' }}>
-                    Please select your shop location using GPS or address map search:
-                  </p>
-
-                  <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-                    {/* Option 1: Use Current Location */}
-                    <button
-                      type="button"
-                      disabled={isLocating}
-                      onClick={handleUseCurrentLocation}
-                      style={{
-                        flex: 1,
-                        minWidth: '150px',
-                        padding: '0.55rem 0.8rem',
-                        borderRadius: '10px',
-                        border: '1px solid #ff9e40',
-                        background: 'rgba(255, 158, 64, 0.15)',
-                        color: '#ff9e40',
-                        fontWeight: 700,
-                        fontSize: '0.78rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.4rem',
-                        cursor: isLocating ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      {isLocating ? <Loader2 className="animate-spin" size={14} /> : <MapPin size={14} />}
-                      <span>Use Current GPS Location</span>
-                    </button>
-
-                    {/* Option 2: Search Address Coordinates */}
-                    <button
-                      type="button"
-                      disabled={isLocating}
-                      onClick={handleSearchLocationCoordinates}
-                      style={{
-                        padding: '0.55rem 0.8rem',
-                        borderRadius: '10px',
-                        border: '1px solid rgba(255, 255, 255, 0.15)',
-                        background: 'rgba(255, 255, 255, 0.05)',
-                        color: '#f8fafc',
-                        fontWeight: 600,
-                        fontSize: '0.78rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.4rem',
-                        cursor: isLocating ? 'not-allowed' : 'pointer'
-                      }}
-                    >
-                      <Search size={14} />
-                      <span>Search Map Address</span>
-                    </button>
-                  </div>
-
-                  {/* Display Coordinates Status */}
-                  {typeof regForm.latitude === 'number' && typeof regForm.longitude === 'number' && !isNaN(regForm.latitude) && !isNaN(regForm.longitude) ? (
-                    <div style={{ fontSize: '0.78rem', background: 'rgba(0, 0, 0, 0.3)', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#e2e8f0' }}>
-                      📍 <strong>Selected Coordinates:</strong> Lat: {regForm.latitude.toFixed(5)}, Lng: {regForm.longitude.toFixed(5)}
-                    </div>
-                  ) : (
-                    <div style={{ fontSize: '0.76rem', color: '#f87171', fontStyle: 'italic' }}>
-                      ℹ️ Optional: GPS coordinates can be selected now or added later in your Shop Profile.
-                    </div>
-                  )}
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">Market Business Address *</label>
-                  <textarea className="form-textarea" required rows={2} placeholder="MG Road, Broadway Corner" value={regForm.address} onChange={(e) => setRegForm({ ...regForm, address: e.target.value })}></textarea>
-                </div>
-                {/* Optional Fields */}
-                <div className="form-group">
-                  <label className="form-label">GST Number (Optional)</label>
-                  <input type="text" className="form-input-text" placeholder="e.g. 32AAAAA0000A1Z5" value={regForm.gstNumber} onChange={(e) => setRegForm({ ...regForm, gstNumber: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Website URL (Optional)</label>
-                  <input type="text" className="form-input-text" placeholder="https://yourstore.com" value={regForm.websiteUrl} onChange={(e) => setRegForm({ ...regForm, websiteUrl: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Business Opening Hours (Optional)</label>
-                  <input type="text" className="form-input-text" placeholder="e.g. 9:30 AM - 8:30 PM (Mon-Sat)" value={regForm.businessHours} onChange={(e) => setRegForm({ ...regForm, businessHours: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Business Description (Optional)</label>
-                  <input type="text" className="form-input-text" placeholder="e.g. Authorised Multi-brand mobile & laptop sales" value={regForm.businessDescription} onChange={(e) => setRegForm({ ...regForm, businessDescription: e.target.value })} />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">Alternate Contact Phone (Optional)</label>
-                  <input type="text" className="form-input-text" placeholder="e.g. +91 98460 00000" value={regForm.alternatePhone} onChange={(e) => setRegForm({ ...regForm, alternatePhone: e.target.value })} />
-                </div>
-              </>
-            )}
-            <button
-              type="submit"
-              className="btn-primary"
-              disabled={isSubmitting}
-              style={{
-                width: '100%',
-                marginTop: '0.75rem',
-                padding: '0.85rem',
                 justifyContent: 'center',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '0.5rem',
-                borderRadius: '12px',
-                fontWeight: 700,
-                fontSize: '0.95rem',
-                background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
-                boxShadow: '0 4px 18px rgba(255, 111, 0, 0.35)',
-                opacity: isSubmitting ? 0.75 : 1,
-                cursor: isSubmitting ? 'not-allowed' : 'pointer'
-              }}
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="animate-spin" size={19} />
-                  <span>Submitting Shop Registration...</span>
-                </>
-              ) : (
-                authRole === 'customer' ? 'Register Customer Account' : 'Submit Shop Registration for Approval'
-              )}
-            </button>
-            <div style={{ textAlign: 'center', marginTop: '0.85rem', fontSize: '0.83rem', color: '#94a3b8' }}>
-              Already registered?{' '}
-              <a href="#" onClick={(e) => { e.preventDefault(); dispatch(setAuthTab('login')); }} style={{ color: '#ff9e40', fontWeight: 700, textDecoration: 'none' }}>
-                Sign In
-              </a>
+                margin: '0 auto 1rem auto',
+                boxShadow: isSeller ? '0 10px 25px rgba(255, 111, 0, 0.4)' : '0 10px 25px rgba(37, 99, 235, 0.4)'
+              }}>
+                {isSeller ? <Store size={30} color="#ffffff" /> : <User size={30} color="#ffffff" />}
+              </div>
+              <h2 style={{ fontSize: '1.45rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
+                {isSeller ? 'Merchant Partner Portal' : 'Customer Sign In & Register'}
+              </h2>
+              <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '0.4rem', lineHeight: '1.4' }}>
+                Enter your WhatsApp mobile number to sign in or create an account
+              </p>
             </div>
-          </form>
-        )}
-        <div style={{
-          marginTop: '1.5rem',
-          paddingTop: '1.1rem',
-          borderTop: '1px solid rgba(255, 255, 255, 0.08)',
-          textAlign: 'center',
-        }}>
-          {authRole === 'customer' ? (
-            <div>
-              <span style={{ fontSize: '0.82rem', color: '#94a3b8', display: 'block', marginBottom: '0.45rem', fontWeight: 500 }}>
-                Are you a Shop Owner?
-              </span>
+
+            {/* MANDATORY ROLE SELECTION */}
+            <div style={{ marginBottom: '1.3rem' }}>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', fontWeight: 700, fontSize: '0.82rem', color: '#cbd5e1' }}>
+                <span>Select Account Role <span style={{ color: '#ef4444' }}>*</span></span>
+                <span style={{ fontSize: '0.72rem', color: isSeller ? '#ff9e40' : '#60a5fa', fontWeight: 600 }}>
+                  Active: {isSeller ? 'Merchant Store' : 'Buyer / Customer'}
+                </span>
+              </label>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.65rem' }}>
+                {/* Customer Option */}
+                <button
+                  type="button"
+                  onClick={() => dispatch(setAuthRole('customer'))}
+                  style={{
+                    padding: '0.85rem 0.75rem',
+                    borderRadius: '14px',
+                    border: !isSeller ? '2px solid #3b82f6' : '1.5px solid rgba(255, 255, 255, 0.1)',
+                    background: !isSeller ? 'rgba(59, 130, 246, 0.16)' : 'rgba(255, 255, 255, 0.03)',
+                    color: !isSeller ? '#ffffff' : '#94a3b8',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    position: 'relative'
+                  }}
+                >
+                  {!isSeller && (
+                    <div style={{ position: 'absolute', top: '6px', right: '8px', color: '#60a5fa' }}>
+                      <CheckCircle2 size={14} />
+                    </div>
+                  )}
+                  <User size={22} color={!isSeller ? '#60a5fa' : '#64748b'} />
+                  <span style={{ fontWeight: 700, fontSize: '0.86rem' }}>Customer</span>
+                  <span style={{ fontSize: '0.7rem', color: !isSeller ? '#93c5fd' : '#64748b' }}>Buy verified gadgets</span>
+                </button>
+
+                {/* Seller Option */}
+                <button
+                  type="button"
+                  onClick={() => dispatch(setAuthRole('seller'))}
+                  style={{
+                    padding: '0.85rem 0.75rem',
+                    borderRadius: '14px',
+                    border: isSeller ? '2px solid #ff6f00' : '1.5px solid rgba(255, 255, 255, 0.1)',
+                    background: isSeller ? 'rgba(255, 111, 0, 0.16)' : 'rgba(255, 255, 255, 0.03)',
+                    color: isSeller ? '#ffffff' : '#94a3b8',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                    position: 'relative'
+                  }}
+                >
+                  {isSeller && (
+                    <div style={{ position: 'absolute', top: '6px', right: '8px', color: '#ff9e40' }}>
+                      <CheckCircle2 size={14} />
+                    </div>
+                  )}
+                  <Store size={22} color={isSeller ? '#ff9e40' : '#64748b'} />
+                  <span style={{ fontWeight: 700, fontSize: '0.86rem' }}>Seller / Store</span>
+                  <span style={{ fontSize: '0.7rem', color: isSeller ? '#fdba74' : '#64748b' }}>Sell & manage shop</span>
+                </button>
+              </div>
+            </div>
+
+            {/* ONLY PHONE NUMBER ON LOGIN AND REGISTRATION DIALOG (STEP 1) */}
+            <form onSubmit={handleSendOtp} className="modal-form" autoComplete="off">
+              <div className="form-group" style={{ marginBottom: '1.1rem' }}>
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', fontWeight: 700, fontSize: '0.84rem' }}>
+                  <span>WhatsApp Mobile Number</span>
+                  <span style={{ color: '#ef4444' }}>*</span>
+                </label>
+                <PhoneInputWithCountry
+                  required
+                  value={otpPhone}
+                  onChange={(val) => setOtpPhone(val)}
+                  placeholder="98765 43210"
+                />
+                <div style={{ 
+                  marginTop: '0.55rem', 
+                  display: 'flex', 
+                  alignItems: 'center', 
+                  gap: '0.45rem', 
+                  fontSize: '0.75rem', 
+                  color: '#94a3b8',
+                  background: 'rgba(16, 185, 129, 0.08)',
+                  border: '1px solid rgba(16, 185, 129, 0.2)',
+                  padding: '0.45rem 0.75rem',
+                  borderRadius: '10px'
+                }}>
+                  <MessageCircle size={15} color="#10b981" />
+                  <span>A 6-digit OTP code will be sent to this WhatsApp number.</span>
+                </div>
+              </div>
+
+              {/* ACTION: SEND OTP */}
               <button
-                type="button"
-                onClick={() => {
-                  dispatch(setAuthRole('seller'));
-                  dispatch(setAuthTab('login'));
-                }}
+                type="submit"
+                disabled={isSendingOtp}
+                className="btn-primary"
                 style={{
-                  background: 'rgba(255, 111, 0, 0.12)',
-                  border: '1px solid rgba(255, 111, 0, 0.4)',
-                  color: '#ff9e40',
-                  fontWeight: 700,
-                  fontSize: '0.85rem',
-                  padding: '0.6rem 1.1rem',
-                  borderRadius: '12px',
-                  cursor: 'pointer',
-                  display: 'inline-flex',
+                  width: '100%',
+                  padding: '0.88rem',
+                  justifyContent: 'center',
+                  display: 'flex',
                   alignItems: 'center',
-                  gap: '0.5rem',
-                  transition: 'all 0.2s ease',
-                  boxShadow: '0 4px 12px rgba(255, 111, 0, 0.12)'
+                  gap: '0.55rem',
+                  borderRadius: '14px',
+                  fontWeight: 700,
+                  fontSize: '0.96rem',
+                  background: isSeller 
+                    ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' 
+                    : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                  boxShadow: isSeller 
+                    ? '0 6px 20px rgba(255, 111, 0, 0.35)' 
+                    : '0 6px 20px rgba(37, 99, 235, 0.35)',
+                  opacity: isSendingOtp ? 0.75 : 1,
+                  cursor: isSendingOtp ? 'not-allowed' : 'pointer'
                 }}
               >
-                <Store size={16} />
-                <span>Partner Sign In / Register Here</span>
-                <ArrowRight size={15} />
+                {isSendingOtp ? (
+                  <>
+                    <Loader2 className="animate-spin" size={19} />
+                    <span>Sending WhatsApp OTP...</span>
+                  </>
+                ) : (
+                  <>
+                    <MessageCircle size={18} />
+                    <span>Send WhatsApp OTP</span>
+                    <ArrowRight size={16} />
+                  </>
+                )}
               </button>
-            </div>
-          ) : (
+
+              {/* Alternative option for existing password accounts */}
+              <div style={{ textAlign: 'center', marginTop: '1.25rem', paddingTop: '0.85rem', borderTop: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                <button
+                  type="button"
+                  onClick={() => setAuthStep('legacy')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#94a3b8',
+                    fontSize: '0.79rem',
+                    cursor: 'pointer',
+                    textDecoration: 'underline'
+                  }}
+                >
+                  Prefer email & password? Classic Sign In →
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* STEP 2: OTP ENTERED TAB (User Request: Step 2)            */}
+        {/* ========================================================= */}
+        {authStep === 'otp' && (
+          <div>
             <button
               type="button"
-              onClick={() => {
-                dispatch(setAuthRole('customer'));
-                dispatch(setAuthTab('login'));
-              }}
+              onClick={() => setAuthStep('phone')}
               style={{
-                background: '#0f172a',
-                border: '1px solid #334155',
-                color: '#cbd5e1',
-                fontWeight: 600,
-                fontSize: '0.82rem',
-                padding: '0.5rem 1rem',
-                borderRadius: '10px',
-                cursor: 'pointer',
+                background: 'none',
+                border: 'none',
+                color: '#94a3b8',
                 display: 'inline-flex',
                 alignItems: 'center',
-                gap: '0.45rem',
-                transition: 'all 0.2s ease',
+                gap: '0.35rem',
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                marginBottom: '1rem',
+                padding: 0
               }}
             >
-              <User size={15} />
-              <span>Switch back to Customer Sign In</span>
+              <ArrowLeft size={16} />
+              <span>Change Number</span>
             </button>
-          )}
-        </div>
+
+            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+              <div style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '16px',
+                background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 0.85rem auto',
+                boxShadow: '0 10px 25px rgba(16, 185, 129, 0.35)'
+              }}>
+                <MessageCircle size={28} color="#ffffff" />
+              </div>
+              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
+                Verify WhatsApp OTP
+              </h2>
+              <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '0.35rem' }}>
+                Enter the 6-digit code sent to <strong style={{ color: '#ffffff' }}>{otpPhone}</strong>
+              </p>
+              {isExistingAccount !== null && (
+                <span style={{ 
+                  display: 'inline-block', 
+                  marginTop: '0.4rem', 
+                  fontSize: '0.72rem', 
+                  padding: '0.2rem 0.6rem', 
+                  borderRadius: '10px',
+                  background: isExistingAccount ? 'rgba(34, 197, 94, 0.15)' : 'rgba(59, 130, 246, 0.15)',
+                  color: isExistingAccount ? '#4ade80' : '#60a5fa',
+                  fontWeight: 700
+                }}>
+                  {isExistingAccount ? 'Existing User Detected (Direct Sign In)' : 'New User (Profile Setup Next)'}
+                </span>
+              )}
+            </div>
+
+            <form onSubmit={handleVerifyOtp} className="modal-form">
+              {/* 6-DIGIT OTP INPUTS */}
+              <div style={{ display: 'flex', gap: '0.45rem', justifyContent: 'center', marginBottom: '1.25rem' }}>
+                {otpDigits.map((digit, idx) => (
+                  <input
+                    key={idx}
+                    ref={(el) => { otpInputRefs.current[idx] = el; }}
+                    type="text"
+                    inputMode="numeric"
+                    maxLength={1}
+                    value={digit}
+                    onChange={(e) => handleOtpDigitChange(idx, e.target.value)}
+                    onKeyDown={(e) => handleOtpKeyDown(idx, e)}
+                    style={{
+                      width: '46px',
+                      height: '54px',
+                      textAlign: 'center',
+                      fontSize: '1.4rem',
+                      fontWeight: 800,
+                      background: 'rgba(255, 255, 255, 0.06)',
+                      border: digit ? '2px solid #10b981' : '1.5px solid rgba(255, 255, 255, 0.15)',
+                      borderRadius: '12px',
+                      color: '#ffffff',
+                      outline: 'none',
+                      transition: 'border 0.2s ease'
+                    }}
+                  />
+                ))}
+              </div>
+
+              {/* ACTION: VERIFY OTP */}
+              <button
+                type="submit"
+                disabled={isVerifyingOtp || otpDigits.join('').length !== 6}
+                className="btn-primary"
+                style={{
+                  width: '100%',
+                  padding: '0.88rem',
+                  justifyContent: 'center',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.55rem',
+                  borderRadius: '14px',
+                  fontWeight: 700,
+                  fontSize: '0.96rem',
+                  background: 'linear-gradient(135deg, #10b981 0%, #059669 100%)',
+                  boxShadow: '0 6px 20px rgba(16, 185, 129, 0.35)',
+                  opacity: (isVerifyingOtp || otpDigits.join('').length !== 6) ? 0.6 : 1,
+                  cursor: (isVerifyingOtp || otpDigits.join('').length !== 6) ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isVerifyingOtp ? (
+                  <>
+                    <Loader2 className="animate-spin" size={19} />
+                    <span>Verifying Code...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={18} />
+                    <span>Verify & Continue</span>
+                  </>
+                )}
+              </button>
+
+              {/* RESEND TIMER / BUTTON */}
+              <div style={{ textAlign: 'center', marginTop: '1.1rem', fontSize: '0.82rem', color: '#94a3b8' }}>
+                {otpCountdown > 0 ? (
+                  <span>Resend WhatsApp OTP in <strong style={{ color: '#ffffff' }}>{otpCountdown}s</strong></span>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => handleSendOtp()}
+                    disabled={isSendingOtp}
+                    style={{
+                      background: 'none',
+                      border: 'none',
+                      color: '#10b981',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.35rem'
+                    }}
+                  >
+                    <RefreshCw size={14} className={isSendingOtp ? 'animate-spin' : ''} />
+                    <span>Resend OTP via WhatsApp</span>
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* STEP 4: DETAILS COLLECTING PAGE (New User Setup)          */}
+        {/* ========================================================= */}
+        {authStep === 'details' && (
+          <div>
+            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+              <div style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '16px',
+                background: isSeller ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 0.85rem auto',
+                boxShadow: isSeller ? '0 10px 25px rgba(255, 111, 0, 0.4)' : '0 10px 25px rgba(37, 99, 235, 0.4)'
+              }}>
+                {isSeller ? <Store size={28} color="#ffffff" /> : <User size={28} color="#ffffff" />}
+              </div>
+              <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
+                {isSeller ? 'Complete Store Details' : 'Complete Customer Profile'}
+              </h2>
+              <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginTop: '0.3rem' }}>
+                Verified Phone: <strong style={{ color: '#4ade80' }}>{regForm.phone || otpPhone}</strong>
+              </p>
+            </div>
+
+            <form onSubmit={handleRegSubmit} className="modal-form">
+              {authRole === 'customer' ? (
+                <>
+                  <div className="form-group">
+                    <label className="form-label">Full Name *</label>
+                    <input
+                      type="text"
+                      className="form-input-text"
+                      required
+                      placeholder="e.g. Rahul Kumar"
+                      value={regForm.name}
+                      onChange={(e) => setRegForm({ ...regForm, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Email Address (Optional)</label>
+                    <input
+                      type="email"
+                      className="form-input-text"
+                      placeholder="e.g. rahul@gmail.com"
+                      value={regForm.email}
+                      onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
+                    />
+                  </div>
+
+                  {/* CUSTOMER LOCATION SELECTION SECTION */}
+                  <div className="form-group" style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1.5px dashed #3b82f6', padding: '1rem', borderRadius: '14px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                      <label className="form-label" style={{ fontWeight: 700, color: '#60a5fa', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <MapPin size={16} />
+                        <span>Your Location Coordinates (Optional)</span>
+                      </label>
+                      {typeof regForm.latitude === 'number' && typeof regForm.longitude === 'number' && !isNaN(regForm.latitude) && !isNaN(regForm.longitude) && (
+                        <span style={{ fontSize: '0.72rem', background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', padding: '0.2rem 0.6rem', borderRadius: '12px', fontWeight: 700 }}>
+                          ✓ Coordinates Set
+                        </span>
+                      )}
+                    </div>
+
+                    <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.75rem' }}>
+                      Detect GPS location or search address to locate nearby verified stores and local deals:
+                    </p>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                      <button
+                        type="button"
+                        disabled={isLocating}
+                        onClick={handleUseCurrentLocation}
+                        style={{
+                          flex: 1,
+                          minWidth: '150px',
+                          padding: '0.55rem 0.8rem',
+                          borderRadius: '10px',
+                          border: '1px solid #3b82f6',
+                          background: 'rgba(59, 130, 246, 0.15)',
+                          color: '#60a5fa',
+                          fontWeight: 700,
+                          fontSize: '0.78rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.4rem',
+                          cursor: isLocating ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        {isLocating ? <Loader2 className="animate-spin" size={14} /> : <MapPin size={14} />}
+                        <span>Use Current GPS Location</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isLocating}
+                        onClick={handleSearchLocationCoordinates}
+                        style={{
+                          padding: '0.55rem 0.8rem',
+                          borderRadius: '10px',
+                          border: '1px solid rgba(255, 255, 255, 0.15)',
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          color: '#f8fafc',
+                          fontWeight: 600,
+                          fontSize: '0.78rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.4rem',
+                          cursor: isLocating ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        <Search size={14} />
+                        <span>Search Address / City</span>
+                      </button>
+                    </div>
+
+                    {typeof regForm.latitude === 'number' && typeof regForm.longitude === 'number' && !isNaN(regForm.latitude) && !isNaN(regForm.longitude) ? (
+                      <div style={{ fontSize: '0.78rem', background: 'rgba(0, 0, 0, 0.3)', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#e2e8f0' }}>
+                        📍 <strong>Selected Coordinates:</strong> Lat: {regForm.latitude.toFixed(5)}, Lng: {regForm.longitude.toFixed(5)}
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.76rem', color: '#94a3b8', fontStyle: 'italic' }}>
+                        ℹ️ Optional: GPS coordinates can be selected now or updated anytime in your profile.
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* SELLER DETAILS FORM */}
+                  <div className="form-group">
+                    <label className="form-label">Shop Business Name *</label>
+                    <input type="text" className="form-input-text" required placeholder="e.g. Kochi iStore Mobiles" value={regForm.shopName} onChange={(e) => setRegForm({ ...regForm, shopName: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Owner Name *</label>
+                    <input type="text" className="form-input-text" required placeholder="e.g. Afraf Fayas" value={regForm.ownerName} onChange={(e) => setRegForm({ ...regForm, ownerName: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Profile / Logo Image (Optional)</label>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(255, 255, 255, 0.04)', padding: '0.85rem', borderRadius: '14px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                      {regForm.profileImage ? (
+                        <div style={{ position: 'relative', width: '64px', height: '64px', borderRadius: '16px', overflow: 'hidden', border: '2px solid #ff9e40', flexShrink: 0 }}>
+                          <img src={regForm.profileImage} alt="Shop Logo Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                      ) : (
+                        <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'rgba(255, 255, 255, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', flexShrink: 0 }}>
+                          <Store size={28} />
+                        </div>
+                      )}
+                      <div style={{ flex: 1 }}>
+                        <input
+                          type="file"
+                          id="logoFileInput"
+                          accept="image/*"
+                          style={{ display: 'none' }}
+                          onChange={handleLogoFileSelect}
+                        />
+                        <label
+                          htmlFor="logoFileInput"
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.4rem',
+                            background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
+                            color: '#ffffff',
+                            padding: '0.5rem 0.9rem',
+                            borderRadius: '10px',
+                            fontSize: '0.8rem',
+                            fontWeight: 700,
+                            cursor: 'pointer',
+                            marginBottom: '0.3rem'
+                          }}
+                        >
+                          📷 {regForm.profileImage ? 'Change Photo' : 'Upload Shop Logo / Photo'}
+                        </label>
+                        <p style={{ fontSize: '0.73rem', color: '#94a3b8', margin: 0 }}>
+                          Supports JPG, PNG, WEBP (Auto-compressed)
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Email Address (Optional)</label>
+                    <input type="email" className="form-input-text" placeholder="e.g. store@gmail.com" value={regForm.email} onChange={(e) => setRegForm({ ...regForm, email: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Store Address (Optional)</label>
+                    <input type="text" className="form-input-text" placeholder="Shop No, Building, Street, Kerala" value={regForm.address} onChange={(e) => setRegForm({ ...regForm, address: e.target.value })} />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">Category</label>
+                    <select className="form-select-box" value={regForm.category} onChange={(e) => setRegForm({ ...regForm, category: e.target.value })}>
+                      <option value="Mobiles & Tablets">Mobiles & Tablets</option>
+                      <option value="Laptops & Computers">Laptops & Computers</option>
+                      <option value="Cameras & Optics">Cameras & Optics</option>
+                      <option value="Audio & Sound">Audio & Sound</option>
+                      <option value="Gaming & Consoles">Gaming & Consoles</option>
+                      <option value="Smart Watches & Wearables">Smart Watches & Wearables</option>
+                      <option value="Accessories">Accessories</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">City</label>
+                    <select className="form-select-box" value={regForm.city} onChange={(e) => setRegForm({ ...regForm, city: e.target.value })}>
+                      {CITIES.filter(c => c !== "All Cities").map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+
+                  {/* MANDATORY LOCATION SELECTION SECTION */}
+                  <div className="form-group" style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1.5px dashed #ff9e40', padding: '1rem', borderRadius: '14px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
+                      <label className="form-label" style={{ fontWeight: 700, color: '#ff9e40', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <MapPin size={16} />
+                        <span>Shop Map Coordinates (Optional)</span>
+                      </label>
+                      {regForm.latitude !== undefined && regForm.longitude !== undefined && (
+                        <span style={{ fontSize: '0.72rem', background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', padding: '0.2rem 0.6rem', borderRadius: '12px', fontWeight: 700 }}>
+                          ✓ Coordinates Set
+                        </span>
+                      )}
+                    </div>
+
+                    <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.75rem' }}>
+                      Select shop location using GPS or address map search:
+                    </p>
+
+                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                      <button
+                        type="button"
+                        disabled={isLocating}
+                        onClick={handleUseCurrentLocation}
+                        style={{
+                          flex: 1,
+                          minWidth: '150px',
+                          padding: '0.55rem 0.8rem',
+                          borderRadius: '10px',
+                          border: '1px solid #ff6f00',
+                          background: 'rgba(255, 111, 0, 0.15)',
+                          color: '#ff9e40',
+                          fontWeight: 700,
+                          fontSize: '0.78rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.4rem',
+                          cursor: isLocating ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        {isLocating ? <Loader2 className="animate-spin" size={14} /> : <MapPin size={14} />}
+                        <span>Use Current GPS Location</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={isLocating}
+                        onClick={handleSearchLocationCoordinates}
+                        style={{
+                          padding: '0.55rem 0.8rem',
+                          borderRadius: '10px',
+                          border: '1px solid rgba(255, 255, 255, 0.15)',
+                          background: 'rgba(255, 255, 255, 0.05)',
+                          color: '#f8fafc',
+                          fontWeight: 600,
+                          fontSize: '0.78rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.4rem',
+                          cursor: isLocating ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        <Search size={14} />
+                        <span>Search Address / City</span>
+                      </button>
+                    </div>
+
+                    {regForm.latitude !== undefined && regForm.longitude !== undefined && (
+                      <div style={{ fontSize: '0.78rem', background: 'rgba(0, 0, 0, 0.3)', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#e2e8f0' }}>
+                        📍 <strong>Shop Coordinates:</strong> Lat: {regForm.latitude.toFixed(5)}, Lng: {regForm.longitude.toFixed(5)}
+                      </div>
+                    )}
+                  </div>
+                </>
+              )}
+
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={isSubmitting}
+                style={{
+                  width: '100%',
+                  marginTop: '1.25rem',
+                  padding: '0.88rem',
+                  justifyContent: 'center',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  borderRadius: '12px',
+                  fontWeight: 700,
+                  fontSize: '0.96rem',
+                  background: isSeller ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                  boxShadow: isSeller ? '0 4px 18px rgba(255, 111, 0, 0.35)' : '0 4px 18px rgba(37, 99, 235, 0.35)',
+                  opacity: isSubmitting ? 0.75 : 1,
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="animate-spin" size={19} />
+                    <span>Completing Registration...</span>
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 size={18} />
+                    <span>Complete Registration & Continue</span>
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        )}
+
+        {/* ========================================================= */}
+        {/* LEGACY EMAIL & PASSWORD SIGN IN FALLBACK                  */}
+        {/* ========================================================= */}
+        {authStep === 'legacy' && (
+          <div>
+            <button
+              type="button"
+              onClick={() => setAuthStep('phone')}
+              style={{
+                background: 'none',
+                border: 'none',
+                color: '#94a3b8',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '0.35rem',
+                fontSize: '0.8rem',
+                cursor: 'pointer',
+                marginBottom: '1rem',
+                padding: 0
+              }}
+            >
+              <ArrowLeft size={16} />
+              <span>← Back to WhatsApp OTP Sign In</span>
+            </button>
+
+            <div style={{ textAlign: 'center', marginBottom: '1.5rem' }}>
+              <div style={{
+                width: '56px',
+                height: '56px',
+                borderRadius: '16px',
+                background: isSeller ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                margin: '0 auto 1rem auto',
+                boxShadow: isSeller ? '0 10px 25px rgba(255, 111, 0, 0.4)' : '0 10px 25px rgba(37, 99, 235, 0.4)'
+              }}>
+                {isSeller ? <Store size={28} color="#ffffff" /> : <User size={28} color="#ffffff" />}
+              </div>
+              <h2 style={{ fontSize: '1.4rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
+                {isSeller ? 'Merchant Email Sign In' : 'Customer Email Sign In'}
+              </h2>
+              <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '0.35rem' }}>
+                Sign in using your registered email and password
+              </p>
+            </div>
+
+            <form onSubmit={handleLoginSubmit} className="modal-form" autoComplete="off">
+              <div className="form-group">
+                <label className="form-label">Email Address / Phone *</label>
+                <input
+                  type="text"
+                  className="form-input-text"
+                  required
+                  placeholder={isSeller ? "e.g. store@gmail.com" : "e.g. rahul@gmail.com"}
+                  value={loginEmail}
+                  onChange={(e) => setLoginEmail(e.target.value)}
+                  autoComplete="off"
+                />
+              </div>
+              <div className="form-group">
+                <label className="form-label">Password *</label>
+                <input
+                  type="password"
+                  className="form-input-text"
+                  required
+                  placeholder="••••••••"
+                  value={loginPassword}
+                  onChange={(e) => setLoginPassword(e.target.value)}
+                  autoComplete="new-password"
+                />
+              </div>
+              <button
+                type="submit"
+                className="btn-primary"
+                disabled={isSubmitting}
+                style={{
+                  width: '100%',
+                  marginTop: '1rem',
+                  padding: '0.85rem',
+                  justifyContent: 'center',
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '0.5rem',
+                  borderRadius: '12px',
+                  fontWeight: 700,
+                  fontSize: '0.95rem',
+                  background: isSeller ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                  boxShadow: isSeller ? '0 4px 18px rgba(255, 111, 0, 0.35)' : '0 4px 18px rgba(37, 99, 235, 0.35)',
+                  opacity: isSubmitting ? 0.75 : 1,
+                  cursor: isSubmitting ? 'not-allowed' : 'pointer'
+                }}
+              >
+                {isSubmitting ? (
+                  <>
+                    <Loader2 className="animate-spin" size={19} />
+                    <span>Signing in...</span>
+                  </>
+                ) : (
+                  <span>Sign In</span>
+                )}
+              </button>
+
+              <div style={{ textAlign: 'center', marginTop: '1rem' }}>
+                <button
+                  type="button"
+                  onClick={() => setAuthStep('phone')}
+                  style={{
+                    background: 'none',
+                    border: 'none',
+                    color: '#ff9e40',
+                    fontSize: '0.82rem',
+                    fontWeight: 700,
+                    cursor: 'pointer'
+                  }}
+                >
+                  Switch to WhatsApp OTP Sign In →
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
       </div>
     </div>
   );
