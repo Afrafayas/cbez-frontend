@@ -736,7 +736,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 <MessageCircle size={30} color="#ffffff" />
               </div>
               <h2 style={{ fontSize: '1.45rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
-                {isSeller ? 'Store Sign In & Register' : 'Sign In / Register'}
+                Login
               </h2>
               <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '0.4rem', lineHeight: '1.4' }}>
                 Enter your WhatsApp mobile number to continue
