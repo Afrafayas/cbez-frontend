@@ -351,7 +351,7 @@ export async function registerUser(userData: {
   alternatePhone?: string;
 }) {
   const res = await fetch(`${API_BASE_URL}/auth/register`, {
-    method: 'POST',
+    method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(userData),
   });
