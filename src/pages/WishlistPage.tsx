@@ -326,7 +326,6 @@ export const WishlistPage: React.FC<WishlistPageProps> = ({
                   <div className="card-actions" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }} onClick={(e) => e.stopPropagation()}>
                     <button
                       className="btn-call"
-                      disabled={isSoldOut}
                       onClick={() => onCallSeller(product, seller)}
                       style={{
                         padding: '0.45rem',
@@ -340,8 +339,7 @@ export const WishlistPage: React.FC<WishlistPageProps> = ({
                         background: '#2563eb',
                         color: '#ffffff',
                         border: 'none',
-                        cursor: isSoldOut ? 'not-allowed' : 'pointer',
-                        opacity: isSoldOut ? 0.5 : 1
+                        cursor: 'pointer'
                       }}
                     >
                       <Phone size={13} />
@@ -349,7 +347,6 @@ export const WishlistPage: React.FC<WishlistPageProps> = ({
                     </button>
                     <button
                       className="btn-whatsapp"
-                      disabled={isSoldOut}
                       onClick={() => onWhatsAppSeller(product, seller)}
                       style={{
                         padding: '0.45rem',
@@ -363,8 +360,7 @@ export const WishlistPage: React.FC<WishlistPageProps> = ({
                         background: '#16a34a',
                         color: '#ffffff',
                         border: 'none',
-                        cursor: isSoldOut ? 'not-allowed' : 'pointer',
-                        opacity: isSoldOut ? 0.5 : 1
+                        cursor: 'pointer'
                       }}
                     >
                       <Smartphone size={13} />

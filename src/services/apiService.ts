@@ -571,39 +571,112 @@ export async function geocodeAddress(address: string): Promise<{ latitude: numbe
   };
 }
 
+const KNOWN_CITIES = [
+  { name: 'Kochi', lat: 9.9312, lng: 76.2673 },
+  { name: 'Calicut', lat: 11.2588, lng: 75.7804 },
+  { name: 'Trivandrum', lat: 8.5241, lng: 76.9366 },
+  { name: 'Thrissur', lat: 10.5276, lng: 76.2144 },
+  { name: 'Palakkad', lat: 10.7867, lng: 76.6548 },
+  { name: 'Malappuram', lat: 11.0720, lng: 76.0740 },
+  { name: 'Kannur', lat: 11.8745, lng: 75.3704 },
+  { name: 'Kottayam', lat: 9.5916, lng: 76.5222 },
+  { name: 'Alappuzha', lat: 9.4981, lng: 76.3388 },
+  { name: 'Kollam', lat: 8.8932, lng: 76.6141 },
+  { name: 'Pathanamthitta', lat: 9.2648, lng: 76.7870 },
+  { name: 'Idukki', lat: 9.8497, lng: 76.9806 },
+  { name: 'Wayanad', lat: 11.6854, lng: 76.1320 },
+  { name: 'Kasaragod', lat: 12.5102, lng: 74.9852 },
+  { name: 'Bangalore', lat: 12.9716, lng: 77.5946 },
+  { name: 'Chennai', lat: 13.0827, lng: 80.2707 },
+  { name: 'Coimbatore', lat: 11.0168, lng: 76.9558 },
+  { name: 'Madurai', lat: 9.9252, lng: 78.1198 },
+  { name: 'Mangalore', lat: 12.9141, lng: 74.8560 },
+];
+
+export function getNearestKnownCity(lat: number, lng: number): string {
+  let minDistance = Infinity;
+  let nearest = 'Kochi';
+  for (const c of KNOWN_CITIES) {
+    const dLat = c.lat - lat;
+    const dLng = c.lng - lng;
+    const distSq = dLat * dLat + dLng * dLng;
+    if (distSq < minDistance) {
+      minDistance = distSq;
+      nearest = c.name;
+    }
+  }
+  return nearest;
+}
+
 export async function reverseGeocodeCoords(lat: number, lng: number): Promise<{
   formattedAddress: string;
   city?: string;
   district?: string;
   country?: string;
 }> {
-  const res = await fetch(`${API_BASE_URL}/location/reverse-geocode?lat=${lat}&lng=${lng}`);
-  const data = await res.json();
-  if (!res.ok) throw new Error(data.message || 'Reverse geocoding failed');
+  // 1. Try Backend API
+  try {
+    const res = await fetch(`${API_BASE_URL}/location/reverse-geocode?lat=${lat}&lng=${lng}`);
+    if (res.ok) {
+      const data = await res.json();
+      let city: string | undefined;
+      let district: string | undefined;
+      let country: string | undefined;
 
-  let city: string | undefined;
-  let district: string | undefined;
-  let country: string | undefined;
-
-  if (Array.isArray(data.addressComponents)) {
-    for (const comp of data.addressComponents) {
-      if (comp.types.includes('locality') || comp.types.includes('administrative_area_level_2')) {
-        city = city || comp.long_name;
+      if (Array.isArray(data.addressComponents)) {
+        for (const comp of data.addressComponents) {
+          if (comp.types.includes('locality') || comp.types.includes('sublocality_level_1') || comp.types.includes('administrative_area_level_2')) {
+            city = city || comp.long_name;
+          }
+          if (comp.types.includes('administrative_area_level_2') || comp.types.includes('administrative_area_level_1')) {
+            district = district || comp.long_name;
+          }
+          if (comp.types.includes('country')) {
+            country = comp.long_name;
+          }
+        }
       }
-      if (comp.types.includes('administrative_area_level_2') || comp.types.includes('administrative_area_level_1')) {
-        district = district || comp.long_name;
-      }
-      if (comp.types.includes('country')) {
-        country = comp.long_name;
+      if (city || district || data.formattedAddress) {
+        return {
+          formattedAddress: data.formattedAddress || city || district || '',
+          city: city || district,
+          district,
+          country,
+        };
       }
     }
+  } catch (err) {
+    console.warn('Backend reverse-geocode API fallback:', err);
   }
 
+  // 2. OpenStreetMap Nominatim Free API Fallback
+  try {
+    const nomRes = await fetch(`https://nominatim.openstreetmap.org/reverse?format=jsonv2&lat=${lat}&lon=${lng}`);
+    if (nomRes.ok) {
+      const nomData = await nomRes.json();
+      const addr = nomData.address || {};
+      const cityName = addr.city || addr.town || addr.suburb || addr.village || addr.municipality || addr.county || addr.state_district;
+      const formatted = nomData.display_name || cityName || '';
+      if (cityName || formatted) {
+        return {
+          formattedAddress: formatted,
+          city: cityName || addr.county || addr.state_district,
+          district: addr.county || addr.state_district || addr.state,
+          country: addr.country,
+        };
+      }
+    }
+  } catch (nomErr) {
+    console.warn('Nominatim reverse-geocode fallback failed:', nomErr);
+  }
+
+  // 3. Distance calculation fallback to nearest city
+  const nearest = getNearestKnownCity(lat, lng);
   return {
-    formattedAddress: data.formattedAddress || '',
-    city,
-    district,
-    country,
+    formattedAddress: nearest,
+    city: nearest,
+    district: nearest,
+    country: 'India',
   };
 }
 

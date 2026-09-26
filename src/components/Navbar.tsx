@@ -13,7 +13,7 @@ import { setAuthRole, setAuthTab, setShowAuthModal, setActiveShop, setActiveUser
 import { setDashboardTab } from '../store/uiSlice';
 import { CITIES } from '../data/mockData';
 import { Product } from '../types';
-import { geocodeAddress, reverseGeocodeCoords, updateUser } from '../services/apiService';
+import { geocodeAddress, reverseGeocodeCoords, getNearestKnownCity, updateUser } from '../services/apiService';
 
 interface NavbarProps {
   filteredProducts: Product[];
@@ -88,10 +88,12 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
         const { latitude, longitude } = position.coords;
         try {
           const rev = await reverseGeocodeCoords(latitude, longitude);
-          const name = rev.city || rev.district || (rev.formattedAddress ? rev.formattedAddress.split(',')[0] : 'Current Location');
+          const fallback = getNearestKnownCity(latitude, longitude);
+          const name = rev.city || rev.district || (rev.formattedAddress ? rev.formattedAddress.split(',')[0] : fallback);
           await applyNewLocation(latitude, longitude, name);
         } catch (err) {
-          await applyNewLocation(latitude, longitude, 'Current Location');
+          const fallbackName = getNearestKnownCity(latitude, longitude);
+          await applyNewLocation(latitude, longitude, fallbackName);
         } finally {
           setIsDetectingLocation(false);
         }

@@ -380,70 +380,75 @@ export const ProductCard: React.FC<ProductCardProps> = ({
         {/* Actions Row: Call Dealer & WhatsApp */}
         <div
           onClick={(e) => e.stopPropagation()}
-          style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem', marginTop: 'auto' }}
+          style={{ marginTop: 'auto', display: 'flex', flexDirection: 'column', gap: '0.4rem' }}
         >
-          <button
-            type="button"
-            disabled={isSoldOut}
-            onClick={() => onCallSeller(product, seller)}
-            style={{
-              padding: '0.55rem 0.6rem',
-              borderRadius: '10px',
-              border: '1px solid #fed7aa',
-              background: '#fff7ed',
-              color: '#ea580c',
-              fontWeight: 700,
-              fontSize: '0.8rem',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.35rem',
-              cursor: isSoldOut ? 'not-allowed' : 'pointer',
-              opacity: isSoldOut ? 0.5 : 1,
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => {
-              if (!isSoldOut) e.currentTarget.style.background = '#ffedd5';
-            }}
-            onMouseLeave={(e) => {
-              if (!isSoldOut) e.currentTarget.style.background = '#fff7ed';
-            }}
-          >
-            <Phone size={13} />
-            <span>Call Dealer</span>
-          </button>
+          {isSoldOut && (
+            <div style={{ fontSize: '0.68rem', textAlign: 'center', color: '#dc2626', fontWeight: 700, background: '#fef2f2', padding: '0.25rem 0.4rem', borderRadius: '6px', border: '1px solid #fee2e2' }}>
+              💬 Out of stock? Call or WhatsApp seller to enquire restock!
+            </div>
+          )}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.5rem' }}>
+            <button
+              type="button"
+              onClick={() => onCallSeller(product, seller)}
+              title={isSoldOut ? "Call dealer to ask about restock / availability" : "Call dealer directly"}
+              style={{
+                padding: '0.55rem 0.5rem',
+                borderRadius: '10px',
+                border: isSoldOut ? '1px solid #fca5a5' : '1px solid #fed7aa',
+                background: isSoldOut ? '#fff5f5' : '#fff7ed',
+                color: isSoldOut ? '#c53030' : '#ea580c',
+                fontWeight: 700,
+                fontSize: '0.78rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.3rem',
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = isSoldOut ? '#fed7d7' : '#ffedd5';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = isSoldOut ? '#fff5f5' : '#fff7ed';
+              }}
+            >
+              <Phone size={13} />
+              <span>{isSoldOut ? 'Call Dealer' : 'Call Dealer'}</span>
+            </button>
 
-          <button
-            type="button"
-            disabled={isSoldOut}
-            onClick={() => onWhatsAppSeller(product, seller)}
-            style={{
-              padding: '0.55rem 0.6rem',
-              borderRadius: '10px',
-              border: 'none',
-              background: '#22c55e',
-              color: '#ffffff',
-              fontWeight: 700,
-              fontSize: '0.8rem',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '0.35rem',
-              cursor: isSoldOut ? 'not-allowed' : 'pointer',
-              opacity: isSoldOut ? 0.5 : 1,
-              boxShadow: isSoldOut ? 'none' : '0 2px 8px rgba(34, 197, 94, 0.28)',
-              transition: 'all 0.2s ease'
-            }}
-            onMouseEnter={(e) => {
-              if (!isSoldOut) e.currentTarget.style.background = '#16a34a';
-            }}
-            onMouseLeave={(e) => {
-              if (!isSoldOut) e.currentTarget.style.background = '#22c55e';
-            }}
-          >
-            <Smartphone size={13} />
-            <span>WhatsApp</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => onWhatsAppSeller(product, seller)}
+              title={isSoldOut ? "WhatsApp dealer to inquire restock" : "Chat on WhatsApp"}
+              style={{
+                padding: '0.55rem 0.5rem',
+                borderRadius: '10px',
+                border: 'none',
+                background: '#22c55e',
+                color: '#ffffff',
+                fontWeight: 700,
+                fontSize: '0.78rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '0.3rem',
+                cursor: 'pointer',
+                boxShadow: '0 2px 8px rgba(34, 197, 94, 0.28)',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = '#16a34a';
+              }}
+              onMouseLeave={(e) => {
+                e.currentTarget.style.background = '#22c55e';
+              }}
+            >
+              <Smartphone size={13} />
+              <span>{isSoldOut ? 'WhatsApp' : 'WhatsApp'}</span>
+            </button>
+          </div>
         </div>
       </div>
     </article>

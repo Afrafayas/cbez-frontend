@@ -5,7 +5,8 @@ import { AuthModal } from './components/AuthModal';
 import { AddEditProductModal } from './components/AddEditProductModal';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { Footer } from './components/Footer';
-import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, reverseGeocodeCoords, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, deleteProductApi, getSellerProducts, updateSellerProduct } from './services/apiService';
+import { useFilterSearchParams } from './hooks/useFilterSearchParams';
+import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, reverseGeocodeCoords, getNearestKnownCity, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, getBrands, deleteProductApi, getSellerProducts, updateSellerProduct } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import React, { ChangeEvent, FormEvent } from 'react';
 import {
@@ -84,7 +85,7 @@ import {
   removeToast,
   setDashboardTab
 } from './store/uiSlice';
-import { CATEGORIES, CITIES, BUDGET_PRESETS , INITIAL_SHOPS } from './data/mockData';
+import { CATEGORIES, CITIES, BUDGET_PRESETS, BRANDS, INITIAL_SHOPS } from './data/mockData';
 import { Product, Shop, Lead, User as CustomerUser, calculateShopProfileCompletion } from './types';
 
 interface CustomSelectProps {
@@ -373,12 +374,17 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
 
+  // Sync Redux filters with browser URL query parameters
+  useFilterSearchParams();
+
   // --- REDUX SELECTORS ---
   const { activeShop, activeUser, showAuthModal } = useAppSelector(state => state.auth);
   const { items: products, shops, leads, selectedProduct, showAddEditModal, subscriptionPlans } = useAppSelector(state => state.products);
   const { toasts, dashboardTab } = useAppSelector(state => state.ui);
   const filters = useAppSelector(state => state.filters);
   const storeCategories = useAppSelector(state => state.products.categories);
+  const [dbBrands, setDbBrands] = React.useState<string[]>([]);
+  const [isLoadingProducts, setIsLoadingProducts] = React.useState<boolean>(true);
 
   const displayCategories = React.useMemo(() => {
     return Array.from(
@@ -393,6 +399,7 @@ export default function App() {
   // --- LIVE BACKEND DATA LOADER ---
   React.useEffect(() => {
     async function loadLiveBackendData() {
+      setIsLoadingProducts(true);
       try {
         const liveProducts = await getProducts({
           search: filters.searchQuery,
@@ -406,16 +413,20 @@ export default function App() {
           lng: filters.userLongitude ?? undefined,
           radiusKm: filters.radiusKm || 10,
         });
-        const [liveShops, livePlans, liveCats] = await Promise.all([
+        const [liveShops, livePlans, liveCats, liveBrands] = await Promise.all([
           getShops().catch(() => []),
           getSubscriptionPlans().catch(() => []),
-          getCategories().catch(() => [])
+          getCategories().catch(() => []),
+          getBrands().catch(() => [])
         ]);
         if (livePlans && livePlans.length > 0) {
           dispatch(setSubscriptionPlans(livePlans));
         }
         if (liveCats && liveCats.length > 0) {
           dispatch(setCategories(liveCats));
+        }
+        if (liveBrands && Array.isArray(liveBrands) && liveBrands.length > 0) {
+          setDbBrands(liveBrands.map((b: any) => b.name || b));
         }
         if (liveProducts) {
           dispatch(setProducts(liveProducts));
@@ -431,6 +442,8 @@ export default function App() {
         }
       } catch (err) {
         console.warn('Backend load fallback:', err);
+      } finally {
+        setIsLoadingProducts(false);
       }
     }
     loadLiveBackendData();
@@ -496,10 +509,12 @@ export default function App() {
         const { latitude, longitude } = pos.coords;
         try {
           const geo = await reverseGeocodeCoords(latitude, longitude);
-          const name = geo.city || geo.district || geo.formattedAddress || 'GPS Location';
+          const fallback = getNearestKnownCity(latitude, longitude);
+          const name = geo.city || geo.district || (geo.formattedAddress ? geo.formattedAddress.split(',')[0] : fallback);
           await handleSelectLocation(latitude, longitude, name);
         } catch {
-          await handleSelectLocation(latitude, longitude, 'GPS Location');
+          const fallbackName = getNearestKnownCity(latitude, longitude);
+          await handleSelectLocation(latitude, longitude, fallbackName);
         } finally {
           setIsLocatingUser(false);
         }
@@ -791,39 +806,51 @@ export default function App() {
     }
 
     async function loadCustomerData() {
+      const currentUser = activeUser || (activeShop ? { id: activeShop.id, name: activeShop.name, email: activeShop.email || '' } : null);
       const token = localStorage.getItem('mlx_token');
-      if (activeUser && token) {
-        try {
-          const shopsData = await getFollowedShops(token);
-          setFollowedShops(shopsData);
-        } catch (err) {
-          console.warn('Failed to load followed shops:', err);
-        }
+      if (currentUser) {
+        if (token) {
+          try {
+            const shopsData = await getFollowedShops(token).catch(() => []);
+            setFollowedShops(shopsData);
+          } catch (err) {
+            console.warn('Failed to load followed shops:', err);
+          }
 
-        try {
-          const [res, ids] = await Promise.all([
-            getUserWishlist(token),
-            getWishlistIds(token).catch(() => [] as string[])
-          ]);
-          const rawItems = res.items || res.products || [];
-          const normalized = normalizeWishlistItems(rawItems);
-          setWishlistItems(normalized);
-          const computedIds = ids && ids.length > 0 ? ids : normalized.map((i: any) => i.id);
-          setWishlistProductIds(computedIds);
-        } catch (err) {
-          console.warn('Failed to load user wishlist:', err);
+          try {
+            const [res, ids] = await Promise.all([
+              getUserWishlist(token).catch(() => ({ items: [] })),
+              getWishlistIds(token).catch(() => [] as string[])
+            ]);
+            const rawItems = res.items || res.products || [];
+            const normalized = normalizeWishlistItems(rawItems);
+            if (normalized.length > 0) {
+              setWishlistItems(normalized);
+              const computedIds = ids && ids.length > 0 ? ids : normalized.map((i: any) => i.id);
+              setWishlistProductIds(computedIds);
+              localStorage.setItem('mlx_local_wishlist_ids', JSON.stringify(computedIds));
+              localStorage.setItem('mlx_local_wishlist_items', JSON.stringify(normalized));
+              return;
+            }
+          } catch (err) {
+            console.warn('Failed to load user wishlist from API:', err);
+          }
         }
+        const savedIds = localStorage.getItem('mlx_local_wishlist_ids');
+        const savedItems = localStorage.getItem('mlx_local_wishlist_items');
+        if (savedIds) setWishlistProductIds(JSON.parse(savedIds));
+        if (savedItems) setWishlistItems(JSON.parse(savedItems));
       } else {
         setWishlistItems([]);
         setWishlistProductIds([]);
       }
     }
     loadCustomerData();
-  }, [activeUser, customerTab]);
+  }, [activeUser, activeShop, customerTab]);
 
   const handleToggleWishlist = async (product: Product) => {
-    const token = localStorage.getItem('mlx_token');
-    if (!activeUser || !token) {
+    const currentUser = activeUser || (activeShop ? { id: activeShop.id, name: activeShop.name, email: activeShop.email || '' } : null);
+    if (!currentUser) {
       dispatch(setAuthRole('customer'));
       dispatch(setAuthTab('login'));
       dispatch(setShowAuthModal(true));
@@ -831,36 +858,33 @@ export default function App() {
       return;
     }
 
+    const token = localStorage.getItem('mlx_token');
     const isCurrentlyWishlisted = wishlistProductIds.includes(product.id);
 
-    // Optimistic UI state update
+    let nextIds: string[];
+    let nextItems: any[];
+
     if (isCurrentlyWishlisted) {
-      setWishlistProductIds(prev => prev.filter(id => id !== product.id));
-      setWishlistItems(prev => prev.filter(item => item.id !== product.id));
+      nextIds = wishlistProductIds.filter(id => id !== product.id);
+      nextItems = wishlistItems.filter(item => item.id !== product.id);
       triggerToast(`Removed "${product.name}" from wishlist`, "info");
     } else {
-      setWishlistProductIds(prev => [...prev, product.id]);
+      nextIds = [...wishlistProductIds, product.id];
       const shop = getSellerShop(product.shopId);
-      setWishlistItems(prev => [{ ...product, shop, wishlistedAt: new Date().toISOString() }, ...prev]);
+      nextItems = [{ ...product, shop, wishlistedAt: new Date().toISOString() }, ...wishlistItems];
       triggerToast(`Added "${product.name}" to wishlist ❤️`, "success");
     }
 
-    try {
-      await toggleWishlist(product.id, token);
-      const freshRes = await getUserWishlist(token);
-      const rawItems = freshRes.items || freshRes.products || [];
-      const normalized = normalizeWishlistItems(rawItems);
-      setWishlistItems(normalized);
-      const freshIds = normalized.map((i: any) => i.id);
-      setWishlistProductIds(freshIds);
-    } catch (err: any) {
-      triggerToast(err.message || "Failed to update wishlist", "warning");
-      const freshRes = await getUserWishlist(token).catch(() => null);
-      if (freshRes) {
-        const rawItems = freshRes.items || freshRes.products || [];
-        const normalized = normalizeWishlistItems(rawItems);
-        setWishlistItems(normalized);
-        setWishlistProductIds(normalized.map((i: any) => i.id));
+    setWishlistProductIds(nextIds);
+    setWishlistItems(nextItems);
+    localStorage.setItem('mlx_local_wishlist_ids', JSON.stringify(nextIds));
+    localStorage.setItem('mlx_local_wishlist_items', JSON.stringify(nextItems));
+
+    if (token) {
+      try {
+        await toggleWishlist(product.id, token);
+      } catch (err: any) {
+        console.warn('Backend sync for wishlist:', err);
       }
     }
   };
@@ -1116,8 +1140,15 @@ export default function App() {
     return 0; // Default Featured
   });
 
-  // Extract unique brands for sidebar filters
-  const uniqueBrands = Array.from(new Set(products.map(p => p.brand)));
+  // Extract brands for sidebar filters combining preset brands, db brands, and product brands
+  const displayBrands = React.useMemo(() => {
+    const combined = new Set([
+      ...BRANDS,
+      ...dbBrands,
+      ...products.map(p => p.brand).filter(Boolean)
+    ]);
+    return Array.from(combined).sort((a, b) => a.localeCompare(b));
+  }, [dbBrands, products]);
 
   // Dynamically extract trending products/models that actually exist in inventory
   const trendingTags = React.useMemo(() => {
@@ -1403,7 +1434,7 @@ export default function App() {
         if (activeShop?.id) {
           getShopSubscription(activeShop.id).then(subData => {
             if (subData?.usage) setShopSubscriptionUsage(subData.usage);
-          }).catch(() => {});
+          }).catch(() => { });
         }
       } catch (err: any) {
         console.warn('Backend product delete sync warning:', err);
@@ -1452,7 +1483,7 @@ export default function App() {
       activeUser?.id &&
       (seller.ownerId || seller.id) &&
       (String(activeUser.id).trim().toLowerCase() === String(seller.ownerId || '').trim().toLowerCase() ||
-       String(activeUser.id).trim().toLowerCase() === String(seller.id).trim().toLowerCase())
+        String(activeUser.id).trim().toLowerCase() === String(seller.id).trim().toLowerCase())
     );
 
     logActivity({
@@ -1479,7 +1510,7 @@ export default function App() {
       activeUser?.id &&
       (seller.ownerId || seller.id) &&
       (String(activeUser.id).trim().toLowerCase() === String(seller.ownerId || '').trim().toLowerCase() ||
-       String(activeUser.id).trim().toLowerCase() === String(seller.id).trim().toLowerCase())
+        String(activeUser.id).trim().toLowerCase() === String(seller.id).trim().toLowerCase())
     );
 
     logActivity({
@@ -1508,11 +1539,11 @@ export default function App() {
   };
 
   const handleGetDirections = (seller: Shop) => {
-      logActivity({
-        action: 'LOCATION_CLICK',
-        details: `Location & Directions clicked for shop: "${seller.name}" (Address: ${seller.address || 'N/A'}, City: ${seller.city || 'N/A'})`,
-        userId: activeUser?.id,
-      });
+    logActivity({
+      action: 'LOCATION_CLICK',
+      details: `Location & Directions clicked for shop: "${seller.name}" (Address: ${seller.address || 'N/A'}, City: ${seller.city || 'N/A'})`,
+      userId: activeUser?.id,
+    });
     const locationQuery = seller.address ? `${seller.name}, ${seller.address}, ${seller.city}` : `${seller.name}, ${seller.city}`;
     const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationQuery)}`;
     triggerToast(`🗺️ Opening Google Maps directions for ${seller.name}...`, 'info');
@@ -1609,13 +1640,13 @@ export default function App() {
               </button>
             )}
 
-            <div className="logo-section" onClick={() => { 
+            <div className="logo-section" onClick={() => {
               if (activeShop) {
                 navigate('/seller-dashboard');
                 dispatch(setDashboardTab('listings'));
               } else {
-                navigate('/'); 
-                dispatch(clearFilters()); 
+                navigate('/');
+                dispatch(clearFilters());
               }
             }}>
               <img src="/logo.png" alt="MLX Market Logo" className="logo-img" />
@@ -1625,40 +1656,40 @@ export default function App() {
               </div>
             </div>
 
-            {/* Location Display Widget (Immediately after Logo - Signed-in Users Only) */}
-            {Boolean(activeUser && !activeShop) && (
-            <div 
-              className="navbar-location-selector"
-              onClick={(e) => {
-                e.stopPropagation();
-                setIsLocationModalOpen(true);
-              }}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '0.45rem',
-                cursor: 'pointer',
-                background: 'rgba(255, 255, 255, 0.09)',
-                padding: '0.35rem 0.75rem',
-                borderRadius: '10px',
-                border: '1px solid rgba(249, 115, 22, 0.4)',
-                transition: 'all 0.2s ease',
-                marginLeft: '0.4rem',
-                userSelect: 'none',
-                backdropFilter: 'blur(8px)',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.18)'
-              }}
-              title={`Selected Location: ${filters.userLocationName || "None"} (Click to update)`}
-            >
-              <MapPin size={15} style={{ color: '#f97316', flexShrink: 0 }} />
-              <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
-                <span style={{ fontSize: '0.6rem', color: '#f97316', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Location</span>
-                <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                  {filters.userLocationName || 'Kochi'}
-                </span>
+            {/* Location Display Widget (Immediately after Logo - Visible to All Customers & Guests) */}
+            {!activeShop && (
+              <div
+                className="navbar-location-selector"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setIsLocationModalOpen(true);
+                }}
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '0.45rem',
+                  cursor: 'pointer',
+                  background: 'rgba(255, 255, 255, 0.09)',
+                  padding: '0.35rem 0.75rem',
+                  borderRadius: '10px',
+                  border: '1px solid rgba(249, 115, 22, 0.4)',
+                  transition: 'all 0.2s ease',
+                  marginLeft: '0.4rem',
+                  userSelect: 'none',
+                  backdropFilter: 'blur(8px)',
+                  boxShadow: '0 2px 8px rgba(0, 0, 0, 0.18)'
+                }}
+                title={`Selected Location: ${filters.userLocationName || "None"} (Click to update)`}
+              >
+                <MapPin size={15} style={{ color: '#f97316', flexShrink: 0 }} />
+                <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
+                  <span style={{ fontSize: '0.6rem', color: '#f97316', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Location</span>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {filters.userLocationName || 'Kochi'}
+                  </span>
+                </div>
+                <ChevronRight size={13} style={{ color: '#94a3b8', marginLeft: '0.1rem', transform: 'rotate(90deg)' }} />
               </div>
-              <ChevronRight size={13} style={{ color: '#94a3b8', marginLeft: '0.1rem', transform: 'rotate(90deg)' }} />
-            </div>
             )}
           </div>
 
@@ -2005,480 +2036,499 @@ export default function App() {
             <Navigate to="/seller-dashboard" replace />
           ) : (
             <main className="main-content" id="marketplace-grid">
-            {/* Mobile Filter Toggle Bar (Visible on screens < 992px) */}
-            <div className="mobile-filter-bar">
-              <button
-                className="mobile-filter-toggle-btn"
-                onClick={() => setIsMobileFilterOpen(!isMobileFilterOpen)}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <Layers size={16} />
-                  <span>Filter Gadgets {filters.selectedCategory ? `• ${filters.selectedCategory}` : ''}</span>
-                </div>
-                <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary)' }}>
-                  {isMobileFilterOpen ? 'Hide Filters ▲' : 'Show Filters ▼'}
-                </span>
-              </button>
-            </div>
-
-            {/* Sidebar Column & Filters */}
-            <div className="sidebar-column-wrapper">
-              <aside className={`sidebar-filters ${isMobileFilterOpen ? 'mobile-open' : ''}`}>
-                <div className="filter-title-bar">
-                  <span className="filter-title">Filter Gadgets</span>
-                  <button className="clear-filter-btn" onClick={() => dispatch(clearFilters())}>Clear All</button>
-                </div>
-
-                {/* Location Search Input */}
-                <div className="filter-group">
-                  <label className="filter-label">Search Location / Area</label>
-                  <div style={{ position: 'relative' }}>
-                    <input
-                      type="text"
-                      className="filter-input"
-                      placeholder="e.g. Kochi, MG Road, Calicut..."
-                      value={filters.filterLocationSearch}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => dispatch(setFilterLocationSearch(e.target.value))}
-                      style={{ paddingLeft: '2.2rem' }}
-                    />
-                    <MapPin size={14} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary-light)' }} />
+              {/* Mobile Filter Toggle Bar (Visible on screens < 992px) */}
+              <div className="mobile-filter-bar">
+                <button
+                  className="mobile-filter-toggle-btn"
+                  onClick={() => setIsMobileFilterOpen(!isMobileFilterOpen)}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                    <Layers size={16} />
+                    <span>Filter Gadgets {filters.selectedCategory ? `• ${filters.selectedCategory}` : ''}</span>
                   </div>
-                </div>
+                  <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--primary)' }}>
+                    {isMobileFilterOpen ? 'Hide Filters ▲' : 'Show Filters ▼'}
+                  </span>
+                </button>
+              </div>
 
-                {/* Category Selector */}
-                <div className="filter-group">
-                  <label className="filter-label">Category</label>
-                  <CustomSelect
-                    value={filters.selectedCategory}
-                    onChange={(val) => dispatch(setSelectedCategory(val))}
-                    options={displayCategories}
-                  />
-                </div>
-
-                {/* City Selector */}
-                <div className="filter-group">
-                  <label className="filter-label">Select City</label>
-                  <CustomSelect
-                    value={filters.filterCity}
-                    onChange={(val) => dispatch(setFilterCity(val))}
-                    options={CITIES}
-                  />
-                </div>
-
-                {/* Budget Presets */}
-                <div className="filter-group">
-                  <label className="filter-label">Max Budget Limit</label>
-                  <CustomSelect
-                    value={filters.filterMaxBudget}
-                    onChange={(val) => dispatch(setFilterMaxBudget(val))}
-                    options={BUDGET_PRESETS}
-                  />
-                </div>
-
-                {/* Brand Filter */}
-                <div className="filter-group">
-                  <label className="filter-label">Brand</label>
-                  <CustomSelect
-                    value={filters.filterBrand}
-                    onChange={(val) => dispatch(setFilterBrand(val))}
-                    options={[
-                      { label: "All Brands", value: "" },
-                      ...uniqueBrands.map(b => ({ label: b, value: b }))
-                    ]}
-                  />
-                </div>
-
-                {/* Custom Price Range */}
-                <div className="filter-group">
-                  <label className="filter-label">Price Range (₹)</label>
-                  <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
-                    <input
-                      type="number"
-                      className="filter-input"
-                      placeholder="Min"
-                      value={filters.filterMinPrice}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => dispatch(setFilterMinPrice(e.target.value))}
-                    />
-                    <input
-                      type="number"
-                      className="filter-input"
-                      placeholder="Max"
-                      value={filters.filterMaxPrice}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => dispatch(setFilterMaxPrice(e.target.value))}
-                    />
+              {/* Sidebar Column & Filters */}
+              <div className="sidebar-column-wrapper">
+                <aside className={`sidebar-filters ${isMobileFilterOpen ? 'mobile-open' : ''}`}>
+                  <div className="filter-title-bar">
+                    <span className="filter-title">Filter Gadgets</span>
+                    <button className="clear-filter-btn" onClick={() => dispatch(clearFilters())}>Clear All</button>
                   </div>
-                </div>
 
-                {/* Advanced Filters */}
-                <div className="filter-group">
-                  <label className="filter-label">Advanced Filters</label>
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
-                    <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+                  {/* Location Search Input */}
+                  <div className="filter-group">
+                    <label className="filter-label">Search Location / Area</label>
+                    <div style={{ position: 'relative' }}>
                       <input
-                        type="checkbox"
-                        checked={filters.filterVerifiedOnly}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => dispatch(setFilterVerifiedOnly(e.target.checked))}
+                        type="text"
+                        className="filter-input"
+                        placeholder="e.g. Kochi, MG Road, Calicut..."
+                        value={filters.filterLocationSearch}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => dispatch(setFilterLocationSearch(e.target.value))}
+                        style={{ paddingLeft: '2.2rem' }}
                       />
-                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
-                        <ShieldCheck size={14} style={{ color: 'var(--primary)' }} />
-                        <span>Verified Sellers Only</span>
-                      </span>
-                    </label>
+                      <MapPin size={14} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-secondary-light)' }} />
+                    </div>
+                  </div>
 
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.25rem' }}>
-                      <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary-light)', fontWeight: 600 }}>Minimum Store Rating</span>
-                      <CustomSelect
-                        value={filters.filterMinRating}
-                        onChange={(val) => dispatch(setFilterMinRating(val))}
-                        options={[
-                          { label: "All Store Ratings", value: "0" },
-                          { label: "4.0+ Stars", value: "4.0" },
-                          { label: "4.5+ Stars", value: "4.5" }
-                        ]}
+                  {/* Category Selector */}
+                  <div className="filter-group">
+                    <label className="filter-label">Category</label>
+                    <CustomSelect
+                      value={filters.selectedCategory}
+                      onChange={(val) => dispatch(setSelectedCategory(val))}
+                      options={displayCategories}
+                    />
+                  </div>
+
+                  {/* City Selector */}
+                  <div className="filter-group">
+                    <label className="filter-label">Select City</label>
+                    <CustomSelect
+                      value={filters.filterCity}
+                      onChange={(val) => dispatch(setFilterCity(val))}
+                      options={CITIES}
+                    />
+                  </div>
+
+                  {/* Budget Presets */}
+                  <div className="filter-group">
+                    <label className="filter-label">Max Budget Limit</label>
+                    <CustomSelect
+                      value={filters.filterMaxBudget}
+                      onChange={(val) => dispatch(setFilterMaxBudget(val))}
+                      options={BUDGET_PRESETS}
+                    />
+                  </div>
+
+                  {/* Brand Filter */}
+                  <div className="filter-group">
+                    <label className="filter-label">Brand</label>
+                    <CustomSelect
+                      value={filters.filterBrand}
+                      onChange={(val) => dispatch(setFilterBrand(val))}
+                      options={[
+                        { label: "All Brands", value: "" },
+                        ...displayBrands.map(b => ({ label: b, value: b }))
+                      ]}
+                    />
+                  </div>
+
+                  {/* Custom Price Range */}
+                  <div className="filter-group">
+                    <label className="filter-label">Price Range (₹)</label>
+                    <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '0.5rem' }}>
+                      <input
+                        type="number"
+                        className="filter-input"
+                        placeholder="Min"
+                        value={filters.filterMinPrice}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => dispatch(setFilterMinPrice(e.target.value))}
+                      />
+                      <input
+                        type="number"
+                        className="filter-input"
+                        placeholder="Max"
+                        value={filters.filterMaxPrice}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => dispatch(setFilterMaxPrice(e.target.value))}
                       />
                     </div>
                   </div>
-                </div>
 
-                {/* In Stock only */}
-                <div className="filter-group">
-                  <label className="checkbox-label">
-                    <input
-                      type="checkbox"
-                      checked={filters.filterInStockOnly}
-                      onChange={(e: ChangeEvent<HTMLInputElement>) => dispatch(setFilterInStockOnly(e.target.checked))}
-                    />
-                    <span>Show in-stock items only</span>
-                  </label>
-                </div>
+                  {/* Advanced Filters */}
+                  <div className="filter-group">
+                    <label className="filter-label">Advanced Filters</label>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '0.6rem' }}>
+                      <label className="checkbox-label" style={{ display: 'flex', alignItems: 'center', gap: '0.4rem', cursor: 'pointer' }}>
+                        <input
+                          type="checkbox"
+                          checked={filters.filterVerifiedOnly}
+                          onChange={(e: ChangeEvent<HTMLInputElement>) => dispatch(setFilterVerifiedOnly(e.target.checked))}
+                        />
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '0.25rem' }}>
+                          <ShieldCheck size={14} style={{ color: 'var(--primary)' }} />
+                          <span>Verified Sellers Only</span>
+                        </span>
+                      </label>
 
-                <div className="trust-sidebar-widget">
-                  <Info size={16} className="widget-icon" />
-                  <span><strong>No Checkout System:</strong> MLX lists verified device inventories. Dial or WhatsApp shop owners directly to buy.</span>
-                </div>
-              </aside>
-            </div>
-
-            {/* Products Grid Section */}
-            <section className="products-section">
-              <div className="catalog-header">
-                <span className="catalog-count">
-                  Available Devices <span>({sortedProducts.length} items found)</span>
-                </span>
-
-                <div className="catalog-sort">
-                  <span>Sort by:</span>
-                  <CustomSelect
-                    value={filters.sortBy}
-                    onChange={(val) => dispatch(setSortBy(val as any))}
-                    options={[
-                      { label: "Featured Listings", value: "featured" },
-                      { label: "Price: Low to High", value: "price-asc" },
-                      { label: "Price: High to Low", value: "price-desc" },
-                      { label: "Top Rated Sellers", value: "rating" },
-                      { label: "Newest Listings", value: "newest" },
-                      { label: "Name: A to Z", value: "alphabetical" },
-                      { label: "Stock Available", value: "stock" }
-                    ]}
-                  />
-                </div>
-              </div>
-
-              {sortedProducts.length > 0 ? (
-                <>
-                  <div className="product-grid">
-                    {/* Dynamically insert Center Banner in between products (after 3 items) */}
-                    {(() => {
-                      const totalCatalogItems = sortedProducts.length;
-                      const catalogStartIndex = (catalogPage - 1) * catalogPerPage;
-                      const catalogEndIndex = Math.min(catalogStartIndex + catalogPerPage, totalCatalogItems);
-                      const paginatedCatalogProducts = sortedProducts.slice(catalogStartIndex, catalogEndIndex);
-
-                      return paginatedCatalogProducts.map((product, index) => {
-                        const seller = getSellerShop(product.shopId);
-                        const isOutOfStock = product.stock <= 0;
-
-                        const renderCard = (
-                          <article
-                            key={product.id}
-                            className="product-card"
-                            onClick={() => {
-                              if (!activeUser && !activeShop) {
-                                dispatch(setAuthRole('customer'));
-                                dispatch(setAuthTab('login'));
-                                dispatch(setShowAuthModal(true));
-                                dispatch(addToast({ message: 'Please log in to view full product details & seller info.', type: 'info' }));
-                                return;
-                              }
-                              logActivity({
-                                action: 'PRODUCT_CLICK',
-                                details: `Clicked on product "${product.name}" (ID: ${product.id}, Price: ₹${(product.offerPrice || product.price).toLocaleString('en-IN')}) listed by "${seller?.name || 'Shop'}"`,
-                                userId: activeUser?.id,
-                              });
-                              dispatch(setSelectedProduct(product));
-                              navigate(`/product/${product.id}`);
-                            }}
-                          >
-                            <div className="card-img-wrapper" style={{ position: 'relative' }}>
-                              {/* Wishlist Overlay Button */}
-                              <button
-                                type="button"
-                                title={wishlistProductIds.includes(product.id) ? "Remove from Wishlist" : "Add to Wishlist"}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleToggleWishlist(product);
-                                }}
-                                style={{
-                                  position: 'absolute',
-                                  top: '12px',
-                                  right: '12px',
-                                  zIndex: 11,
-                                  width: '34px',
-                                  height: '34px',
-                                  borderRadius: '50%',
-                                  backgroundColor: 'rgba(255, 255, 255, 0.95)',
-                                  border: '1px solid #e2e8f0',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  color: wishlistProductIds.includes(product.id) ? '#ef4444' : '#64748b',
-                                  cursor: 'pointer',
-                                  boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                                  transition: 'all 0.2s ease'
-                                }}
-                              >
-                                <Heart size={18} fill={wishlistProductIds.includes(product.id) ? '#ef4444' : 'transparent'} />
-                              </button>
-                              {product.images && product.images.length > 0 ? (
-                                <img src={product.images[0]} alt={product.name} className="product-card-img" />
-                              ) : (
-                                renderCategoryIcon(product.category)
-                              )}
-                              <span className={`tag-stock ${isOutOfStock ? 'out' : 'in'}`}>
-                                {isOutOfStock ? 'Out of Stock' : `Stock: ${product.stock} units`}
-                              </span>
-                              {(product.condition || product.specs?.['Condition']) && (
-                                <span className="tag-condition">{product.condition || product.specs['Condition']}</span>
-                              )}
-                            </div>
-
-                            <div className="card-body">
-                              <span className="card-brand">{product.brand}</span>
-                              <h3 className="card-name">{product.name}</h3>
-
-                              <div className="card-dealer-info">
-                                <div className="dealer-name">
-                                  <Store size={14} className="verified-icon" />
-                                  <span>{seller.name}</span>
-                                </div>
-                                <div className="dealer-location">
-                                  <MapPin size={12} />
-                                  <span>{seller.address}, {seller.city}</span>
-                                </div>
-                              </div>
-
-                              <div className="card-footer">
-                                <div>
-                                  <span className="card-price-label">Consumer Selling Price</span>
-                                  <div className="card-price">₹{product.price.toLocaleString('en-IN')}</div>
-                                </div>
-
-                                <button className="card-action-btn" title="View details & contact">
-                                  <ChevronRight size={18} />
-                                </button>
-                              </div>
-                            </div>
-                          </article>
-                        );
-
-                        // Inject Centre banner
-                        if (index === 3) {
-                          return (
-                            <React.Fragment key="center-banner-wrapper">
-                              <div className="centre-process-banner">
-                                <div className="process-guide-badge">
-                                  <ShieldCheck size={14} />
-                                  <span>Safe Buyer Guide</span>
-                                </div>
-                                <h3 className="process-headline">How to buy safely in 3 easy steps:</h3>
-                                <div className="process-steps">
-                                  <div className="process-step-card">
-                                    <div className="step-icon-wrapper">
-                                      <MapPin size={20} />
-                                    </div>
-                                    <div className="step-card-content">
-                                      <span className="step-card-num">Step 1</span>
-                                      <p className="step-card-txt">Select your city and browse used gadgets near you</p>
-                                    </div>
-                                  </div>
-
-                                  <div className="process-step-card">
-                                    <div className="step-icon-wrapper">
-                                      <Phone size={20} />
-                                    </div>
-                                    <div className="step-card-content">
-                                      <span className="step-card-num">Step 2</span>
-                                      <p className="step-card-txt">Click WhatsApp or Call to contact the store directly</p>
-                                    </div>
-                                  </div>
-
-                                  <div className="process-step-card">
-                                    <div className="step-icon-wrapper">
-                                      <CheckCircle size={20} />
-                                    </div>
-                                    <div className="step-card-content">
-                                      <span className="step-card-num">Step 3</span>
-                                      <p className="step-card-txt">Meet dealer, physically inspect the gadget, and buy</p>
-                                    </div>
-                                  </div>
-                                </div>
-                                <span className="process-footer">No hidden platform fees. No commissions. Pure peer-to-merchant deals.</span>
-                              </div>
-                              {renderCard}
-                            </React.Fragment>
-                          );
-                        }
-
-                        return renderCard;
-                      });
-                    })()}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '0.25rem', marginTop: '0.25rem' }}>
+                        <span style={{ fontSize: '0.72rem', color: 'var(--text-secondary-light)', fontWeight: 600 }}>Minimum Store Rating</span>
+                        <CustomSelect
+                          value={filters.filterMinRating}
+                          onChange={(val) => dispatch(setFilterMinRating(val))}
+                          options={[
+                            { label: "All Store Ratings", value: "0" },
+                            { label: "4.0+ Stars", value: "4.0" },
+                            { label: "4.5+ Stars", value: "4.5" }
+                          ]}
+                        />
+                      </div>
+                    </div>
                   </div>
 
-                  {/* Marketplace Catalog Pagination Bar */}
-                  {sortedProducts.length > 0 && (
-                    <div
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        marginTop: '2rem',
-                        padding: '1.25rem 1.5rem',
-                        background: '#ffffff',
-                        borderRadius: '16px',
-                        border: '1px solid #e2e8f0',
-                        boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
-                        flexWrap: 'wrap',
-                        gap: '1rem'
-                      }}
-                    >
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                        <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>Show per page:</span>
-                        <select
-                          value={catalogPerPage}
-                          onChange={(e) => {
-                            setCatalogPerPage(Number(e.target.value));
-                            setCatalogPage(1);
-                          }}
-                          style={{
-                            padding: '0.4rem 0.75rem',
-                            fontSize: '0.82rem',
-                            borderRadius: '8px',
-                            border: '1px solid #cbd5e1',
-                            background: '#ffffff',
-                            fontWeight: 700,
-                            color: '#1e293b',
-                            cursor: 'pointer'
-                          }}
-                        >
-                          <option value={8}>8 items</option>
-                          <option value={12}>12 items</option>
-                          <option value={24}>24 items</option>
-                          <option value={48}>48 items</option>
-                        </select>
-                        <span style={{ fontSize: '0.82rem', color: '#94a3b8', fontWeight: 600 }}>
-                          Showing {sortedProducts.length > 0 ? (catalogPage - 1) * catalogPerPage + 1 : 0} to {Math.min(catalogPage * catalogPerPage, sortedProducts.length)} of {sortedProducts.length} items
-                        </span>
+                  {/* In Stock only */}
+                  <div className="filter-group">
+                    <label className="checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={filters.filterInStockOnly}
+                        onChange={(e: ChangeEvent<HTMLInputElement>) => dispatch(setFilterInStockOnly(e.target.checked))}
+                      />
+                      <span>Show in-stock items only</span>
+                    </label>
+                  </div>
+
+                  <div className="trust-sidebar-widget">
+                    <Info size={16} className="widget-icon" />
+                    <span><strong>No Checkout System:</strong> MLX lists verified device inventories. Dial or WhatsApp shop owners directly to buy.</span>
+                  </div>
+                </aside>
+              </div>
+
+              {/* Products Grid Section */}
+              <section className="products-section">
+                <div className="catalog-header">
+                  <span className="catalog-count">
+                    Available Devices {!isLoadingProducts && (
+                      <span>({sortedProducts.length} items found)</span>
+                    )}
+                  </span>
+
+                  <div className="catalog-sort">
+                    <span>Sort by:</span>
+                    <CustomSelect
+                      value={filters.sortBy}
+                      onChange={(val) => dispatch(setSortBy(val as any))}
+                      options={[
+                        { label: "Featured Listings", value: "featured" },
+                        { label: "Price: Low to High", value: "price-asc" },
+                        { label: "Price: High to Low", value: "price-desc" },
+                        { label: "Top Rated Sellers", value: "rating" },
+                        { label: "Newest Listings", value: "newest" },
+                        { label: "Name: A to Z", value: "alphabetical" },
+                        { label: "Stock Available", value: "stock" }
+                      ]}
+                    />
+                  </div>
+                </div>
+
+                {isLoadingProducts ? (
+                  <div className="product-grid" id="marketplace-grid">
+                    {Array.from({ length: 8 }).map((_, idx) => (
+                      <div key={idx} className="skeleton-card">
+                        <div className="skeleton-shimmer" style={{ height: '210px', width: '100%' }} />
+                        <div style={{ padding: '1.1rem', display: 'flex', flexDirection: 'column', gap: '0.65rem' }}>
+                          <div className="skeleton-shimmer" style={{ width: '35%', height: '13px', borderRadius: '4px' }} />
+                          <div className="skeleton-shimmer" style={{ width: '85%', height: '18px', borderRadius: '4px' }} />
+                          <div className="skeleton-shimmer" style={{ width: '55%', height: '14px', borderRadius: '4px' }} />
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '0.6rem', paddingTop: '0.6rem', borderTop: '1px solid #f1f5f9' }}>
+                            <div className="skeleton-shimmer" style={{ width: '40%', height: '22px', borderRadius: '6px' }} />
+                            <div className="skeleton-shimmer" style={{ width: '28%', height: '16px', borderRadius: '4px' }} />
+                          </div>
+                        </div>
                       </div>
+                    ))}
+                  </div>
+                ) : sortedProducts.length > 0 ? (
+                  <>
+                    <div className="product-grid">
+                      {/* Dynamically insert Center Banner in between products (after 3 items) */}
+                      {(() => {
+                        const totalCatalogItems = sortedProducts.length;
+                        const catalogStartIndex = (catalogPage - 1) * catalogPerPage;
+                        const catalogEndIndex = Math.min(catalogStartIndex + catalogPerPage, totalCatalogItems);
+                        const paginatedCatalogProducts = sortedProducts.slice(catalogStartIndex, catalogEndIndex);
 
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <button
-                          type="button"
-                          disabled={catalogPage === 1}
-                          onClick={() => {
-                            setCatalogPage(prev => Math.max(prev - 1, 1));
-                            const gridEl = document.getElementById('marketplace-grid');
-                            if (gridEl) gridEl.scrollIntoView({ behavior: 'smooth' });
-                          }}
-                          style={{
-                            padding: '0.45rem 0.85rem',
-                            borderRadius: '8px',
-                            border: '1px solid #cbd5e1',
-                            fontSize: '0.82rem',
-                            fontWeight: 700,
-                            background: '#ffffff',
-                            color: catalogPage === 1 ? '#cbd5e1' : '#334155',
-                            cursor: catalogPage === 1 ? 'not-allowed' : 'pointer',
-                            transition: 'all 0.2s ease'
-                          }}
-                        >
-                          ◀ Prev
-                        </button>
+                        return paginatedCatalogProducts.map((product, index) => {
+                          const seller = getSellerShop(product.shopId);
+                          const isOutOfStock = product.stock <= 0;
 
-                        {Array.from({ length: Math.ceil(sortedProducts.length / catalogPerPage) || 1 }, (_, i) => i + 1).map(page => (
+                          const renderCard = (
+                            <article
+                              key={product.id}
+                              className="product-card"
+                              onClick={() => {
+                                if (!activeUser && !activeShop) {
+                                  dispatch(setAuthRole('customer'));
+                                  dispatch(setAuthTab('login'));
+                                  dispatch(setShowAuthModal(true));
+                                  dispatch(addToast({ message: 'Please log in to view full product details & seller info.', type: 'info' }));
+                                  return;
+                                }
+                                logActivity({
+                                  action: 'PRODUCT_CLICK',
+                                  details: `Clicked on product "${product.name}" (ID: ${product.id}, Price: ₹${(product.offerPrice || product.price).toLocaleString('en-IN')}) listed by "${seller?.name || 'Shop'}"`,
+                                  userId: activeUser?.id,
+                                });
+                                dispatch(setSelectedProduct(product));
+                                navigate(`/product/${product.id}`);
+                              }}
+                            >
+                              <div className="card-img-wrapper" style={{ position: 'relative' }}>
+                                {/* Wishlist Overlay Button */}
+                                <button
+                                  type="button"
+                                  title={wishlistProductIds.includes(product.id) ? "Remove from Wishlist" : "Add to Wishlist"}
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleToggleWishlist(product);
+                                  }}
+                                  style={{
+                                    position: 'absolute',
+                                    top: '12px',
+                                    right: '12px',
+                                    zIndex: 11,
+                                    width: '34px',
+                                    height: '34px',
+                                    borderRadius: '50%',
+                                    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+                                    border: '1px solid #e2e8f0',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    color: wishlistProductIds.includes(product.id) ? '#ef4444' : '#64748b',
+                                    cursor: 'pointer',
+                                    boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                                    transition: 'all 0.2s ease'
+                                  }}
+                                >
+                                  <Heart size={18} fill={wishlistProductIds.includes(product.id) ? '#ef4444' : 'transparent'} />
+                                </button>
+                                {product.images && product.images.length > 0 ? (
+                                  <img src={product.images[0]} alt={product.name} className="product-card-img" />
+                                ) : (
+                                  renderCategoryIcon(product.category)
+                                )}
+                                <span className={`tag-stock ${isOutOfStock ? 'out' : 'in'}`}>
+                                  {isOutOfStock ? 'Out of Stock' : `Stock: ${product.stock} units`}
+                                </span>
+                                {(product.condition || product.specs?.['Condition']) && (
+                                  <span className="tag-condition">{product.condition || product.specs['Condition']}</span>
+                                )}
+                              </div>
+
+                              <div className="card-body">
+                                <span className="card-brand">{product.brand}</span>
+                                <h3 className="card-name">{product.name}</h3>
+
+                                <div className="card-dealer-info">
+                                  <div className="dealer-name">
+                                    <Store size={14} className="verified-icon" />
+                                    <span>{seller.name}</span>
+                                  </div>
+                                  <div className="dealer-location">
+                                    <MapPin size={12} />
+                                    <span>{seller.address}, {seller.city}</span>
+                                  </div>
+                                </div>
+
+                                <div className="card-footer">
+                                  <div>
+                                    <span className="card-price-label">Consumer Selling Price</span>
+                                    <div className="card-price">₹{product.price.toLocaleString('en-IN')}</div>
+                                  </div>
+
+                                  <button className="card-action-btn" title="View details & contact">
+                                    <ChevronRight size={18} />
+                                  </button>
+                                </div>
+                              </div>
+                            </article>
+                          );
+
+                          // Inject Centre banner
+                          if (index === 3) {
+                            return (
+                              <React.Fragment key="center-banner-wrapper">
+                                <div className="centre-process-banner">
+                                  <div className="process-guide-badge">
+                                    <ShieldCheck size={14} />
+                                    <span>Safe Buyer Guide</span>
+                                  </div>
+                                  <h3 className="process-headline">How to buy safely in 3 easy steps:</h3>
+                                  <div className="process-steps">
+                                    <div className="process-step-card">
+                                      <div className="step-icon-wrapper">
+                                        <MapPin size={20} />
+                                      </div>
+                                      <div className="step-card-content">
+                                        <span className="step-card-num">Step 1</span>
+                                        <p className="step-card-txt">Select your city and browse used gadgets near you</p>
+                                      </div>
+                                    </div>
+
+                                    <div className="process-step-card">
+                                      <div className="step-icon-wrapper">
+                                        <Phone size={20} />
+                                      </div>
+                                      <div className="step-card-content">
+                                        <span className="step-card-num">Step 2</span>
+                                        <p className="step-card-txt">Click WhatsApp or Call to contact the store directly</p>
+                                      </div>
+                                    </div>
+
+                                    <div className="process-step-card">
+                                      <div className="step-icon-wrapper">
+                                        <CheckCircle size={20} />
+                                      </div>
+                                      <div className="step-card-content">
+                                        <span className="step-card-num">Step 3</span>
+                                        <p className="step-card-txt">Meet dealer, physically inspect the gadget, and buy</p>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <span className="process-footer">No hidden platform fees. No commissions. Pure peer-to-merchant deals.</span>
+                                </div>
+                                {renderCard}
+                              </React.Fragment>
+                            );
+                          }
+
+                          return renderCard;
+                        });
+                      })()}
+                    </div>
+
+                    {/* Marketplace Catalog Pagination Bar */}
+                    {sortedProducts.length > 0 && (
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          marginTop: '2rem',
+                          padding: '1.25rem 1.5rem',
+                          background: '#ffffff',
+                          borderRadius: '16px',
+                          border: '1px solid #e2e8f0',
+                          boxShadow: '0 2px 10px rgba(0,0,0,0.03)',
+                          flexWrap: 'wrap',
+                          gap: '1rem'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                          <span style={{ fontSize: '0.85rem', color: '#64748b', fontWeight: 600 }}>Show per page:</span>
+                          <select
+                            value={catalogPerPage}
+                            onChange={(e) => {
+                              setCatalogPerPage(Number(e.target.value));
+                              setCatalogPage(1);
+                            }}
+                            style={{
+                              padding: '0.4rem 0.75rem',
+                              fontSize: '0.82rem',
+                              borderRadius: '8px',
+                              border: '1px solid #cbd5e1',
+                              background: '#ffffff',
+                              fontWeight: 700,
+                              color: '#1e293b',
+                              cursor: 'pointer'
+                            }}
+                          >
+                            <option value={8}>8 items</option>
+                            <option value={12}>12 items</option>
+                            <option value={24}>24 items</option>
+                            <option value={48}>48 items</option>
+                          </select>
+                          <span style={{ fontSize: '0.82rem', color: '#94a3b8', fontWeight: 600 }}>
+                            Showing {sortedProducts.length > 0 ? (catalogPage - 1) * catalogPerPage + 1 : 0} to {Math.min(catalogPage * catalogPerPage, sortedProducts.length)} of {sortedProducts.length} items
+                          </span>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
                           <button
-                            key={page}
                             type="button"
+                            disabled={catalogPage === 1}
                             onClick={() => {
-                              setCatalogPage(page);
+                              setCatalogPage(prev => Math.max(prev - 1, 1));
                               const gridEl = document.getElementById('marketplace-grid');
                               if (gridEl) gridEl.scrollIntoView({ behavior: 'smooth' });
                             }}
                             style={{
-                              padding: '0.45rem 0.8rem',
+                              padding: '0.45rem 0.85rem',
                               borderRadius: '8px',
-                              border: catalogPage === page ? '1px solid var(--primary)' : '1px solid #cbd5e1',
+                              border: '1px solid #cbd5e1',
                               fontSize: '0.82rem',
-                              fontWeight: 800,
-                              background: catalogPage === page ? 'var(--primary)' : '#ffffff',
-                              color: catalogPage === page ? '#ffffff' : '#334155',
-                              cursor: 'pointer',
-                              boxShadow: catalogPage === page ? '0 2px 8px rgba(255, 111, 0, 0.3)' : 'none'
+                              fontWeight: 700,
+                              background: '#ffffff',
+                              color: catalogPage === 1 ? '#cbd5e1' : '#334155',
+                              cursor: catalogPage === 1 ? 'not-allowed' : 'pointer',
+                              transition: 'all 0.2s ease'
                             }}
                           >
-                            {page}
+                            ◀ Prev
                           </button>
-                        ))}
 
-                        <button
-                          type="button"
-                          disabled={catalogPage === Math.ceil(sortedProducts.length / catalogPerPage)}
-                          onClick={() => {
-                            setCatalogPage(prev => Math.min(prev + 1, Math.ceil(sortedProducts.length / catalogPerPage)));
-                            const gridEl = document.getElementById('marketplace-grid');
-                            if (gridEl) gridEl.scrollIntoView({ behavior: 'smooth' });
-                          }}
-                          style={{
-                            padding: '0.45rem 0.85rem',
-                            borderRadius: '8px',
-                            border: '1px solid #cbd5e1',
-                            fontSize: '0.82rem',
-                            fontWeight: 700,
-                            background: '#ffffff',
-                            color: catalogPage === Math.ceil(sortedProducts.length / catalogPerPage) ? '#cbd5e1' : '#334155',
-                            cursor: catalogPage === Math.ceil(sortedProducts.length / catalogPerPage) ? 'not-allowed' : 'pointer',
-                            transition: 'all 0.2s ease'
-                          }}
-                        >
-                          Next ▶
-                        </button>
+                          {Array.from({ length: Math.ceil(sortedProducts.length / catalogPerPage) || 1 }, (_, i) => i + 1).map(page => (
+                            <button
+                              key={page}
+                              type="button"
+                              onClick={() => {
+                                setCatalogPage(page);
+                                const gridEl = document.getElementById('marketplace-grid');
+                                if (gridEl) gridEl.scrollIntoView({ behavior: 'smooth' });
+                              }}
+                              style={{
+                                padding: '0.45rem 0.8rem',
+                                borderRadius: '8px',
+                                border: catalogPage === page ? '1px solid var(--primary)' : '1px solid #cbd5e1',
+                                fontSize: '0.82rem',
+                                fontWeight: 800,
+                                background: catalogPage === page ? 'var(--primary)' : '#ffffff',
+                                color: catalogPage === page ? '#ffffff' : '#334155',
+                                cursor: 'pointer',
+                                boxShadow: catalogPage === page ? '0 2px 8px rgba(255, 111, 0, 0.3)' : 'none'
+                              }}
+                            >
+                              {page}
+                            </button>
+                          ))}
+
+                          <button
+                            type="button"
+                            disabled={catalogPage === Math.ceil(sortedProducts.length / catalogPerPage)}
+                            onClick={() => {
+                              setCatalogPage(prev => Math.min(prev + 1, Math.ceil(sortedProducts.length / catalogPerPage)));
+                              const gridEl = document.getElementById('marketplace-grid');
+                              if (gridEl) gridEl.scrollIntoView({ behavior: 'smooth' });
+                            }}
+                            style={{
+                              padding: '0.45rem 0.85rem',
+                              borderRadius: '8px',
+                              border: '1px solid #cbd5e1',
+                              fontSize: '0.82rem',
+                              fontWeight: 700,
+                              background: '#ffffff',
+                              color: catalogPage === Math.ceil(sortedProducts.length / catalogPerPage) ? '#cbd5e1' : '#334155',
+                              cursor: catalogPage === Math.ceil(sortedProducts.length / catalogPerPage) ? 'not-allowed' : 'pointer',
+                              transition: 'all 0.2s ease'
+                            }}
+                          >
+                            Next ▶
+                          </button>
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="empty-state">
-                  <HelpCircle size={48} className="empty-icon" />
-                  <h3 className="empty-title">No used gadgets match these criteria</h3>
-                  <p className="empty-desc">
-                    Try clearing location/budget filters or searching for another device name.
-                  </p>
-                  <button className="btn-primary" onClick={() => dispatch(clearFilters())} style={{ padding: '0.6rem 1.2rem', fontSize: '0.85rem' }}>
-                    Clear Filters
-                  </button>
-                </div>
-              )}
-            </section>
-          </main>
+                    )}
+                  </>
+                ) : (
+                  <div className="empty-state">
+                    <HelpCircle size={48} className="empty-icon" />
+                    <h3 className="empty-title">No used gadgets match these criteria</h3>
+                    <p className="empty-desc">
+                      Try clearing location/budget filters or searching for another device name.
+                    </p>
+                    <button className="btn-primary" onClick={() => dispatch(clearFilters())} style={{ padding: '0.6rem 1.2rem', fontSize: '0.85rem' }}>
+                      Clear Filters
+                    </button>
+                  </div>
+                )}
+              </section>
+            </main>
           )
         } />
 
@@ -2486,450 +2536,450 @@ export default function App() {
           activeShop ? (
             <Navigate to="/seller-dashboard" replace />
           ) : (
-          /* --- CUSTOMER DASHBOARD VIEW --- */
-          <main className="dashboard-view customer-dashboard-view">
-            <aside className="dashboard-sidebar">
-              <div className="dashboard-profile-hdr">
-                <div className="profile-avatar">
-                  {activeUser ? activeUser.name.charAt(0) : 'C'}
-                </div>
-                <h2 className="profile-name">{activeUser?.name}</h2>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600, backgroundColor: 'rgba(255, 111, 0, 0.1)', padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-sm)' }}>
-                  <User size={12} />
-                  <span>Verified Buyer Portal</span>
-                </div>
-              </div>
-
-              <div className="profile-stats-row">
-                <div className="profile-stat-box">
-                  <div className="profile-stat-num">
-                    {leads.filter(l => activeUser && l.customerPhone === activeUser.phone).length}
+            /* --- CUSTOMER DASHBOARD VIEW --- */
+            <main className="dashboard-view customer-dashboard-view">
+              <aside className="dashboard-sidebar">
+                <div className="dashboard-profile-hdr">
+                  <div className="profile-avatar">
+                    {activeUser ? activeUser.name.charAt(0) : 'C'}
                   </div>
-                  <div className="profile-stat-lbl">Inquiries Sourced</div>
+                  <h2 className="profile-name">{activeUser?.name}</h2>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem', fontSize: '0.75rem', color: 'var(--primary)', fontWeight: 600, backgroundColor: 'rgba(255, 111, 0, 0.1)', padding: '0.2rem 0.6rem', borderRadius: 'var(--radius-sm)' }}>
+                    <User size={12} />
+                    <span>Verified Buyer Portal</span>
+                  </div>
                 </div>
-              </div>
 
-              <div className="dashboard-menu">
-                <button
-                  className={`dash-menu-btn ${customerTab === 'inquiries' ? 'active' : ''}`}
-                  onClick={() => setCustomerTab('inquiries')}
-                >
-                  <MessageSquare size={16} />
-                  <span>My Inquiries Log</span>
-                </button>
-
-                <button
-                  className={`dash-menu-btn ${customerTab === 'following' ? 'active' : ''}`}
-                  onClick={() => setCustomerTab('following')}
-                >
-                  <UserCheck size={16} />
-                  <span>Stores I Follow ({followedShops.length})</span>
-                </button>
-
-                <button
-                  className={`dash-menu-btn ${customerTab === 'wishlist' ? 'active' : ''}`}
-                  onClick={() => setCustomerTab('wishlist')}
-                >
-                  <Heart size={16} fill={customerTab === 'wishlist' ? '#ef4444' : 'transparent'} color={customerTab === 'wishlist' ? '#ef4444' : 'currentColor'} />
-                  <span>My Wishlist ({wishlistProductIds.length})</span>
-                </button>
-
-                <button
-                  className={`dash-menu-btn ${customerTab === 'profile' ? 'active' : ''}`}
-                  onClick={() => setCustomerTab('profile')}
-                >
-                  <User size={16} />
-                  <span>My Profile Details</span>
-                </button>
-
-                <button
-                  className="dash-menu-btn exit-dash-btn"
-                  onClick={() => navigate('/')}
-                  style={{ marginTop: 'auto', backgroundColor: 'transparent', border: '1px solid var(--light-border)', color: 'var(--text-primary-light)' }}
-                >
-                  <ChevronLeft size={16} />
-                  <span>Exit Dashboard</span>
-                </button>
-              </div>
-            </aside>
-
-            <section className="dashboard-content">
-              {customerTab === 'inquiries' ? (
-                /* Customer Inquiries Log */
-                <div className="dashboard-panel">
-                  <div className="panel-header">
-                    <h3 className="panel-title">My Inquiries Log</h3>
-                    <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary-light)' }}>
-                      Direct Peer-to-Merchant Connections
+                <div className="profile-stats-row">
+                  <div className="profile-stat-box">
+                    <div className="profile-stat-num">
+                      {leads.filter(l => activeUser && l.customerPhone === activeUser.phone).length}
                     </div>
-                  </div>
-
-                  <div className="leads-list-container" style={{ marginTop: '1rem' }}>
-                    <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary-light)', marginBottom: '1.5rem' }}>
-                      Below is the log of verified used gadgets you inquired about. You can use these details to contact store partners again.
-                    </p>
-
-                    {(() => {
-                      const custLeadsAll = leads.filter(l => activeUser && l.customerPhone === activeUser.phone);
-                      const totalItems = custLeadsAll.length;
-                      const totalPages = Math.ceil(totalItems / custInquiriesPerPage) || 1;
-                      const startIndex = (custInquiriesPage - 1) * custInquiriesPerPage;
-                      const endIndex = Math.min(startIndex + custInquiriesPerPage, totalItems);
-                      const paginatedLeads = custLeadsAll.slice(startIndex, endIndex);
-
-                      if (totalItems === 0) {
-                        return (
-                          <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-secondary-light)' }}>
-                            <HelpCircle size={40} style={{ opacity: 0.3, marginBottom: '1rem' }} />
-                            <p>You haven't made any inquiries yet. Click Call/WhatsApp on any used device to connect with local stores!</p>
-                            <button className="btn-primary" onClick={() => navigate('/')} style={{ marginTop: '1rem', padding: '0.5rem 1rem' }}>
-                              Browse Used Gadgets
-                            </button>
-                          </div>
-                        );
-                      }
-
-                      return (
-                        <>
-                          <table className="leads-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                            <thead>
-                              <tr style={{ backgroundColor: 'var(--light-bg)', textAlign: 'left', borderBottom: '1px solid var(--light-border)' }}>
-                                <th style={{ padding: '0.75rem' }}>Inquiry Date</th>
-                                <th style={{ padding: '0.75rem' }}>Used Device Model</th>
-                                <th style={{ padding: '0.75rem' }}>Store Partner</th>
-                                <th style={{ padding: '0.75rem' }}>Store Location</th>
-                                <th style={{ padding: '0.75rem' }}>Contact Channel</th>
-                                <th style={{ padding: '0.75rem', textAlign: 'center' }}>Action</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {paginatedLeads.map((lead) => {
-                                const matchingProduct = products.find(p => p.id === lead.productId);
-                                const store = shops.find(s => s.id === lead.shopId);
-                                return (
-                                  <tr key={lead.id} style={{ borderBottom: '1px solid var(--light-border)' }}>
-                                    <td style={{ padding: '0.75rem' }}>
-                                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                                        <Calendar size={14} style={{ color: 'var(--text-secondary-light)' }} />
-                                        <span>{new Date(lead.createdAt).toLocaleDateString('en-IN', { dateStyle: 'short' })}</span>
-                                      </div>
-                                    </td>
-                                    <td style={{ padding: '0.75rem', fontWeight: 600 }}>
-                                      {lead.productName}
-                                    </td>
-                                    <td style={{ padding: '0.75rem' }}>
-                                      {store ? store.name : "Local Store Partner"}
-                                    </td>
-                                    <td style={{ padding: '0.75rem' }}>
-                                      {store ? `${store.address}, ${store.city}` : "Kerala, India"}
-                                    </td>
-                                    <td style={{ padding: '0.75rem' }}>
-                                      <span className={`lead-badge ${lead.contactType}`}>
-                                        {lead.contactType === 'whatsapp' ? 'WhatsApp' : 'Direct Call'}
-                                      </span>
-                                    </td>
-                                    <td style={{ padding: '0.75rem', textAlign: 'center' }}>
-                                      {store && matchingProduct ? (
-                                        <button
-                                          className="action-btn sell-btn"
-                                          style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
-                                          onClick={() => {
-                                            if (lead.contactType === 'whatsapp') {
-                                              handleWhatsAppSeller(matchingProduct, store);
-                                            } else {
-                                              handleCallSeller(matchingProduct, store);
-                                            }
-                                          }}
-                                        >
-                                          <Phone size={11} />
-                                          <span>Contact Again</span>
-                                        </button>
-                                      ) : (
-                                        <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary-light)' }}>Unavailable</span>
-                                      )}
-                                    </td>
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                          </table>
-
-                          {/* Customer Inquiries Pagination Controls Bar */}
-                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '1rem' }}>
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
-                              <span>Rows per page:</span>
-                              <select
-                                value={custInquiriesPerPage}
-                                onChange={(e) => {
-                                  setCustInquiriesPerPage(Number(e.target.value));
-                                  setCustInquiriesPage(1);
-                                }}
-                                style={{ padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: 700, color: '#334155', cursor: 'pointer' }}
-                              >
-                                <option value={5}>5</option>
-                                <option value={10}>10</option>
-                                <option value={20}>20</option>
-                              </select>
-                              <span>Showing {totalItems > 0 ? startIndex + 1 : 0} to {endIndex} of {totalItems} entries</span>
-                            </div>
-
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
-                              <button
-                                type="button"
-                                disabled={custInquiriesPage === 1}
-                                onClick={() => setCustInquiriesPage(prev => Math.max(prev - 1, 1))}
-                                style={{ padding: '0.35rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: 700, background: '#ffffff', color: custInquiriesPage === 1 ? '#cbd5e1' : '#334155', cursor: custInquiriesPage === 1 ? 'not-allowed' : 'pointer' }}
-                              >
-                                ◀ Prev
-                              </button>
-                              {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
-                                <button
-                                  key={page}
-                                  type="button"
-                                  onClick={() => setCustInquiriesPage(page)}
-                                  style={{ padding: '0.35rem 0.7rem', borderRadius: '8px', border: custInquiriesPage === page ? '1px solid var(--primary)' : '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: 800, background: custInquiriesPage === page ? 'var(--primary)' : '#ffffff', color: custInquiriesPage === page ? '#ffffff' : '#334155', cursor: 'pointer' }}
-                                >
-                                  {page}
-                                </button>
-                              ))}
-                              <button
-                                type="button"
-                                disabled={custInquiriesPage === totalPages}
-                                onClick={() => setCustInquiriesPage(prev => Math.min(prev + 1, totalPages))}
-                                style={{ padding: '0.35rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: 700, background: '#ffffff', color: custInquiriesPage === totalPages ? '#cbd5e1' : '#334155', cursor: custInquiriesPage === totalPages ? 'not-allowed' : 'pointer' }}
-                              >
-                                Next ▶
-                              </button>
-                            </div>
-                          </div>
-                        </>
-                      );
-                    })()}
+                    <div className="profile-stat-lbl">Inquiries Sourced</div>
                   </div>
                 </div>
-              ) : customerTab === 'following' ? (
-                /* Stores I Follow Tab */
-                <div className="dashboard-panel">
-                  <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div>
-                      <h3 className="panel-title">Stores I Follow</h3>
+
+                <div className="dashboard-menu">
+                  <button
+                    className={`dash-menu-btn ${customerTab === 'inquiries' ? 'active' : ''}`}
+                    onClick={() => setCustomerTab('inquiries')}
+                  >
+                    <MessageSquare size={16} />
+                    <span>My Inquiries Log</span>
+                  </button>
+
+                  <button
+                    className={`dash-menu-btn ${customerTab === 'following' ? 'active' : ''}`}
+                    onClick={() => setCustomerTab('following')}
+                  >
+                    <UserCheck size={16} />
+                    <span>Stores I Follow ({followedShops.length})</span>
+                  </button>
+
+                  <button
+                    className={`dash-menu-btn ${customerTab === 'wishlist' ? 'active' : ''}`}
+                    onClick={() => setCustomerTab('wishlist')}
+                  >
+                    <Heart size={16} fill={customerTab === 'wishlist' ? '#ef4444' : 'transparent'} color={customerTab === 'wishlist' ? '#ef4444' : 'currentColor'} />
+                    <span>My Wishlist ({wishlistProductIds.length})</span>
+                  </button>
+
+                  <button
+                    className={`dash-menu-btn ${customerTab === 'profile' ? 'active' : ''}`}
+                    onClick={() => setCustomerTab('profile')}
+                  >
+                    <User size={16} />
+                    <span>My Profile Details</span>
+                  </button>
+
+                  <button
+                    className="dash-menu-btn exit-dash-btn"
+                    onClick={() => navigate('/')}
+                    style={{ marginTop: 'auto', backgroundColor: 'transparent', border: '1px solid var(--light-border)', color: 'var(--text-primary-light)' }}
+                  >
+                    <ChevronLeft size={16} />
+                    <span>Exit Dashboard</span>
+                  </button>
+                </div>
+              </aside>
+
+              <section className="dashboard-content">
+                {customerTab === 'inquiries' ? (
+                  /* Customer Inquiries Log */
+                  <div className="dashboard-panel">
+                    <div className="panel-header">
+                      <h3 className="panel-title">My Inquiries Log</h3>
                       <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary-light)' }}>
-                        Verified merchant partners you are following
+                        Direct Peer-to-Merchant Connections
                       </div>
                     </div>
-                  </div>
 
-                  <div style={{ marginTop: '1rem' }}>
-                    {followedShops.length > 0 ? (
-                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-                        {followedShops.map((shop) => (
-                          <div
-                            key={shop.id}
-                            style={{
-                              background: '#ffffff',
-                              border: '1px solid var(--light-border)',
-                              borderRadius: '12px',
-                              padding: '1.25rem',
-                              display: 'flex',
-                              flexDirection: 'column',
-                              justifyContent: 'space-between',
-                              gap: '0.75rem',
-                            }}
-                          >
-                            <div>
-                              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                <h4 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>{shop.name}</h4>
-                                <span style={{ fontSize: '0.75rem', background: '#e0f2fe', color: '#0369a1', padding: '0.15rem 0.5rem', borderRadius: '12px', fontWeight: 600 }}>
-                                  {shop.city}
-                                </span>
-                              </div>
-                              <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.25rem 0 0 0' }}>
-                                📍 {shop.address}
-                              </p>
-                              <p style={{ fontSize: '0.78rem', color: '#475569', margin: '0.25rem 0 0 0' }}>
-                                👤 Owner: {shop.ownerName} | 🏷️ {shop.category || 'Mobiles & Electronics'}
-                              </p>
-                            </div>
+                    <div className="leads-list-container" style={{ marginTop: '1rem' }}>
+                      <p style={{ fontSize: '0.9rem', color: 'var(--text-secondary-light)', marginBottom: '1.5rem' }}>
+                        Below is the log of verified used gadgets you inquired about. You can use these details to contact store partners again.
+                      </p>
 
-                            <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                              {shop.phone && (
-                                <a
-                                  href={`tel:${shop.phone}`}
-                                  className="action-btn sell-btn"
-                                  style={{ flex: 1, padding: '0.4rem', fontSize: '0.78rem', justifyContent: 'center', textDecoration: 'none' }}
-                                >
-                                  <Phone size={13} />
-                                  <span>Call Shop</span>
-                                </a>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => handleUnfollowShopInDash(shop.id)}
-                                style={{
-                                  padding: '0.4rem 0.75rem',
-                                  fontSize: '0.78rem',
-                                  borderRadius: '8px',
-                                  border: '1px solid #fca5a5',
-                                  background: '#fef2f2',
-                                  color: '#dc2626',
-                                  fontWeight: 600,
-                                  cursor: 'pointer',
-                                }}
-                              >
-                                Unfollow
+                      {(() => {
+                        const custLeadsAll = leads.filter(l => activeUser && l.customerPhone === activeUser.phone);
+                        const totalItems = custLeadsAll.length;
+                        const totalPages = Math.ceil(totalItems / custInquiriesPerPage) || 1;
+                        const startIndex = (custInquiriesPage - 1) * custInquiriesPerPage;
+                        const endIndex = Math.min(startIndex + custInquiriesPerPage, totalItems);
+                        const paginatedLeads = custLeadsAll.slice(startIndex, endIndex);
+
+                        if (totalItems === 0) {
+                          return (
+                            <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-secondary-light)' }}>
+                              <HelpCircle size={40} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+                              <p>You haven't made any inquiries yet. Click Call/WhatsApp on any used device to connect with local stores!</p>
+                              <button className="btn-primary" onClick={() => navigate('/')} style={{ marginTop: '1rem', padding: '0.5rem 1rem' }}>
+                                Browse Used Gadgets
                               </button>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-secondary-light)' }}>
-                        <UserCheck size={40} style={{ opacity: 0.3, marginBottom: '1rem' }} />
-                        <p>You are not following any local shops yet. Click "+ Follow Shop" on any product detail page!</p>
-                        <button className="btn-primary" onClick={() => navigate('/')} style={{ marginTop: '1rem', padding: '0.5rem 1rem' }}>
-                          Explore Shop Catalog
-                        </button>
-                      </div>
-                    )}
+                          );
+                        }
+
+                        return (
+                          <>
+                            <table className="leads-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                              <thead>
+                                <tr style={{ backgroundColor: 'var(--light-bg)', textAlign: 'left', borderBottom: '1px solid var(--light-border)' }}>
+                                  <th style={{ padding: '0.75rem' }}>Inquiry Date</th>
+                                  <th style={{ padding: '0.75rem' }}>Used Device Model</th>
+                                  <th style={{ padding: '0.75rem' }}>Store Partner</th>
+                                  <th style={{ padding: '0.75rem' }}>Store Location</th>
+                                  <th style={{ padding: '0.75rem' }}>Contact Channel</th>
+                                  <th style={{ padding: '0.75rem', textAlign: 'center' }}>Action</th>
+                                </tr>
+                              </thead>
+                              <tbody>
+                                {paginatedLeads.map((lead) => {
+                                  const matchingProduct = products.find(p => p.id === lead.productId);
+                                  const store = shops.find(s => s.id === lead.shopId);
+                                  return (
+                                    <tr key={lead.id} style={{ borderBottom: '1px solid var(--light-border)' }}>
+                                      <td style={{ padding: '0.75rem' }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                          <Calendar size={14} style={{ color: 'var(--text-secondary-light)' }} />
+                                          <span>{new Date(lead.createdAt).toLocaleDateString('en-IN', { dateStyle: 'short' })}</span>
+                                        </div>
+                                      </td>
+                                      <td style={{ padding: '0.75rem', fontWeight: 600 }}>
+                                        {lead.productName}
+                                      </td>
+                                      <td style={{ padding: '0.75rem' }}>
+                                        {store ? store.name : "Local Store Partner"}
+                                      </td>
+                                      <td style={{ padding: '0.75rem' }}>
+                                        {store ? `${store.address}, ${store.city}` : "Kerala, India"}
+                                      </td>
+                                      <td style={{ padding: '0.75rem' }}>
+                                        <span className={`lead-badge ${lead.contactType}`}>
+                                          {lead.contactType === 'whatsapp' ? 'WhatsApp' : 'Direct Call'}
+                                        </span>
+                                      </td>
+                                      <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                                        {store && matchingProduct ? (
+                                          <button
+                                            className="action-btn sell-btn"
+                                            style={{ padding: '0.3rem 0.6rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}
+                                            onClick={() => {
+                                              if (lead.contactType === 'whatsapp') {
+                                                handleWhatsAppSeller(matchingProduct, store);
+                                              } else {
+                                                handleCallSeller(matchingProduct, store);
+                                              }
+                                            }}
+                                          >
+                                            <Phone size={11} />
+                                            <span>Contact Again</span>
+                                          </button>
+                                        ) : (
+                                          <span style={{ fontSize: '0.8rem', color: 'var(--text-secondary-light)' }}>Unavailable</span>
+                                        )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+
+                            {/* Customer Inquiries Pagination Controls Bar */}
+                            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '1.25rem', paddingTop: '1rem', borderTop: '1px solid #e2e8f0', flexWrap: 'wrap', gap: '1rem' }}>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.8rem', color: '#64748b', fontWeight: 600 }}>
+                                <span>Rows per page:</span>
+                                <select
+                                  value={custInquiriesPerPage}
+                                  onChange={(e) => {
+                                    setCustInquiriesPerPage(Number(e.target.value));
+                                    setCustInquiriesPage(1);
+                                  }}
+                                  style={{ padding: '0.3rem 0.5rem', borderRadius: '6px', border: '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: 700, color: '#334155', cursor: 'pointer' }}
+                                >
+                                  <option value={5}>5</option>
+                                  <option value={10}>10</option>
+                                  <option value={20}>20</option>
+                                </select>
+                                <span>Showing {totalItems > 0 ? startIndex + 1 : 0} to {endIndex} of {totalItems} entries</span>
+                              </div>
+
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                                <button
+                                  type="button"
+                                  disabled={custInquiriesPage === 1}
+                                  onClick={() => setCustInquiriesPage(prev => Math.max(prev - 1, 1))}
+                                  style={{ padding: '0.35rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: 700, background: '#ffffff', color: custInquiriesPage === 1 ? '#cbd5e1' : '#334155', cursor: custInquiriesPage === 1 ? 'not-allowed' : 'pointer' }}
+                                >
+                                  ◀ Prev
+                                </button>
+                                {Array.from({ length: totalPages }, (_, i) => i + 1).map(page => (
+                                  <button
+                                    key={page}
+                                    type="button"
+                                    onClick={() => setCustInquiriesPage(page)}
+                                    style={{ padding: '0.35rem 0.7rem', borderRadius: '8px', border: custInquiriesPage === page ? '1px solid var(--primary)' : '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: 800, background: custInquiriesPage === page ? 'var(--primary)' : '#ffffff', color: custInquiriesPage === page ? '#ffffff' : '#334155', cursor: 'pointer' }}
+                                  >
+                                    {page}
+                                  </button>
+                                ))}
+                                <button
+                                  type="button"
+                                  disabled={custInquiriesPage === totalPages}
+                                  onClick={() => setCustInquiriesPage(prev => Math.min(prev + 1, totalPages))}
+                                  style={{ padding: '0.35rem 0.75rem', borderRadius: '8px', border: '1px solid #cbd5e1', fontSize: '0.8rem', fontWeight: 700, background: '#ffffff', color: custInquiriesPage === totalPages ? '#cbd5e1' : '#334155', cursor: custInquiriesPage === totalPages ? 'not-allowed' : 'pointer' }}
+                                >
+                                  Next ▶
+                                </button>
+                              </div>
+                            </div>
+                          </>
+                        );
+                      })()}
+                    </div>
                   </div>
-                </div>
-              ) : customerTab === 'wishlist' ? (
-                /* Customer Wishlist Tab */
-                <div className="dashboard-panel">
-                  <WishlistPage
-                    wishlistProducts={wishlistItems}
-                    onRemoveWishlist={(id) => {
-                      const prod = products.find(p => p.id === id) || wishlistItems.find(i => i.id === id || (i as any).productId === id || (i as any).wishlistRecordId === id);
-                      const targetProd = (prod as any)?.product || prod;
-                      if (targetProd) {
-                        handleToggleWishlist(targetProd as Product);
-                      } else {
-                        handleToggleWishlist({ id, name: 'Item', price: 0 } as Product);
-                      }
-                    }}
-                    onCallSeller={handleCallSeller}
-                    onWhatsAppSeller={handleWhatsAppSeller}
-                    onSelectProduct={(product) => {
-                      if (!activeUser && !activeShop) {
+                ) : customerTab === 'following' ? (
+                  /* Stores I Follow Tab */
+                  <div className="dashboard-panel">
+                    <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div>
+                        <h3 className="panel-title">Stores I Follow</h3>
+                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary-light)' }}>
+                          Verified merchant partners you are following
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: '1rem' }}>
+                      {followedShops.length > 0 ? (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
+                          {followedShops.map((shop) => (
+                            <div
+                              key={shop.id}
+                              style={{
+                                background: '#ffffff',
+                                border: '1px solid var(--light-border)',
+                                borderRadius: '12px',
+                                padding: '1.25rem',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                justifyContent: 'space-between',
+                                gap: '0.75rem',
+                              }}
+                            >
+                              <div>
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                                  <h4 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>{shop.name}</h4>
+                                  <span style={{ fontSize: '0.75rem', background: '#e0f2fe', color: '#0369a1', padding: '0.15rem 0.5rem', borderRadius: '12px', fontWeight: 600 }}>
+                                    {shop.city}
+                                  </span>
+                                </div>
+                                <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.25rem 0 0 0' }}>
+                                  📍 {shop.address}
+                                </p>
+                                <p style={{ fontSize: '0.78rem', color: '#475569', margin: '0.25rem 0 0 0' }}>
+                                  👤 Owner: {shop.ownerName} | 🏷️ {shop.category || 'Mobiles & Electronics'}
+                                </p>
+                              </div>
+
+                              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                                {shop.phone && (
+                                  <a
+                                    href={`tel:${shop.phone}`}
+                                    className="action-btn sell-btn"
+                                    style={{ flex: 1, padding: '0.4rem', fontSize: '0.78rem', justifyContent: 'center', textDecoration: 'none' }}
+                                  >
+                                    <Phone size={13} />
+                                    <span>Call Shop</span>
+                                  </a>
+                                )}
+                                <button
+                                  type="button"
+                                  onClick={() => handleUnfollowShopInDash(shop.id)}
+                                  style={{
+                                    padding: '0.4rem 0.75rem',
+                                    fontSize: '0.78rem',
+                                    borderRadius: '8px',
+                                    border: '1px solid #fca5a5',
+                                    background: '#fef2f2',
+                                    color: '#dc2626',
+                                    fontWeight: 600,
+                                    cursor: 'pointer',
+                                  }}
+                                >
+                                  Unfollow
+                                </button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-secondary-light)' }}>
+                          <UserCheck size={40} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+                          <p>You are not following any local shops yet. Click "+ Follow Shop" on any product detail page!</p>
+                          <button className="btn-primary" onClick={() => navigate('/')} style={{ marginTop: '1rem', padding: '0.5rem 1rem' }}>
+                            Explore Shop Catalog
+                          </button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                ) : customerTab === 'wishlist' ? (
+                  /* Customer Wishlist Tab */
+                  <div className="dashboard-panel">
+                    <WishlistPage
+                      wishlistProducts={wishlistItems}
+                      onRemoveWishlist={(id) => {
+                        const prod = products.find(p => p.id === id) || wishlistItems.find(i => i.id === id || (i as any).productId === id || (i as any).wishlistRecordId === id);
+                        const targetProd = (prod as any)?.product || prod;
+                        if (targetProd) {
+                          handleToggleWishlist(targetProd as Product);
+                        } else {
+                          handleToggleWishlist({ id, name: 'Item', price: 0 } as Product);
+                        }
+                      }}
+                      onCallSeller={handleCallSeller}
+                      onWhatsAppSeller={handleWhatsAppSeller}
+                      onSelectProduct={(product) => {
+                        if (!activeUser && !activeShop) {
+                          dispatch(setAuthRole('customer'));
+                          dispatch(setAuthTab('login'));
+                          dispatch(setShowAuthModal(true));
+                          dispatch(addToast({ message: 'Please log in to view full product details & seller info.', type: 'info' }));
+                          return;
+                        }
+                        dispatch(setSelectedProduct(product));
+                        navigate(`/product/${product.id}`);
+                      }}
+                      activeUser={activeUser}
+                      onOpenLogin={() => {
                         dispatch(setAuthRole('customer'));
                         dispatch(setAuthTab('login'));
                         dispatch(setShowAuthModal(true));
-                        dispatch(addToast({ message: 'Please log in to view full product details & seller info.', type: 'info' }));
-                        return;
-                      }
-                      dispatch(setSelectedProduct(product));
-                      navigate(`/product/${product.id}`);
-                    }}
-                    activeUser={activeUser}
-                    onOpenLogin={() => {
-                      dispatch(setAuthRole('customer'));
-                      dispatch(setAuthTab('login'));
-                      dispatch(setShowAuthModal(true));
-                    }}
-                  />
-                </div>
-              ) : (
-                /* Customer Profile Edit */
-                <div className="dashboard-panel">
-                  <div className="panel-header">
-                    <h3 className="panel-title">My Profile Details</h3>
+                      }}
+                    />
                   </div>
+                ) : (
+                  /* Customer Profile Edit */
+                  <div className="dashboard-panel">
+                    <div className="panel-header">
+                      <h3 className="panel-title">My Profile Details</h3>
+                    </div>
 
-                  <form
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      if (!custProfileForm.name || !custProfileForm.email || !custProfileForm.phone) {
-                        triggerToast("Please fill in all required fields.", "info");
-                        return;
-                      }
-                      if (activeUser) {
-                        try {
-                          const updatedFromBackend = await updateUser(activeUser.id, {
-                            name: custProfileForm.name,
-                            email: custProfileForm.email,
-                            phone: custProfileForm.phone,
-                            latitude: custProfileForm.latitude,
-                            longitude: custProfileForm.longitude
-                          });
-
-                          const updatedUser: CustomerUser = {
-                            ...activeUser,
-                            name: updatedFromBackend.name || custProfileForm.name,
-                            email: updatedFromBackend.email || custProfileForm.email,
-                            phone: updatedFromBackend.phone || custProfileForm.phone,
-                            latitude: updatedFromBackend.latitude ?? custProfileForm.latitude ?? null,
-                            longitude: updatedFromBackend.longitude ?? custProfileForm.longitude ?? null,
-                          };
-
-                          // Update user list in localStorage
-                          let customUsers: CustomerUser[] = [];
-                          try {
-                            const savedUsers = localStorage.getItem('mlx_registered_users');
-                            if (savedUsers) customUsers = JSON.parse(savedUsers);
-                          } catch (err) {
-                            console.error(err);
-                          }
-
-                          const userIdx = customUsers.findIndex(u => u.id === activeUser.id);
-                          if (userIdx !== -1) {
-                            customUsers[userIdx] = updatedUser;
-                          } else {
-                            customUsers.push(updatedUser);
-                          }
-                          localStorage.setItem('mlx_registered_users', JSON.stringify(customUsers));
-
-                          dispatch(setActiveUser(updatedUser));
-                          triggerToast("Profile & location updated successfully!", "success");
-                        } catch (err: any) {
-                          triggerToast(err.message || "Failed to update profile", "info");
+                    <form
+                      onSubmit={async (e) => {
+                        e.preventDefault();
+                        if (!custProfileForm.name || !custProfileForm.email || !custProfileForm.phone) {
+                          triggerToast("Please fill in all required fields.", "info");
+                          return;
                         }
-                      }
-                    }}
-                    className="form-grid"
-                  >
-                    <div className="form-group">
-                      <label className="form-label">Full Name *</label>
-                      <input
-                        type="text"
-                        className="form-input-text"
-                        required
-                        value={custProfileForm.name}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => setCustProfileForm({ ...custProfileForm, name: e.target.value })}
-                      />
-                    </div>
+                        if (activeUser) {
+                          try {
+                            const updatedFromBackend = await updateUser(activeUser.id, {
+                              name: custProfileForm.name,
+                              email: custProfileForm.email,
+                              phone: custProfileForm.phone,
+                              latitude: custProfileForm.latitude,
+                              longitude: custProfileForm.longitude
+                            });
 
-                    <div className="form-group">
-                      <label className="form-label">Email Address *</label>
-                      <input
-                        type="email"
-                        className="form-input-text"
-                        required
-                        value={custProfileForm.email}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => setCustProfileForm({ ...custProfileForm, email: e.target.value })}
-                      />
-                    </div>
+                            const updatedUser: CustomerUser = {
+                              ...activeUser,
+                              name: updatedFromBackend.name || custProfileForm.name,
+                              email: updatedFromBackend.email || custProfileForm.email,
+                              phone: updatedFromBackend.phone || custProfileForm.phone,
+                              latitude: updatedFromBackend.latitude ?? custProfileForm.latitude ?? null,
+                              longitude: updatedFromBackend.longitude ?? custProfileForm.longitude ?? null,
+                            };
 
-                    <div className="form-group">
-                      <label className="form-label">Mobile Phone Number *</label>
-                      <input
-                        type="tel"
-                        className="form-input-text"
-                        required
-                        value={custProfileForm.phone}
-                        onChange={(e: ChangeEvent<HTMLInputElement>) => setCustProfileForm({ ...custProfileForm, phone: e.target.value })}
-                      />
-                    </div>
+                            // Update user list in localStorage
+                            let customUsers: CustomerUser[] = [];
+                            try {
+                              const savedUsers = localStorage.getItem('mlx_registered_users');
+                              if (savedUsers) customUsers = JSON.parse(savedUsers);
+                            } catch (err) {
+                              console.error(err);
+                            }
 
-                    <div className="form-actions-row full-width" style={{ marginTop: '1rem' }}>
-                      <button type="submit" className="btn-primary" style={{ padding: '0.6rem 1.2rem' }}>
-                        Save Changes
-                      </button>
-                    </div>
-                  </form>
-                </div>
-              )}
-            </section>
-          </main>
+                            const userIdx = customUsers.findIndex(u => u.id === activeUser.id);
+                            if (userIdx !== -1) {
+                              customUsers[userIdx] = updatedUser;
+                            } else {
+                              customUsers.push(updatedUser);
+                            }
+                            localStorage.setItem('mlx_registered_users', JSON.stringify(customUsers));
+
+                            dispatch(setActiveUser(updatedUser));
+                            triggerToast("Profile & location updated successfully!", "success");
+                          } catch (err: any) {
+                            triggerToast(err.message || "Failed to update profile", "info");
+                          }
+                        }
+                      }}
+                      className="form-grid"
+                    >
+                      <div className="form-group">
+                        <label className="form-label">Full Name *</label>
+                        <input
+                          type="text"
+                          className="form-input-text"
+                          required
+                          value={custProfileForm.name}
+                          onChange={(e: ChangeEvent<HTMLInputElement>) => setCustProfileForm({ ...custProfileForm, name: e.target.value })}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Email Address *</label>
+                        <input
+                          type="email"
+                          className="form-input-text"
+                          required
+                          value={custProfileForm.email}
+                          onChange={(e: ChangeEvent<HTMLInputElement>) => setCustProfileForm({ ...custProfileForm, email: e.target.value })}
+                        />
+                      </div>
+
+                      <div className="form-group">
+                        <label className="form-label">Mobile Phone Number *</label>
+                        <input
+                          type="tel"
+                          className="form-input-text"
+                          required
+                          value={custProfileForm.phone}
+                          onChange={(e: ChangeEvent<HTMLInputElement>) => setCustProfileForm({ ...custProfileForm, phone: e.target.value })}
+                        />
+                      </div>
+
+                      <div className="form-actions-row full-width" style={{ marginTop: '1rem' }}>
+                        <button type="submit" className="btn-primary" style={{ padding: '0.6rem 1.2rem' }}>
+                          Save Changes
+                        </button>
+                      </div>
+                    </form>
+                  </div>
+                )}
+              </section>
+            </main>
           )
         } />
 
@@ -3558,143 +3608,143 @@ export default function App() {
                   </div>
                 </div>
               ) : (dashboardTab === 'leads' || dashboardTab === 'customer-logs') ? (
-              <SellerCustomerLogsPage
-                onToast={triggerToast}
-                onOpenUpgradeModal={() => {
-                  dispatch(setDashboardTab('profile'));
-                }}
-              />
-            ) : dashboardTab === 'followers' ? (
-              /* My Store Followers Panel */
-              <div className="dashboard-panel">
-                {(() => {
-                  const validFollowers = shopFollowers.filter(
-                    (follower) => follower.id !== activeShop?.id && follower.name !== activeShop?.name
-                  );
+                <SellerCustomerLogsPage
+                  onToast={triggerToast}
+                  onOpenUpgradeModal={() => {
+                    dispatch(setDashboardTab('profile'));
+                  }}
+                />
+              ) : dashboardTab === 'followers' ? (
+                /* My Store Followers Panel */
+                <div className="dashboard-panel">
+                  {(() => {
+                    const validFollowers = shopFollowers.filter(
+                      (follower) => follower.id !== activeShop?.id && follower.name !== activeShop?.name
+                    );
 
-                  return (
-                    <>
-                      <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <h3 className="panel-title">My Store Followers</h3>
-                          <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary-light)' }}>
-                            Customers who are following <strong>{activeShop?.name}</strong> for inventory updates
+                    return (
+                      <>
+                        <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <h3 className="panel-title">My Store Followers</h3>
+                            <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary-light)' }}>
+                              Customers who are following <strong>{activeShop?.name}</strong> for inventory updates
+                            </div>
+                          </div>
+                          <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '0.4rem 0.85rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, color: '#2563eb' }}>
+                            Total Followers: {validFollowers.length}
                           </div>
                         </div>
-                        <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '0.4rem 0.85rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, color: '#2563eb' }}>
-                          Total Followers: {validFollowers.length}
-                        </div>
-                      </div>
 
-                      <div style={{ marginTop: '1.5rem' }}>
-                        {validFollowers.length > 0 ? (
-                          <table className="leads-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
-                            <thead>
-                              <tr style={{ backgroundColor: 'var(--light-bg)', textAlign: 'left', borderBottom: '1px solid var(--light-border)' }}>
-                                <th style={{ padding: '0.75rem' }}>Followed Date</th>
-                                <th style={{ padding: '0.75rem' }}>Customer Name</th>
-                                <th style={{ padding: '0.75rem' }}>Contact Details</th>
-                                <th style={{ padding: '0.75rem', textAlign: 'right' }}>Direct Action</th>
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {validFollowers.map((follower) => (
-                                <tr key={follower.id} style={{ borderBottom: '1px solid var(--light-border)' }}>
-                                  <td style={{ padding: '0.75rem' }}>
-                                    {new Date(follower.followedAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
-                                  </td>
-                                  <td style={{ padding: '0.75rem', fontWeight: 600 }}>{follower.name}</td>
-                                  <td style={{ padding: '0.75rem' }}>
-                                    <div>{follower.phone || follower.email || 'Registered Customer'}</div>
-                                  </td>
-                                  <td style={{ padding: '0.75rem', textAlign: 'right' }}>
-                                    {follower.phone ? (
-                                      <a
-                                        href={`https://wa.me/${follower.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${follower.name}, thank you for following ${activeShop?.name} on MLX Market!`)}`}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        className="btn-whatsapp"
-                                        style={{ padding: '0.25rem 0.65rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', textDecoration: 'none', borderRadius: '6px' }}
-                                      >
-                                        <span>WhatsApp Customer</span>
-                                      </a>
-                                    ) : (
-                                      <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Subscribed</span>
-                                    )}
-                                  </td>
+                        <div style={{ marginTop: '1.5rem' }}>
+                          {validFollowers.length > 0 ? (
+                            <table className="leads-table" style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.9rem' }}>
+                              <thead>
+                                <tr style={{ backgroundColor: 'var(--light-bg)', textAlign: 'left', borderBottom: '1px solid var(--light-border)' }}>
+                                  <th style={{ padding: '0.75rem' }}>Followed Date</th>
+                                  <th style={{ padding: '0.75rem' }}>Customer Name</th>
+                                  <th style={{ padding: '0.75rem' }}>Contact Details</th>
+                                  <th style={{ padding: '0.75rem', textAlign: 'right' }}>Direct Action</th>
                                 </tr>
-                              ))}
-                            </tbody>
-                          </table>
-                        ) : (
-                          <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary-light)' }}>
-                            <UserCheck size={36} style={{ opacity: 0.3, marginBottom: '1rem' }} />
-                            <p>No customers are following your store yet. Keep your product catalog updated and accurate to attract followers!</p>
-                          </div>
-                        )}
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-            ) : (
-              <div className="dashboard-panel">
-                {/* SHOP PROFILE COMPLETION PROGRESS CARD */}
-                {(() => {
-                  const completion = calculateShopProfileCompletion(
-                    activeShop ? {
-                      ...activeShop,
-                      name: profileForm.name || activeShop.name,
-                      ownerName: profileForm.ownerName || activeShop.ownerName,
-                      phone: profileForm.phone || activeShop.phone,
-                      whatsapp: profileForm.whatsapp || activeShop.whatsapp,
-                      city: profileForm.city || activeShop.city,
-                      address: profileForm.address || activeShop.address,
-                    } : null,
-                    activeUser?.email
-                  );
+                              </thead>
+                              <tbody>
+                                {validFollowers.map((follower) => (
+                                  <tr key={follower.id} style={{ borderBottom: '1px solid var(--light-border)' }}>
+                                    <td style={{ padding: '0.75rem' }}>
+                                      {new Date(follower.followedAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
+                                    </td>
+                                    <td style={{ padding: '0.75rem', fontWeight: 600 }}>{follower.name}</td>
+                                    <td style={{ padding: '0.75rem' }}>
+                                      <div>{follower.phone || follower.email || 'Registered Customer'}</div>
+                                    </td>
+                                    <td style={{ padding: '0.75rem', textAlign: 'right' }}>
+                                      {follower.phone ? (
+                                        <a
+                                          href={`https://wa.me/${follower.phone.replace(/\D/g, '')}?text=${encodeURIComponent(`Hi ${follower.name}, thank you for following ${activeShop?.name} on MLX Market!`)}`}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="btn-whatsapp"
+                                          style={{ padding: '0.25rem 0.65rem', fontSize: '0.75rem', display: 'inline-flex', alignItems: 'center', gap: '0.25rem', textDecoration: 'none', borderRadius: '6px' }}
+                                        >
+                                          <span>WhatsApp Customer</span>
+                                        </a>
+                                      ) : (
+                                        <span style={{ fontSize: '0.8rem', color: '#64748b' }}>Subscribed</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          ) : (
+                            <div style={{ textAlign: 'center', padding: '3rem 1rem', color: 'var(--text-secondary-light)' }}>
+                              <UserCheck size={36} style={{ opacity: 0.3, marginBottom: '1rem' }} />
+                              <p>No customers are following your store yet. Keep your product catalog updated and accurate to attract followers!</p>
+                            </div>
+                          )}
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              ) : (
+                <div className="dashboard-panel">
+                  {/* SHOP PROFILE COMPLETION PROGRESS CARD */}
+                  {(() => {
+                    const completion = calculateShopProfileCompletion(
+                      activeShop ? {
+                        ...activeShop,
+                        name: profileForm.name || activeShop.name,
+                        ownerName: profileForm.ownerName || activeShop.ownerName,
+                        phone: profileForm.phone || activeShop.phone,
+                        whatsapp: profileForm.whatsapp || activeShop.whatsapp,
+                        city: profileForm.city || activeShop.city,
+                        address: profileForm.address || activeShop.address,
+                      } : null,
+                      activeUser?.email
+                    );
 
-                  return (
-                    <div
-                      style={{
-                        background: completion.isFullyCompleted
-                          ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(16, 185, 129, 0.04) 100%)'
-                          : 'linear-gradient(135deg, rgba(255, 111, 0, 0.08) 0%, rgba(234, 88, 12, 0.04) 100%)',
-                        border: completion.isFullyCompleted
-                          ? '1px solid rgba(34, 197, 94, 0.3)'
-                          : '1px solid rgba(255, 111, 0, 0.3)',
-                        borderRadius: '16px',
-                        padding: '1.25rem 1.5rem',
-                        marginBottom: '1.75rem',
-                        boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                        <div>
-                          <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: completion.isFullyCompleted ? '#166534' : '#9a3412', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                            <ShieldCheck size={20} color={completion.isFullyCompleted ? '#16a34a' : '#ea580c'} />
-                            <span>Profile Completion: {completion.completionPercentage}%</span>
-                          </h4>
-                          <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.83rem', color: '#64748b' }}>
-                            {completion.isFullyCompleted
-                              ? '🎉 Excellent! Your shop profile is 100% complete and fully verified for buyers.'
-                              : 'Complete the remaining profile details to reach 100%.'}
-                          </p>
+                    return (
+                      <div
+                        style={{
+                          background: completion.isFullyCompleted
+                            ? 'linear-gradient(135deg, rgba(34, 197, 94, 0.08) 0%, rgba(16, 185, 129, 0.04) 100%)'
+                            : 'linear-gradient(135deg, rgba(255, 111, 0, 0.08) 0%, rgba(234, 88, 12, 0.04) 100%)',
+                          border: completion.isFullyCompleted
+                            ? '1px solid rgba(34, 197, 94, 0.3)'
+                            : '1px solid rgba(255, 111, 0, 0.3)',
+                          borderRadius: '16px',
+                          padding: '1.25rem 1.5rem',
+                          marginBottom: '1.75rem',
+                          boxShadow: '0 4px 12px rgba(0,0,0,0.03)'
+                        }}
+                      >
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '0.75rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                          <div>
+                            <h4 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: completion.isFullyCompleted ? '#166534' : '#9a3412', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                              <ShieldCheck size={20} color={completion.isFullyCompleted ? '#16a34a' : '#ea580c'} />
+                              <span>Profile Completion: {completion.completionPercentage}%</span>
+                            </h4>
+                            <p style={{ margin: '0.25rem 0 0 0', fontSize: '0.83rem', color: '#64748b' }}>
+                              {completion.isFullyCompleted
+                                ? '🎉 Excellent! Your shop profile is 100% complete and fully verified for buyers.'
+                                : 'Complete the remaining profile details to reach 100%.'}
+                            </p>
+                          </div>
+                          <div
+                            style={{
+                              fontSize: '0.82rem',
+                              fontWeight: 800,
+                              padding: '0.35rem 0.85rem',
+                              borderRadius: '20px',
+                              background: completion.isFullyCompleted ? '#dcfce7' : '#ffedd5',
+                              color: completion.isFullyCompleted ? '#15803d' : '#c2410c',
+                              border: completion.isFullyCompleted ? '1px solid #86efac' : '1px solid #fdba74'
+                            }}
+                          >
+                            {completion.completedFieldsCount} / {completion.totalFieldsCount} Mandatory Fields
+                          </div>
                         </div>
-                        <div
-                          style={{
-                            fontSize: '0.82rem',
-                            fontWeight: 800,
-                            padding: '0.35rem 0.85rem',
-                            borderRadius: '20px',
-                            background: completion.isFullyCompleted ? '#dcfce7' : '#ffedd5',
-                            color: completion.isFullyCompleted ? '#15803d' : '#c2410c',
-                            border: completion.isFullyCompleted ? '1px solid #86efac' : '1px solid #fdba74'
-                          }}
-                        >
-                          {completion.completedFieldsCount} / {completion.totalFieldsCount} Mandatory Fields
-                        </div>
-                      </div>
 
                         {/* PROGRESS BAR TRACK */}
                         <div style={{ width: '100%', height: '10px', background: 'rgba(0, 0, 0, 0.08)', borderRadius: '10px', overflow: 'hidden', marginBottom: '0.85rem' }}>
@@ -4131,12 +4181,12 @@ export default function App() {
       />
 
 
-            {/* --- LOCATION PICKER MODAL --- */}
+      {/* --- LOCATION PICKER MODAL --- */}
       {isLocationModalOpen && (
-        <div 
-          className="modal-backdrop location-modal-fixed-overlay" 
-          onClick={() => setIsLocationModalOpen(false)} 
-          style={{ 
+        <div
+          className="modal-backdrop location-modal-fixed-overlay"
+          onClick={() => setIsLocationModalOpen(false)}
+          style={{
             position: 'fixed',
             top: 0,
             left: 0,
@@ -4316,7 +4366,7 @@ export default function App() {
         </div>
       )}
 
-<Footer />
+      <Footer />
 
       {/* --- ADD / EDIT PRODUCT MODAL --- */}
       <AddEditProductModal
@@ -4326,7 +4376,7 @@ export default function App() {
           if (activeShop?.id) {
             getShopSubscription(activeShop.id).then(subData => {
               if (subData?.usage) setShopSubscriptionUsage(subData.usage);
-            }).catch(() => {});
+            }).catch(() => { });
           }
         }}
       />
