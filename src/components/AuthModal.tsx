@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, FormEvent } from 'react';
-import { X, Loader2, Store, ArrowRight, User, MapPin, Search, CheckCircle2, MessageCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Loader2, Store, ArrowRight, User, MapPin, CheckCircle2, MessageCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { 
   setShowAuthModal, 
@@ -16,7 +16,6 @@ import {
   sendOtpApi, 
   verifyOtpApi, 
   getActiveSubscriptionPlans, 
-  geocodeAddress, 
   reverseGeocodeCoords 
 } from '../services/apiService';
 import { PhoneInputWithCountry } from './PhoneInputWithCountry';
@@ -422,33 +421,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
     );
   };
 
-  const handleSearchLocationCoordinates = async () => {
-    const query = regForm.address || regForm.city || 'Kochi Market';
-    if (!query) {
-      onToast('Please enter a business address or city name to search on map', 'info');
-      return;
-    }
 
-    setIsLocating(true);
-    try {
-      const geo = await geocodeAddress(query);
-      if (geo) {
-        setRegForm(prev => ({
-          ...prev,
-          latitude: geo.latitude,
-          longitude: geo.longitude,
-          address: geo.formattedAddress || prev.address,
-        }));
-        onToast(`Coordinates found: (${geo.latitude.toFixed(4)}, ${geo.longitude.toFixed(4)})`, 'success');
-      } else {
-        onToast('Could not resolve exact coordinates for this address. Please try another query.', 'info');
-      }
-    } catch {
-      onToast('Failed to locate coordinates. Please try again.', 'info');
-    } finally {
-      setIsLocating(false);
-    }
-  };
 
   // Load subscription plans for sellers
   useEffect(() => {

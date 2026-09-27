@@ -30,6 +30,7 @@ import {
   LogIn,
   Store,
   X,
+  Loader2,
   CheckCircle,
   AlertTriangle,
   HelpCircle,
@@ -528,19 +529,7 @@ export default function App() {
     );
   };
 
-  const handleGeocodeSearch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!customAddressInput.trim()) return;
-    setIsLocatingUser(true);
-    try {
-      const geo = await geocodeAddress(customAddressInput.trim());
-      await handleSelectLocation(geo.latitude, geo.longitude, geo.formattedAddress || customAddressInput.trim());
-    } catch (err: any) {
-      dispatch(addToast({ message: err.message || 'Failed to locate address', type: 'warning' }));
-    } finally {
-      setIsLocatingUser(false);
-    }
-  };
+
 
   const PRESET_CITIES = [
     { name: 'Kochi', lat: 9.9312, lng: 76.2673 },
@@ -4403,7 +4392,7 @@ export default function App() {
                   onSelectLocation={(data) => {
                     setCustomAddressInput(data.formattedAddress);
                     handleSelectLocation(data.latitude, data.longitude, data.formattedAddress);
-                    setShowLocationModal(false);
+                    setIsLocationModalOpen(false);
                   }}
                   placeholder="Type any town or landmark (e.g. Kakkanad, Calicut)..."
                 />

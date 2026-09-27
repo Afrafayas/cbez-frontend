@@ -39,7 +39,7 @@ export const SellerCustomerLogsPage: React.FC<SellerCustomerLogsPageProps> = ({
 }) => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const { activeShop } = useAppSelector((state) => state.auth);
+  const { activeShop, activeUser } = useAppSelector((state) => state.auth);
   const { items: products } = useAppSelector((state) => state.products);
 
   const [loading, setLoading] = useState<boolean>(true);
