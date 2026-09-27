@@ -680,6 +680,156 @@ export async function reverseGeocodeCoords(lat: number, lng: number): Promise<{
   };
 }
 
+export interface LocationPrediction {
+  placeId: string;
+  description: string;
+  mainText: string;
+  secondaryText: string;
+  lat?: number;
+  lng?: number;
+}
+
+export async function fetchLocationSuggestions(query: string): Promise<LocationPrediction[]> {
+  if (!query || query.trim().length < 2) return [];
+  const trimmed = query.trim();
+
+  // 1. Try Backend Autocomplete Endpoint
+  try {
+    const res = await fetch(`${API_BASE_URL}/location/autocomplete?q=${encodeURIComponent(trimmed)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && Array.isArray(data.predictions) && data.predictions.length > 0) {
+        return data.predictions;
+      }
+    }
+  } catch (err) {
+    console.warn('Backend autocomplete endpoint fallback:', err);
+  }
+
+  // 2. OpenStreetMap Nominatim Real-Time Location Search Fallback
+  try {
+    const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(trimmed)}&countrycodes=in&addressdetails=1&limit=8`;
+    const res = await fetch(nomUrl, {
+      headers: { 'User-Agent': 'CbezFrontend/1.0' },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        return data.map((item: any) => {
+          const addr = item.address || {};
+          const mainText = addr.shop || addr.amenity || addr.building || addr.suburb || addr.neighbourhood || addr.city || addr.town || item.display_name.split(',')[0];
+          const secParts = [addr.county, addr.state_district, addr.state, 'India'].filter(Boolean);
+          return {
+            placeId: String(item.place_id || item.osm_id),
+            description: item.display_name,
+            mainText: mainText || item.display_name,
+            secondaryText: Array.from(new Set(secParts)).join(', '),
+            lat: parseFloat(item.lat),
+            lng: parseFloat(item.lon),
+          };
+        });
+      }
+    }
+  } catch (nomErr) {
+    console.warn('Nominatim suggestion fallback failed:', nomErr);
+  }
+
+  return [];
+}
+
+export async function searchGeocodeLocation(addressQuery: string): Promise<{
+  formattedAddress: string;
+  latitude: number;
+  longitude: number;
+  city?: string;
+  district?: string;
+  country?: string;
+}> {
+  if (!addressQuery) {
+    return { formattedAddress: 'Kochi, Kerala', latitude: 9.9312, longitude: 76.2673, city: 'Kochi', district: 'Ernakulam', country: 'India' };
+  }
+
+  // 1. Backend Geocode API
+  try {
+    const res = await fetch(`${API_BASE_URL}/location/geocode?address=${encodeURIComponent(addressQuery)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.latitude && data.longitude) {
+        return {
+          formattedAddress: data.formattedAddress || addressQuery,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          city: data.city || 'Kochi',
+          district: data.district || 'Ernakulam',
+          country: 'India',
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Backend geocode API fallback:', err);
+  }
+
+  // 2. OpenStreetMap Search Fallback
+  try {
+    const nomUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addressQuery)}&countrycodes=in&addressdetails=1&limit=1`;
+    const res = await fetch(nomUrl, {
+      headers: { 'User-Agent': 'CbezFrontend/1.0' },
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const item = data[0];
+        const addr = item.address || {};
+        const cityName = addr.city || addr.town || addr.suburb || addr.village || addr.county || 'Kochi';
+        return {
+          formattedAddress: item.display_name,
+          latitude: parseFloat(item.lat),
+          longitude: parseFloat(item.lon),
+          city: cityName,
+          district: addr.county || addr.state_district || cityName,
+          country: addr.country || 'India',
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Nominatim geocode fallback failed:', err);
+  }
+
+  return { formattedAddress: addressQuery, latitude: 9.9312, longitude: 76.2673, city: 'Kochi', district: 'Ernakulam', country: 'India' };
+}
+
+export async function fetchPlaceDetails(placeId: string, description?: string): Promise<{
+  formattedAddress: string;
+  latitude: number;
+  longitude: number;
+  city?: string;
+  district?: string;
+  country?: string;
+}> {
+  // 1. Try Backend Place Details Endpoint
+  try {
+    const res = await fetch(`${API_BASE_URL}/location/place-details?placeId=${encodeURIComponent(placeId)}`);
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.latitude && data.longitude) {
+        return {
+          formattedAddress: data.formattedAddress || description || '',
+          latitude: data.latitude,
+          longitude: data.longitude,
+          city: data.city,
+          district: data.district,
+          country: data.country || 'India',
+        };
+      }
+    }
+  } catch (err) {
+    console.warn('Backend place-details endpoint fallback:', err);
+  }
+
+  // 2. Geocode with description or placeId
+  return searchGeocodeLocation(description || placeId);
+}
+
 /* Wishlist APIs */
 export async function toggleWishlist(productId: string, token: string) {
   const res = await fetch(`${API_BASE_URL}/wishlist/toggle/${productId}`, {

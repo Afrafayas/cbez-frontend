@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, FormEvent } from 'react';
-import { X, Loader2, Store, ArrowRight, User, MapPin, Search, CheckCircle2, MessageCircle, ArrowLeft, RefreshCw } from 'lucide-react';
+import { X, Loader2, Store, ArrowRight, User, MapPin, Search, CheckCircle2, MessageCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { 
   setShowAuthModal, 
@@ -20,6 +20,7 @@ import {
   reverseGeocodeCoords 
 } from '../services/apiService';
 import { PhoneInputWithCountry } from './PhoneInputWithCountry';
+import { LocationAutocompleteInput } from './LocationAutocompleteInput';
 import { useNavigate } from 'react-router-dom';
 import { setDashboardTab } from '../store/uiSlice';
 
@@ -80,6 +81,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const [isLocating, setIsLocating] = useState(false);
   const [activePlans, setActivePlans] = useState<SubscriptionPlan[]>([]);
   const [regForm, setRegForm] = useState(INITIAL_REG_FORM);
+  const [showMoreSellerFields, setShowMoreSellerFields] = useState(false);
 
   const resetAllForms = React.useCallback(() => {
     setLoginEmail('');
@@ -723,20 +725,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 width: '60px',
                 height: '60px',
                 borderRadius: '18px',
-                background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
+                background: isSeller ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 margin: '0 auto 1rem auto',
-                boxShadow: '0 10px 25px rgba(255, 111, 0, 0.4)'
+                boxShadow: isSeller ? '0 10px 25px rgba(255, 111, 0, 0.4)' : '0 10px 25px rgba(37, 99, 235, 0.4)',
+                transition: 'all 0.3s ease'
               }}>
-                <MessageCircle size={30} color="#ffffff" />
+                {isSeller ? (
+                  <Store size={30} color="#ffffff" />
+                ) : (
+                  <User size={30} color="#ffffff" />
+                )}
               </div>
               <h2 style={{ fontSize: '1.45rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
                 {authRole === 'seller' ? 'Dealer Login' : 'Customer Login'}
               </h2>
               <p style={{ fontSize: '0.82rem', color: '#94a3b8', marginTop: '0.4rem', lineHeight: '1.4' }}>
-                Enter your WhatsApp mobile number to continue
+                {authRole === 'seller'
+                  ? 'Enter your verified shop WhatsApp number to access Dealer Portal'
+                  : 'Enter your WhatsApp mobile number to continue'}
               </p>
             </div>
 
@@ -869,14 +878,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                 width: '56px',
                 height: '56px',
                 borderRadius: '16px',
-                background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
+                background: isSeller ? 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)' : 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 margin: '0 auto 0.85rem auto',
-                boxShadow: '0 10px 25px rgba(255, 111, 0, 0.35)'
+                boxShadow: isSeller ? '0 10px 25px rgba(255, 111, 0, 0.35)' : '0 10px 25px rgba(37, 99, 235, 0.35)',
+                transition: 'all 0.3s ease'
               }}>
-                <MessageCircle size={28} color="#ffffff" />
+                {isSeller ? (
+                  <Store size={28} color="#ffffff" />
+                ) : (
+                  <User size={28} color="#ffffff" />
+                )}
               </div>
               <h2 style={{ fontSize: '1.35rem', fontWeight: 800, margin: 0, color: '#ffffff' }}>
                 Verify WhatsApp OTP
@@ -1035,6 +1049,91 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
             <form onSubmit={handleRegSubmit} className="modal-form">
               {authRole === 'customer' ? (
                 <>
+                  {/* CUSTOMER LOCATION SELECTION SECTION (FIRST FIELD IN REGISTRATION FORM) */}
+                  <div className="form-group" style={{ 
+                    background: 'linear-gradient(135deg, rgba(255, 111, 0, 0.08) 0%, rgba(30, 41, 59, 0.7) 100%)', 
+                    border: '1px solid rgba(249, 115, 22, 0.35)', 
+                    padding: '1.2rem', 
+                    borderRadius: '16px', 
+                    marginBottom: '1.25rem',
+                    boxShadow: '0 8px 25px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1)' 
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.6rem' }}>
+                      <label className="form-label" style={{ fontWeight: 800, color: '#f97316', margin: 0, display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.9rem', letterSpacing: '0.3px' }}>
+                        <div style={{ background: 'rgba(249, 115, 22, 0.2)', padding: '5px', borderRadius: '8px', color: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <MapPin size={16} />
+                        </div>
+                        <span>YOUR LOCATION / CITY (OPTIONAL)</span>
+                      </label>
+                      {typeof regForm.latitude === 'number' && typeof regForm.longitude === 'number' && !isNaN(regForm.latitude) && !isNaN(regForm.longitude) && (
+                        <span style={{ fontSize: '0.74rem', background: 'rgba(34, 197, 94, 0.18)', color: '#4ade80', padding: '0.25rem 0.75rem', borderRadius: '20px', fontWeight: 700, border: '1px solid rgba(34, 197, 94, 0.3)' }}>
+                          ✓ GPS Coordinates Set
+                        </span>
+                      )}
+                    </div>
+
+                    <p style={{ fontSize: '0.8rem', color: '#94a3b8', marginBottom: '0.85rem', lineHeight: '1.4' }}>
+                      Detect GPS location or search address to locate nearby verified stores and local deals:
+                    </p>
+
+                    <div style={{ display: 'flex', gap: '0.65rem', flexDirection: 'column', marginBottom: '0.85rem' }}>
+                      <LocationAutocompleteInput
+                        theme="dark"
+                        value={regForm.address}
+                        onChange={(val) => setRegForm(prev => ({ ...prev, address: val }))}
+                        onSelectLocation={(data) => {
+                          setRegForm(prev => ({
+                            ...prev,
+                            address: data.formattedAddress || prev.address,
+                            latitude: data.latitude,
+                            longitude: data.longitude,
+                            city: data.city || prev.city,
+                            district: data.district || prev.district,
+                          }));
+                          onToast(`Location set: ${data.city || data.formattedAddress} (${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)})`, 'success');
+                        }}
+                        placeholder="Type address, landmark, or city (e.g. Edappally, Kochi)..."
+                      />
+
+                      <button
+                        type="button"
+                        disabled={isLocating}
+                        onClick={handleUseCurrentLocation}
+                        style={{
+                          width: '100%',
+                          padding: '0.65rem 0.9rem',
+                          borderRadius: '12px',
+                          border: '1px solid rgba(249, 115, 22, 0.5)',
+                          background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(234, 88, 12, 0.08) 100%)',
+                          color: '#f97316',
+                          fontWeight: 700,
+                          fontSize: '0.82rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.45rem',
+                          cursor: isLocating ? 'not-allowed' : 'pointer',
+                          transition: 'all 0.2s ease',
+                          boxShadow: '0 2px 10px rgba(249, 115, 22, 0.15)'
+                        }}
+                      >
+                        {isLocating ? <Loader2 className="animate-spin" size={15} /> : <MapPin size={15} />}
+                        <span>Detect My Current GPS Location</span>
+                      </button>
+                    </div>
+
+                    {typeof regForm.latitude === 'number' && typeof regForm.longitude === 'number' && !isNaN(regForm.latitude) && !isNaN(regForm.longitude) ? (
+                      <div style={{ fontSize: '0.78rem', background: 'rgba(15, 23, 42, 0.6)', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#e2e8f0', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span>📍</span>
+                        <span><strong>Selected Coordinates:</strong> Lat: {regForm.latitude.toFixed(5)}, Lng: {regForm.longitude.toFixed(5)}</span>
+                      </div>
+                    ) : (
+                      <div style={{ fontSize: '0.76rem', color: '#94a3b8', fontStyle: 'italic' }}>
+                        ℹ️ Optional: GPS coordinates can be selected now or updated anytime in your profile.
+                      </div>
+                    )}
+                  </div>
+
                   <div className="form-group">
                     <label className="form-label">Full Name *</label>
                     <input
@@ -1075,89 +1174,98 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                       onChange={(val) => setRegForm({ ...regForm, phone: val })}
                     />
                   </div>
-
-                  {/* CUSTOMER LOCATION SELECTION SECTION */}
-                  <div className="form-group" style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1.5px dashed #ff9e40', padding: '1rem', borderRadius: '14px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                      <label className="form-label" style={{ fontWeight: 700, color: '#ff9e40', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <MapPin size={16} />
-                        <span>Your Location Coordinates (Optional)</span>
+                </>
+              ) : (
+                <>
+                  {/* SELLER LOCATION SECTION (FIRST FIELD IN REGISTRATION FORM) */}
+                  <div className="form-group" style={{ 
+                    background: 'linear-gradient(135deg, rgba(255, 111, 0, 0.08) 0%, rgba(30, 41, 59, 0.7) 100%)', 
+                    border: '1px solid rgba(249, 115, 22, 0.35)', 
+                    padding: '1.2rem', 
+                    borderRadius: '16px', 
+                    marginBottom: '1.25rem',
+                    boxShadow: '0 8px 25px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1)' 
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.65rem' }}>
+                      <label className="form-label" style={{ fontWeight: 800, color: '#f97316', margin: 0, display: 'flex', alignItems: 'center', gap: '0.45rem', fontSize: '0.9rem', letterSpacing: '0.3px' }}>
+                        <div style={{ background: 'rgba(249, 115, 22, 0.2)', padding: '5px', borderRadius: '8px', color: '#f97316', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          <MapPin size={16} />
+                        </div>
+                        <span>SHOP LOCATION & ADDRESS *</span>
                       </label>
                       {typeof regForm.latitude === 'number' && typeof regForm.longitude === 'number' && !isNaN(regForm.latitude) && !isNaN(regForm.longitude) && (
-                        <span style={{ fontSize: '0.72rem', background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', padding: '0.2rem 0.6rem', borderRadius: '12px', fontWeight: 700 }}>
-                          ✓ Coordinates Set
+                        <span style={{ fontSize: '0.74rem', background: 'rgba(34, 197, 94, 0.18)', color: '#4ade80', padding: '0.25rem 0.75rem', borderRadius: '20px', fontWeight: 700, border: '1px solid rgba(34, 197, 94, 0.3)' }}>
+                          ✓ GPS Coordinates Set
                         </span>
                       )}
                     </div>
 
-                    <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.75rem' }}>
-                      Detect GPS location or search address to locate nearby verified stores and local deals:
-                    </p>
+                    <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                      <label className="form-label">City *</label>
+                      <select className="form-select-box" value={regForm.city} onChange={(e) => setRegForm({ ...regForm, city: e.target.value })}>
+                        {CITIES.filter(c => c !== "All Cities").map(c => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
 
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                    <div className="form-group" style={{ marginBottom: '0.75rem' }}>
+                      <label className="form-label">Search & Auto-fill Market Business Address *</label>
+                      <LocationAutocompleteInput
+                        theme="dark"
+                        value={regForm.address}
+                        onChange={(val) => setRegForm(prev => ({ ...prev, address: val }))}
+                        onSelectLocation={(data) => {
+                          setRegForm(prev => ({
+                            ...prev,
+                            address: data.formattedAddress || prev.address,
+                            latitude: data.latitude,
+                            longitude: data.longitude,
+                            city: data.city || prev.city,
+                            district: data.district || prev.district,
+                          }));
+                          onToast(`Location set: ${data.city || data.formattedAddress} (${data.latitude.toFixed(4)}, ${data.longitude.toFixed(4)})`, 'success');
+                        }}
+                        placeholder="Type street, landmark, or city (e.g. Edappally, Kochi)..."
+                        required
+                      />
+                    </div>
+
+                    {/* GPS DETECT BUTTON */}
+                    <div style={{ marginTop: '0.75rem' }}>
                       <button
                         type="button"
                         disabled={isLocating}
                         onClick={handleUseCurrentLocation}
                         style={{
-                          flex: 1,
-                          minWidth: '150px',
-                          padding: '0.55rem 0.8rem',
-                          borderRadius: '10px',
-                          border: '1px solid #ff9e40',
-                          background: 'rgba(255, 111, 0, 0.15)',
-                          color: '#ff9e40',
+                          width: '100%',
+                          padding: '0.65rem 0.9rem',
+                          borderRadius: '12px',
+                          border: '1px solid rgba(249, 115, 22, 0.5)',
+                          background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.2) 0%, rgba(234, 88, 12, 0.08) 100%)',
+                          color: '#f97316',
                           fontWeight: 700,
-                          fontSize: '0.78rem',
+                          fontSize: '0.82rem',
                           display: 'flex',
                           alignItems: 'center',
                           justifyContent: 'center',
-                          gap: '0.4rem',
-                          cursor: isLocating ? 'not-allowed' : 'pointer'
+                          gap: '0.45rem',
+                          cursor: isLocating ? 'not-allowed' : 'pointer',
+                          transition: 'all 0.2s ease',
+                          boxShadow: '0 2px 10px rgba(249, 115, 22, 0.15)'
                         }}
                       >
-                        {isLocating ? <Loader2 className="animate-spin" size={14} /> : <MapPin size={14} />}
-                        <span>Use Current GPS Location</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        disabled={isLocating}
-                        onClick={handleSearchLocationCoordinates}
-                        style={{
-                          padding: '0.55rem 0.8rem',
-                          borderRadius: '10px',
-                          border: '1px solid rgba(255, 255, 255, 0.15)',
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          color: '#f8fafc',
-                          fontWeight: 600,
-                          fontSize: '0.78rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '0.4rem',
-                          cursor: isLocating ? 'not-allowed' : 'pointer'
-                        }}
-                      >
-                        <Search size={14} />
-                        <span>Search Address / City</span>
+                        {isLocating ? <Loader2 className="animate-spin" size={15} /> : <MapPin size={15} />}
+                        <span>Detect My Current GPS Location</span>
                       </button>
                     </div>
 
-                    {typeof regForm.latitude === 'number' && typeof regForm.longitude === 'number' && !isNaN(regForm.latitude) && !isNaN(regForm.longitude) ? (
-                      <div style={{ fontSize: '0.78rem', background: 'rgba(0, 0, 0, 0.3)', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#e2e8f0' }}>
-                        📍 <strong>Selected Coordinates:</strong> Lat: {regForm.latitude.toFixed(5)}, Lng: {regForm.longitude.toFixed(5)}
-                      </div>
-                    ) : (
-                      <div style={{ fontSize: '0.76rem', color: '#94a3b8', fontStyle: 'italic' }}>
-                        ℹ️ Optional: GPS coordinates can be selected now or updated anytime in your profile.
+                    {typeof regForm.latitude === 'number' && typeof regForm.longitude === 'number' && !isNaN(regForm.latitude) && !isNaN(regForm.longitude) && (
+                      <div style={{ fontSize: '0.78rem', background: 'rgba(15, 23, 42, 0.6)', padding: '0.6rem 0.85rem', borderRadius: '10px', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#e2e8f0', marginTop: '0.65rem', display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                        <span>📍</span>
+                        <span><strong>Selected Coordinates:</strong> Lat: {regForm.latitude.toFixed(5)}, Lng: {regForm.longitude.toFixed(5)}</span>
                       </div>
                     )}
                   </div>
-                </>
-              ) : (
-                <>
-                  {/* SELLER ORIGINAL REGISTRATION FORM */}
+
                   <div className="form-group">
                     <label className="form-label">Shop Business Name *</label>
                     <input type="text" className="form-input-text" required placeholder="e.g. Kochi iStore Mobiles" value={regForm.shopName} onChange={(e) => setRegForm({ ...regForm, shopName: e.target.value })} />
@@ -1167,198 +1275,161 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                     <input type="text" className="form-input-text" required placeholder="e.g. Afraf Fayas" value={regForm.ownerName} onChange={(e) => setRegForm({ ...regForm, ownerName: e.target.value })} />
                   </div>
                   <div className="form-group">
-                    <label className="form-label">Profile / Logo Image (Optional)</label>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(255, 255, 255, 0.04)', padding: '0.85rem', borderRadius: '14px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
-                      {regForm.profileImage ? (
-                        <div style={{ position: 'relative', width: '64px', height: '64px', borderRadius: '16px', overflow: 'hidden', border: '2px solid #ff9e40', flexShrink: 0 }}>
-                          <img src={regForm.profileImage} alt="Shop Logo Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                        </div>
-                      ) : (
-                        <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'rgba(255, 255, 255, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', flexShrink: 0 }}>
-                          <Store size={28} />
-                        </div>
-                      )}
-                      <div style={{ flex: 1 }}>
-                        <input
-                          type="file"
-                          id="logoFileInput"
-                          accept="image/*"
-                          style={{ display: 'none' }}
-                          onChange={handleLogoFileSelect}
-                        />
-                        <label
-                          htmlFor="logoFileInput"
-                          style={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.4rem',
-                            background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
-                            color: '#ffffff',
-                            padding: '0.5rem 0.9rem',
-                            borderRadius: '10px',
-                            fontSize: '0.8rem',
-                            fontWeight: 700,
-                            cursor: 'pointer',
-                            marginBottom: '0.3rem'
-                          }}
-                        >
-                          📷 {regForm.profileImage ? 'Change Photo' : 'Upload Shop Logo / Photo'}
-                        </label>
-                        <p style={{ fontSize: '0.73rem', color: '#94a3b8', margin: 0 }}>
-                          Supports JPG, PNG, WEBP (Auto-compressed)
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="form-group">
                     <label className="form-label">Email Address *</label>
                     <input type="email" className="form-input-text" required placeholder="e.g. store@gmail.com" value={regForm.email} onChange={(e) => setRegForm({ ...regForm, email: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Password (Optional)</label>
-                    <input type="password" className="form-input-text" placeholder="••••••••" value={regForm.password} onChange={(e) => setRegForm({ ...regForm, password: e.target.value })} />
                   </div>
                   <div className="form-group">
                     <label className="form-label">Call Phone Number *</label>
                     <PhoneInputWithCountry required value={regForm.phone} onChange={(val) => setRegForm({ ...regForm, phone: val })} />
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">WhatsApp Number (Optional)</label>
-                    <PhoneInputWithCountry value={regForm.whatsapp} onChange={(val) => setRegForm({ ...regForm, whatsapp: val })} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">City (Optional)</label>
-                    <select className="form-select-box" value={regForm.city} onChange={(e) => setRegForm({ ...regForm, city: e.target.value })}>
-                      {CITIES.filter(c => c !== "All Cities").map(c => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">District (Optional)</label>
-                    <input type="text" className="form-input-text" placeholder="e.g. Ernakulam" value={regForm.district} onChange={(e) => setRegForm({ ...regForm, district: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Country (Optional)</label>
-                    <input type="text" className="form-input-text" placeholder="India" value={regForm.country} onChange={(e) => setRegForm({ ...regForm, country: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Aadhaar Card Number (Optional)</label>
-                    <input type="text" className="form-input-text" placeholder="12-digit Aadhaar Number" value={regForm.aadhaarNumber} onChange={(e) => setRegForm({ ...regForm, aadhaarNumber: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">PAN Card Number (Optional)</label>
-                    <input type="text" className="form-input-text" placeholder="10-character PAN Number" value={regForm.panNumber} onChange={(e) => setRegForm({ ...regForm, panNumber: e.target.value })} />
-                  </div>
 
-                  {/* MANDATORY LOCATION SELECTION SECTION */}
-                  <div className="form-group" style={{ background: 'rgba(255, 255, 255, 0.05)', border: '1.5px dashed #ff9e40', padding: '1rem', borderRadius: '14px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem' }}>
-                      <label className="form-label" style={{ fontWeight: 700, color: '#ff9e40', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
-                        <MapPin size={16} />
-                        <span>Shop Map Coordinates (Optional)</span>
-                      </label>
-                      {regForm.latitude !== undefined && regForm.longitude !== undefined && (
-                        <span style={{ fontSize: '0.72rem', background: 'rgba(34, 197, 94, 0.2)', color: '#4ade80', padding: '0.2rem 0.6rem', borderRadius: '12px', fontWeight: 700 }}>
-                          ✓ Coordinates Set
-                        </span>
-                      )}
-                    </div>
+                  {/* COLLAPSIBLE ACCORDION FOR OPTIONAL BUSINESS & VERIFICATION DETAILS */}
+                  <div style={{ marginTop: '0.85rem', marginBottom: '0.85rem' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowMoreSellerFields(prev => !prev)}
+                      style={{
+                        width: '100%',
+                        padding: '0.75rem 0.95rem',
+                        borderRadius: '12px',
+                        background: showMoreSellerFields ? 'rgba(255, 111, 0, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                        border: showMoreSellerFields ? '1.5px solid #ff9e40' : '1px dashed rgba(255, 255, 255, 0.2)',
+                        color: showMoreSellerFields ? '#ff9e40' : '#e2e8f0',
+                        fontWeight: 700,
+                        fontSize: '0.83rem',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        cursor: 'pointer',
+                        transition: 'all 0.25s ease',
+                        boxShadow: showMoreSellerFields ? '0 4px 15px rgba(255, 111, 0, 0.2)' : 'none'
+                      }}
+                    >
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '0.45rem' }}>
+                        {showMoreSellerFields ? <ChevronUp size={16} color="#ff9e40" /> : <ChevronDown size={16} color="#ff9e40" />}
+                        <span>{showMoreSellerFields ? 'Hide Optional Business Details' : '➕ Add GST, Aadhaar, PAN & Additional Info (Optional)'}</span>
+                      </span>
+                      <span style={{ fontSize: '0.7rem', background: 'rgba(255, 158, 64, 0.2)', color: '#ff9e40', padding: '0.18rem 0.55rem', borderRadius: '8px', fontWeight: 700 }}>
+                        {showMoreSellerFields ? 'Expanded' : 'Optional Fields'}
+                      </span>
+                    </button>
 
-                    <p style={{ fontSize: '0.78rem', color: '#94a3b8', marginBottom: '0.75rem' }}>
-                      Please select your shop location using GPS or address map search:
-                    </p>
+                    {showMoreSellerFields && (
+                      <div style={{
+                        marginTop: '0.85rem',
+                        padding: '1rem',
+                        borderRadius: '14px',
+                        background: 'rgba(0, 0, 0, 0.22)',
+                        border: '1px solid rgba(255, 255, 255, 0.08)',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        gap: '0.85rem',
+                        animation: 'fadeIn 0.25s ease-out'
+                      }}>
+                        <div className="form-group">
+                          <label className="form-label">Profile / Logo Image (Optional)</label>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', background: 'rgba(255, 255, 255, 0.04)', padding: '0.85rem', borderRadius: '14px', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+                            {regForm.profileImage ? (
+                              <div style={{ position: 'relative', width: '64px', height: '64px', borderRadius: '16px', overflow: 'hidden', border: '2px solid #ff9e40', flexShrink: 0 }}>
+                                <img src={regForm.profileImage} alt="Shop Logo Preview" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                              </div>
+                            ) : (
+                              <div style={{ width: '64px', height: '64px', borderRadius: '16px', background: 'rgba(255, 255, 255, 0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8', flexShrink: 0 }}>
+                                <Store size={28} />
+                              </div>
+                            )}
+                            <div style={{ flex: 1 }}>
+                              <input
+                                type="file"
+                                id="logoFileInput"
+                                accept="image/*"
+                                style={{ display: 'none' }}
+                                onChange={handleLogoFileSelect}
+                              />
+                              <label
+                                htmlFor="logoFileInput"
+                                style={{
+                                  display: 'inline-flex',
+                                  alignItems: 'center',
+                                  gap: '0.4rem',
+                                  background: 'linear-gradient(135deg, #ff6f00 0%, #ea580c 100%)',
+                                  color: '#ffffff',
+                                  padding: '0.5rem 0.9rem',
+                                  borderRadius: '10px',
+                                  fontSize: '0.8rem',
+                                  fontWeight: 700,
+                                  cursor: 'pointer',
+                                  marginBottom: '0.3rem'
+                                }}
+                              >
+                                📷 {regForm.profileImage ? 'Change Photo' : 'Upload Shop Logo / Photo'}
+                              </label>
+                              <p style={{ fontSize: '0.73rem', color: '#94a3b8', margin: 0 }}>
+                                Supports JPG, PNG, WEBP (Auto-compressed)
+                              </p>
+                            </div>
+                          </div>
+                        </div>
 
-                    <div style={{ display: 'flex', gap: '0.5rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
-                      <button
-                        type="button"
-                        disabled={isLocating}
-                        onClick={handleUseCurrentLocation}
-                        style={{
-                          flex: 1,
-                          minWidth: '150px',
-                          padding: '0.55rem 0.8rem',
-                          borderRadius: '10px',
-                          border: '1px solid #ff9e40',
-                          background: 'rgba(255, 111, 0, 0.15)',
-                          color: '#ff9e40',
-                          fontWeight: 700,
-                          fontSize: '0.78rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '0.4rem',
-                          cursor: isLocating ? 'not-allowed' : 'pointer'
-                        }}
-                      >
-                        {isLocating ? <Loader2 className="animate-spin" size={14} /> : <MapPin size={14} />}
-                        <span>Use Current GPS Location</span>
-                      </button>
+                        <div className="form-group">
+                          <label className="form-label">Password (Optional)</label>
+                          <input type="password" className="form-input-text" placeholder="••••••••" value={regForm.password} onChange={(e) => setRegForm({ ...regForm, password: e.target.value })} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">WhatsApp Number (Optional)</label>
+                          <PhoneInputWithCountry value={regForm.whatsapp} onChange={(val) => setRegForm({ ...regForm, whatsapp: val })} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">District (Optional)</label>
+                          <input type="text" className="form-input-text" placeholder="e.g. Ernakulam" value={regForm.district} onChange={(e) => setRegForm({ ...regForm, district: e.target.value })} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Country (Optional)</label>
+                          <input type="text" className="form-input-text" placeholder="India" value={regForm.country} onChange={(e) => setRegForm({ ...regForm, country: e.target.value })} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Aadhaar Card Number (Optional)</label>
+                          <input type="text" className="form-input-text" placeholder="12-digit Aadhaar Number" value={regForm.aadhaarNumber} onChange={(e) => setRegForm({ ...regForm, aadhaarNumber: e.target.value })} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">PAN Card Number (Optional)</label>
+                          <input type="text" className="form-input-text" placeholder="10-character PAN Number" value={regForm.panNumber} onChange={(e) => setRegForm({ ...regForm, panNumber: e.target.value })} />
+                        </div>
 
-                      <button
-                        type="button"
-                        disabled={isLocating}
-                        onClick={handleSearchLocationCoordinates}
-                        style={{
-                          padding: '0.55rem 0.8rem',
-                          borderRadius: '10px',
-                          border: '1px solid rgba(255, 255, 255, 0.15)',
-                          background: 'rgba(255, 255, 255, 0.05)',
-                          color: '#f8fafc',
-                          fontWeight: 600,
-                          fontSize: '0.78rem',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          gap: '0.4rem',
-                          cursor: isLocating ? 'not-allowed' : 'pointer'
-                        }}
-                      >
-                        <Search size={14} />
-                        <span>Search Map Address</span>
-                      </button>
-                    </div>
-
-                    {regForm.latitude !== undefined && regForm.longitude !== undefined && (
-                      <div style={{ fontSize: '0.78rem', background: 'rgba(0, 0, 0, 0.3)', padding: '0.5rem 0.75rem', borderRadius: '8px', border: '1px solid rgba(255, 255, 255, 0.1)', color: '#e2e8f0' }}>
-                        📍 <strong>Shop Coordinates:</strong> Lat: {regForm.latitude.toFixed(5)}, Lng: {regForm.longitude.toFixed(5)}
+                        <div className="form-group">
+                          <label className="form-label">Category</label>
+                          <select className="form-select-box" value={regForm.category} onChange={(e) => setRegForm({ ...regForm, category: e.target.value })}>
+                            <option value="Mobiles & Tablets">Mobiles & Tablets</option>
+                            <option value="Laptops & Computers">Laptops & Computers</option>
+                            <option value="Cameras & Optics">Cameras & Optics</option>
+                            <option value="Audio & Sound">Audio & Sound</option>
+                            <option value="Gaming & Consoles">Gaming & Consoles</option>
+                            <option value="Smart Watches & Wearables">Smart Watches & Wearables</option>
+                            <option value="Accessories">Accessories</option>
+                          </select>
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">GST Number (Optional)</label>
+                          <input type="text" className="form-input-text" placeholder="e.g. 32AAAAA0000A1Z5" value={regForm.gstNumber} onChange={(e) => setRegForm({ ...regForm, gstNumber: e.target.value })} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Website URL (Optional)</label>
+                          <input type="text" className="form-input-text" placeholder="https://yourstore.com" value={regForm.websiteUrl} onChange={(e) => setRegForm({ ...regForm, websiteUrl: e.target.value })} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Business Opening Hours (Optional)</label>
+                          <input type="text" className="form-input-text" placeholder="e.g. 9:30 AM - 8:30 PM (Mon-Sat)" value={regForm.businessHours} onChange={(e) => setRegForm({ ...regForm, businessHours: e.target.value })} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Business Description (Optional)</label>
+                          <input type="text" className="form-input-text" placeholder="e.g. Authorised Multi-brand mobile & laptop sales" value={regForm.businessDescription} onChange={(e) => setRegForm({ ...regForm, businessDescription: e.target.value })} />
+                        </div>
+                        <div className="form-group">
+                          <label className="form-label">Alternate Contact Phone (Optional)</label>
+                          <input type="text" className="form-input-text" placeholder="e.g. +91 98460 00000" value={regForm.alternatePhone} onChange={(e) => setRegForm({ ...regForm, alternatePhone: e.target.value })} />
+                        </div>
                       </div>
                     )}
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Market Business Address *</label>
-                    <textarea className="form-textarea" required rows={2} placeholder="MG Road, Broadway Corner" value={regForm.address} onChange={(e) => setRegForm({ ...regForm, address: e.target.value })}></textarea>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Category</label>
-                    <select className="form-select-box" value={regForm.category} onChange={(e) => setRegForm({ ...regForm, category: e.target.value })}>
-                      <option value="Mobiles & Tablets">Mobiles & Tablets</option>
-                      <option value="Laptops & Computers">Laptops & Computers</option>
-                      <option value="Cameras & Optics">Cameras & Optics</option>
-                      <option value="Audio & Sound">Audio & Sound</option>
-                      <option value="Gaming & Consoles">Gaming & Consoles</option>
-                      <option value="Smart Watches & Wearables">Smart Watches & Wearables</option>
-                      <option value="Accessories">Accessories</option>
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">GST Number (Optional)</label>
-                    <input type="text" className="form-input-text" placeholder="e.g. 32AAAAA0000A1Z5" value={regForm.gstNumber} onChange={(e) => setRegForm({ ...regForm, gstNumber: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Website URL (Optional)</label>
-                    <input type="text" className="form-input-text" placeholder="https://yourstore.com" value={regForm.websiteUrl} onChange={(e) => setRegForm({ ...regForm, websiteUrl: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Business Opening Hours (Optional)</label>
-                    <input type="text" className="form-input-text" placeholder="e.g. 9:30 AM - 8:30 PM (Mon-Sat)" value={regForm.businessHours} onChange={(e) => setRegForm({ ...regForm, businessHours: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Business Description (Optional)</label>
-                    <input type="text" className="form-input-text" placeholder="e.g. Authorised Multi-brand mobile & laptop sales" value={regForm.businessDescription} onChange={(e) => setRegForm({ ...regForm, businessDescription: e.target.value })} />
-                  </div>
-                  <div className="form-group">
-                    <label className="form-label">Alternate Contact Phone (Optional)</label>
-                    <input type="text" className="form-input-text" placeholder="e.g. +91 98460 00000" value={regForm.alternatePhone} onChange={(e) => setRegForm({ ...regForm, alternatePhone: e.target.value })} />
                   </div>
                 </>
               )}

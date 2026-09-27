@@ -8,6 +8,7 @@ import { Footer } from './components/Footer';
 import { useFilterSearchParams } from './hooks/useFilterSearchParams';
 import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, reverseGeocodeCoords, getNearestKnownCity, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, getBrands, deleteProductApi, getSellerProducts, updateSellerProduct } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
+import { LocationAutocompleteInput } from './components/LocationAutocompleteInput';
 import React, { ChangeEvent, FormEvent } from 'react';
 import {
   Search,
@@ -562,6 +563,7 @@ export default function App() {
   const [productToDelete, setProductToDelete] = React.useState<Product | null>(null);
   const [togglingStockId, setTogglingStockId] = React.useState<string | null>(null);
   const [isDeletingProduct, setIsDeletingProduct] = React.useState<boolean>(false);
+  const [isSavingProfile, setIsSavingProfile] = React.useState<boolean>(false);
   const [viewingSellerProduct, setViewingSellerProduct] = React.useState<Product | null>(null);
   const [sellerProducts, setSellerProducts] = React.useState<Product[]>([]);
   const [isLoadingSellerProducts, setIsLoadingSellerProducts] = React.useState<boolean>(false);
@@ -1121,6 +1123,14 @@ export default function App() {
   });
 
   const sortedProducts = [...filteredProducts].sort((a, b) => {
+    // Priority Rule: Out-of-Stock / Sold-Out products are always pushed to the end
+    const aOut = (a.stock !== undefined && a.stock <= 0) || Boolean(a.isSoldOut);
+    const bOut = (b.stock !== undefined && b.stock <= 0) || Boolean(b.isSoldOut);
+
+    if (aOut !== bOut) {
+      return aOut ? 1 : -1;
+    }
+
     if (filters.sortBy === 'price-asc') return a.price - b.price;
     if (filters.sortBy === 'price-desc') return b.price - a.price;
     if (filters.sortBy === 'stock') return b.stock - a.stock;
@@ -1300,7 +1310,9 @@ export default function App() {
 
   const handleProfileUpdate = async (e: FormEvent) => {
     e.preventDefault();
-    if (!activeShop) return;
+    if (!activeShop || isSavingProfile) return;
+    setIsSavingProfile(true);
+
     const updated: Shop = {
       ...activeShop,
       name: profileForm.name,
@@ -1347,13 +1359,15 @@ export default function App() {
         businessDescription: updated.businessDescription,
         alternatePhone: updated.alternatePhone,
       });
+      dispatch(updateShop(updated));
+      dispatch(setActiveShop(updated));
+      triggerToast("Shop profile & location updated successfully!", "success");
     } catch (err: any) {
       console.warn('Backend shop sync error:', err);
+      triggerToast(err.message || 'Failed to update profile', 'warning');
+    } finally {
+      setIsSavingProfile(false);
     }
-
-    dispatch(updateShop(updated));
-    dispatch(setActiveShop(updated));
-    triggerToast("Shop profile & location updated successfully!", "success");
   };
 
   const handleOpenAddProduct = () => {
@@ -1364,6 +1378,12 @@ export default function App() {
       triggerToast("Please login as a seller to list products.");
       return;
     }
+
+    if (!activeShop.verified) {
+      triggerToast("⚠️ Verification Pending: Your shop registration is currently pending Admin approval. You can add products after Admin verifies your shop.", "info");
+      return;
+    }
+
     dispatch(setProductToEdit(null));
     dispatch(setShowAddEditModal(true));
   };
@@ -3026,7 +3046,7 @@ export default function App() {
                 </div>
                 <div className="profile-stat-box">
                   <div className="profile-stat-num">
-                    {leads.filter(l => !activeShop || l.shopId === activeShop.id || l.shopId === 'shop-101' || true).length}
+                    {leads.filter(l => activeShop && (l.shopId === activeShop.id || String(l.shopId) === String(activeShop.id))).length}
                   </div>
                   <div className="profile-stat-lbl">Total Leads</div>
                 </div>
@@ -3251,6 +3271,40 @@ export default function App() {
             <section style={{ flex: 1 }}>
               {dashboardTab === 'listings' ? (
                 <div className="dashboard-panel">
+                  {/* Shop Verification Pending Warning Banner */}
+                  {activeShop && !activeShop.verified && (
+                    <div style={{
+                      background: '#fff7ed',
+                      border: '1.5px solid #ffedd5',
+                      borderLeft: '4px solid #ea580c',
+                      padding: '0.9rem 1.15rem',
+                      borderRadius: '12px',
+                      marginBottom: '1.25rem',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '1rem',
+                      flexWrap: 'wrap'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                        <div style={{ width: '40px', height: '40px', borderRadius: '12px', background: '#ffedd5', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: '1.2rem' }}>
+                          ⏳
+                        </div>
+                        <div>
+                          <h4 style={{ margin: 0, fontSize: '0.9rem', fontWeight: 800, color: '#9a3412' }}>
+                            Shop Verification Pending Admin Approval
+                          </h4>
+                          <p style={{ margin: '0.2rem 0 0 0', fontSize: '0.8rem', color: '#c2410c' }}>
+                            Your shop registration is under review. Product creation will be unlocked as soon as Admin approves your store.
+                          </p>
+                        </div>
+                      </div>
+                      <span style={{ fontSize: '0.74rem', background: '#ffedd5', color: '#c2410c', padding: '0.3rem 0.75rem', borderRadius: '20px', fontWeight: 800, flexShrink: 0, border: '1px solid #fed7aa' }}>
+                        PENDING VERIFICATION
+                      </span>
+                    </div>
+                  )}
+
                   {/* Clean Unified Section Header */}
                   <div
                     className="panel-header"
@@ -4107,8 +4161,27 @@ export default function App() {
                     </div>
 
                     <div className="form-actions-row full-width">
-                      <button type="submit" className="btn-primary">
-                        Save Profile Updates
+                      <button
+                        type="submit"
+                        className="btn-primary"
+                        disabled={isSavingProfile}
+                        style={{
+                          display: 'inline-flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          gap: '0.5rem',
+                          opacity: isSavingProfile ? 0.75 : 1,
+                          cursor: isSavingProfile ? 'not-allowed' : 'pointer'
+                        }}
+                      >
+                        {isSavingProfile ? (
+                          <>
+                            <Loader2 className="animate-spin" size={18} />
+                            <span>Saving Profile Updates...</span>
+                          </>
+                        ) : (
+                          <span>Save Profile Updates</span>
+                        )}
                       </button>
                     </div>
                   </form>
@@ -4319,49 +4392,23 @@ export default function App() {
             </div>
 
             {/* Address Search Form */}
-            <form onSubmit={handleGeocodeSearch}>
+            <div>
               <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', display: 'block', marginBottom: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
                 SEARCH OTHER TOWN OR AREA (e.g. Kottakkal, Kakkanad)
               </label>
-              <div style={{ display: 'flex', gap: '0.5rem' }}>
-                <input
-                  type="text"
-                  placeholder="Type any town (e.g. Kottakkal, Kakkanad)..."
+              <div style={{ position: 'relative' }}>
+                <LocationAutocompleteInput
                   value={customAddressInput}
-                  onChange={(e) => setCustomAddressInput(e.target.value)}
-                  style={{
-                    flex: 1,
-                    padding: '0.75rem 1rem',
-                    borderRadius: '12px',
-                    background: '#1e293b',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    color: '#ffffff',
-                    fontSize: '0.85rem',
-                    outline: 'none',
-                    transition: 'border 0.2s ease'
+                  onChange={(val) => setCustomAddressInput(val)}
+                  onSelectLocation={(data) => {
+                    setCustomAddressInput(data.formattedAddress);
+                    handleSelectLocation(data.latitude, data.longitude, data.formattedAddress);
+                    setShowLocationModal(false);
                   }}
+                  placeholder="Type any town or landmark (e.g. Kakkanad, Calicut)..."
                 />
-                <button
-                  type="submit"
-                  disabled={isLocatingUser || !customAddressInput.trim()}
-                  style={{
-                    padding: '0.75rem 1.25rem',
-                    borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
-                    color: '#ffffff',
-                    fontWeight: 700,
-                    fontSize: '0.85rem',
-                    border: 'none',
-                    cursor: (isLocatingUser || !customAddressInput.trim()) ? 'not-allowed' : 'pointer',
-                    opacity: (isLocatingUser || !customAddressInput.trim()) ? 0.6 : 1,
-                    boxShadow: '0 2px 10px rgba(249, 115, 22, 0.3)',
-                    transition: 'all 0.2s ease'
-                  }}
-                >
-                  Locate
-                </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
@@ -4422,7 +4469,7 @@ export default function App() {
                 left: 0,
                 right: 0,
                 height: '5px',
-                background: 'linear-gradient(90deg, #ef4444 0%, #ea580c 50%, #f59e0b 100%)'
+                background: 'linear-gradient(90deg, #f97316 0%, #ea580c 50%, #f59e0b 100%)'
               }}
             />
 
@@ -4455,14 +4502,14 @@ export default function App() {
                 width: '68px',
                 height: '68px',
                 borderRadius: '22px',
-                background: 'linear-gradient(135deg, #fef2f2 0%, #fee2e2 100%)',
-                border: '1.5px solid #fca5a5',
-                color: '#dc2626',
+                background: 'linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%)',
+                border: '1.5px solid #fed7aa',
+                color: '#ea580c',
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
                 margin: '0.25rem auto 1.25rem',
-                boxShadow: '0 10px 25px -5px rgba(220, 38, 38, 0.25)'
+                boxShadow: '0 10px 25px -5px rgba(234, 88, 12, 0.25)'
               }}
             >
               <Trash2 size={30} />
@@ -4565,7 +4612,7 @@ export default function App() {
                   padding: '0.75rem 1rem',
                   borderRadius: '12px',
                   border: 'none',
-                  background: 'linear-gradient(135deg, #ef4444 0%, #dc2626 100%)',
+                  background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
                   color: '#ffffff',
                   fontWeight: 700,
                   fontSize: '0.88rem',
@@ -4574,7 +4621,7 @@ export default function App() {
                   justifyContent: 'center',
                   gap: '0.45rem',
                   cursor: isDeletingProduct ? 'not-allowed' : 'pointer',
-                  boxShadow: '0 4px 14px rgba(220, 38, 38, 0.35)',
+                  boxShadow: '0 4px 14px rgba(234, 88, 12, 0.35)',
                   transition: 'all 0.2s ease',
                   opacity: isDeletingProduct ? 0.7 : 1
                 }}

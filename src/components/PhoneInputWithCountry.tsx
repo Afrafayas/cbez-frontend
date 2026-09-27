@@ -25,23 +25,28 @@ interface PhoneInputWithCountryProps {
 export const PhoneInputWithCountry: React.FC<PhoneInputWithCountryProps> = ({
   value,
   onChange,
-  placeholder = "9876543210",
+  placeholder = "98765 43210",
   required = false,
 }) => {
   const parseValue = (val: string) => {
     if (!val) return { countryCode: '+91', phoneDigits: '' };
-    const matched = COUNTRY_CODES.find(c => val.trim().startsWith(c.code));
+    const trimmed = val.trim();
+    // Sort by code length descending to match +971 before +9 or +1
+    const matched = COUNTRY_CODES.slice()
+      .sort((a, b) => b.code.length - a.code.length)
+      .find((c) => trimmed.startsWith(c.code));
     if (matched) {
-      const digits = val.trim().slice(matched.code.length).trim();
+      const digits = trimmed.slice(matched.code.length).trim();
       return { countryCode: matched.code, phoneDigits: digits };
     }
-    if (val.trim().startsWith('+')) {
-      const parts = val.trim().split(/\s+/);
+    if (trimmed.startsWith('+')) {
+      const parts = trimmed.split(/\s+/);
       if (parts.length > 1) {
         return { countryCode: parts[0], phoneDigits: parts.slice(1).join('') };
       }
+      return { countryCode: parts[0], phoneDigits: '' };
     }
-    return { countryCode: '+91', phoneDigits: val.replace(/^\+91\s*/, '').trim() };
+    return { countryCode: '+91', phoneDigits: trimmed.replace(/^\+91\s*/, '').trim() };
   };
 
   const initial = parseValue(value);
@@ -57,14 +62,14 @@ export const PhoneInputWithCountry: React.FC<PhoneInputWithCountryProps> = ({
   const handleCodeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newCode = e.target.value;
     setSelectedCode(newCode);
-    const full = digits.trim() ? `${newCode} ${digits.trim()}` : '';
+    const full = digits.trim() ? `${newCode} ${digits.trim()}` : newCode;
     onChange(full);
   };
 
   const handleDigitsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newDigits = e.target.value.replace(/[^0-9]/g, '');
     setDigits(newDigits);
-    const full = newDigits.trim() ? `${selectedCode} ${newDigits.trim()}` : '';
+    const full = newDigits.trim() ? `${selectedCode} ${newDigits.trim()}` : selectedCode;
     onChange(full);
   };
 
