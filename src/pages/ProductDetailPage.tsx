@@ -676,6 +676,29 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                   )}
                 </div>
 
+                {isSoldOut && (
+                  <div
+                    style={{
+                      background: '#fef2f2',
+                      border: '1px solid #fca5a5',
+                      borderRadius: '10px',
+                      padding: '0.75rem 1rem',
+                      marginBottom: '0.85rem',
+                      color: '#991b1b',
+                      fontSize: '0.83rem',
+                      lineHeight: 1.4,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '0.5rem'
+                    }}
+                  >
+                    <span style={{ fontSize: '1.1rem' }}>💬</span>
+                    <div>
+                      <strong>Item Out of Stock:</strong> You can still Call or WhatsApp <strong>{seller.name}</strong> directly to inquire about restock arrival, pre-orders, or similar gadgets!
+                    </div>
+                  </div>
+                )}
+
                 {/* Sourcing Action Buttons */}
                 <div
                   style={{
@@ -687,51 +710,49 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                   <button
                     type="button"
                     className="btn-call"
-                    disabled={isSoldOut}
                     onClick={() => onCallSeller(product, seller)}
+                    title={isSoldOut ? "Call dealer to inquire about restock / availability" : "Call Dealer"}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '0.4rem',
-                      padding: '0.7rem 1rem',
+                      padding: '0.7rem 0.85rem',
                       borderRadius: '10px',
-                      background: '#16a34a',
+                      background: isSoldOut ? '#ea580c' : '#16a34a',
                       color: '#fff',
                       border: 'none',
                       fontWeight: 700,
-                      fontSize: '0.88rem',
-                      cursor: isSoldOut ? 'not-allowed' : 'pointer',
-                      opacity: isSoldOut ? 0.5 : 1
+                      fontSize: '0.85rem',
+                      cursor: 'pointer'
                     }}
                   >
                     <Phone size={16} />
-                    <span>Call Dealer</span>
+                    <span>{isSoldOut ? 'Call Dealer (Ask Stock)' : 'Call Dealer'}</span>
                   </button>
 
                   <button
                     type="button"
                     className="btn-whatsapp"
-                    disabled={isSoldOut}
                     onClick={() => onWhatsAppSeller(product, seller)}
+                    title={isSoldOut ? "WhatsApp dealer for restock inquiry" : "WhatsApp Dealer"}
                     style={{
                       display: 'inline-flex',
                       alignItems: 'center',
                       justifyContent: 'center',
                       gap: '0.4rem',
-                      padding: '0.7rem 1rem',
+                      padding: '0.7rem 0.85rem',
                       borderRadius: '10px',
                       background: '#25d366',
                       color: '#fff',
                       border: 'none',
                       fontWeight: 700,
-                      fontSize: '0.88rem',
-                      cursor: isSoldOut ? 'not-allowed' : 'pointer',
-                      opacity: isSoldOut ? 0.5 : 1
+                      fontSize: '0.85rem',
+                      cursor: 'pointer'
                     }}
                   >
                     <Smartphone size={16} />
-                    <span>WhatsApp</span>
+                    <span>{isSoldOut ? 'WhatsApp (Inquire)' : 'WhatsApp'}</span>
                   </button>
 
                   {onGetDirections && (
@@ -743,12 +764,12 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                         alignItems: 'center',
                         justifyContent: 'center',
                         gap: '0.4rem',
-                        padding: '0.7rem 1rem',
+                        padding: '0.7rem 0.85rem',
                         borderRadius: '10px',
                         background: '#0284c7',
                         color: '#ffffff',
                         fontWeight: 700,
-                        fontSize: '0.88rem',
+                        fontSize: '0.85rem',
                         border: 'none',
                         cursor: 'pointer'
                       }}

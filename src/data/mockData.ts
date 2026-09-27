@@ -314,3 +314,23 @@ export const BUDGET_PRESETS = [
   "Under ₹25,000",
   "Under ₹50,000"
 ];
+
+export const BRANDS = [
+  "Apple",
+  "Samsung",
+  "OnePlus",
+  "Google Pixel",
+  "Xiaomi",
+  "Realme",
+  "Oppo",
+  "Vivo",
+  "Nothing",
+  "Sony",
+  "Motorola",
+  "Asus",
+  "Dell",
+  "HP",
+  "Lenovo",
+  "Acer"
+];
+

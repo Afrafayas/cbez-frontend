@@ -1,5 +1,5 @@
 import React, { useState, useEffect, FormEvent } from 'react';
-import { X } from 'lucide-react';
+import { X, Loader2 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { setShowAddEditModal, addProduct, editProduct } from '../store/productsSlice';
 import { Product } from '../types';
@@ -270,6 +270,13 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
       });
     }
   }, [productToEdit, showAddEditModal]);
+
+  useEffect(() => {
+    if (showAddEditModal && activeShop && !activeShop.verified && !productToEdit) {
+      dispatch(setShowAddEditModal(false));
+      onToast('⚠️ Verification Pending: Your shop registration is currently pending Admin approval. You can add products after Admin verifies your shop.', 'info');
+    }
+  }, [showAddEditModal, activeShop, productToEdit, dispatch, onToast]);
 
   if (!showAddEditModal) return null;
 
@@ -1560,9 +1567,16 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
               type="submit"
               className="btn-primary"
               disabled={isSubmitting}
-              style={{ padding: '0.65rem 1.6rem', opacity: isSubmitting ? 0.7 : 1, cursor: isSubmitting ? 'not-allowed' : 'pointer', fontSize: '0.88rem', fontWeight: 700 }}
+              style={{ padding: '0.65rem 1.6rem', opacity: isSubmitting ? 0.7 : 1, cursor: isSubmitting ? 'not-allowed' : 'pointer', fontSize: '0.88rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}
             >
-              {isSubmitting ? 'Saving Product...' : (productToEdit ? 'Save Changes' : 'Submit Device Listing')}
+              {isSubmitting ? (
+                <>
+                  <Loader2 className="animate-spin" size={16} />
+                  <span>Saving Product...</span>
+                </>
+              ) : (
+                <span>{productToEdit ? 'Save Changes' : 'Submit Device Listing'}</span>
+              )}
             </button>
           </div>
         </form>
