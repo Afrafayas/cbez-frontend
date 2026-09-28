@@ -461,6 +461,10 @@ export default function App() {
     filters.userLatitude,
     filters.userLongitude,
     filters.radiusKm,
+    activeUser?.id,
+    activeShop?.id,
+    showAuthModal,
+    location.pathname,
   ]);
 
   // --- LOCATION STATE & HANDLERS ---
