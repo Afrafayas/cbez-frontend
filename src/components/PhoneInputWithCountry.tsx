@@ -25,13 +25,12 @@ interface PhoneInputWithCountryProps {
 export const PhoneInputWithCountry: React.FC<PhoneInputWithCountryProps> = ({
   value,
   onChange,
-  placeholder = "98765 43210",
+  placeholder = "9778357773",
   required = false,
 }) => {
   const parseValue = (val: string) => {
     if (!val) return { countryCode: '+91', phoneDigits: '' };
     const trimmed = val.trim();
-    // Sort by code length descending to match +971 before +9 or +1
     const matched = COUNTRY_CODES.slice()
       .sort((a, b) => b.code.length - a.code.length)
       .find((c) => trimmed.startsWith(c.code));
@@ -74,34 +73,87 @@ export const PhoneInputWithCountry: React.FC<PhoneInputWithCountryProps> = ({
   };
 
   return (
-    <div style={{ display: 'flex', gap: '0.4rem', width: '100%' }}>
-      <select
-        value={selectedCode}
-        onChange={handleCodeChange}
-        className="form-select-box"
-        style={{
-          width: '115px',
-          flexShrink: 0,
-          padding: '0.75rem 0.4rem',
-          fontSize: '0.85rem',
-          fontWeight: 600,
-          cursor: 'pointer',
-        }}
-      >
-        {COUNTRY_CODES.map((item) => (
-          <option key={item.code} value={item.code}>
-            {item.flag} {item.code}
-          </option>
-        ))}
-      </select>
+    <div style={{ display: 'flex', gap: '0.5rem', width: '100%', marginTop: '0.35rem' }}>
+      <div style={{ position: 'relative', width: '115px', flexShrink: 0 }}>
+        <select
+          value={selectedCode}
+          onChange={handleCodeChange}
+          style={{
+            width: '100%',
+            height: '46px',
+            padding: '0 1.8rem 0 0.85rem',
+            fontSize: '0.88rem',
+            fontWeight: 700,
+            color: '#0f172a',
+            backgroundColor: '#f1f5f9',
+            border: '1.5px solid #cbd5e1',
+            borderRadius: '10px',
+            cursor: 'pointer',
+            outline: 'none',
+            appearance: 'none',
+            WebkitAppearance: 'none',
+            boxSizing: 'border-box',
+            transition: 'all 0.2s ease',
+          }}
+          onFocus={(e) => {
+            e.target.style.borderColor = '#ff6f00';
+            e.target.style.boxShadow = '0 0 0 3px rgba(255, 111, 0, 0.2)';
+          }}
+          onBlur={(e) => {
+            e.target.style.borderColor = '#cbd5e1';
+            e.target.style.boxShadow = 'none';
+          }}
+        >
+          {COUNTRY_CODES.map((item) => (
+            <option key={item.code} value={item.code} style={{ background: '#ffffff', color: '#0f172a' }}>
+              {item.country} {item.code}
+            </option>
+          ))}
+        </select>
+        <span
+          style={{
+            position: 'absolute',
+            right: '0.65rem',
+            top: '50%',
+            transform: 'translateY(-50%)',
+            pointerEvents: 'none',
+            color: '#475569',
+            fontSize: '0.7rem',
+          }}
+        >
+          ▼
+        </span>
+      </div>
+
       <input
         type="tel"
         required={required}
         placeholder={placeholder}
         value={digits}
         onChange={handleDigitsChange}
-        className="form-input-text"
-        style={{ flex: 1 }}
+        style={{
+          flex: 1,
+          height: '46px',
+          padding: '0 1rem',
+          fontSize: '0.95rem',
+          fontWeight: 600,
+          color: '#0f172a',
+          backgroundColor: '#f1f5f9',
+          border: '1.5px solid #cbd5e1',
+          borderRadius: '10px',
+          outline: 'none',
+          boxSizing: 'border-box',
+          letterSpacing: '0.02em',
+          transition: 'all 0.2s ease',
+        }}
+        onFocus={(e) => {
+          e.target.style.borderColor = '#ff6f00';
+          e.target.style.boxShadow = '0 0 0 3px rgba(255, 111, 0, 0.2)';
+        }}
+        onBlur={(e) => {
+          e.target.style.borderColor = '#cbd5e1';
+          e.target.style.boxShadow = 'none';
+        }}
       />
     </div>
   );
