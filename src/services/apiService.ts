@@ -301,9 +301,13 @@ export async function sendOtpApi(data: { phone: string; role?: string }) {
   } catch (err: any) {
     if (err.name === 'TypeError' || err.message?.includes('Failed to fetch') || err.message === 'Failed to fetch') {
       console.warn('Backend API server unreachable, activating Demo OTP mode.');
+      const cleanDigits = (data.phone || '').replace(/\D/g, '');
+      const isTestNumber = cleanDigits.endsWith('9961624063');
       return {
         success: true,
-        message: 'WhatsApp OTP sent! (Demo Mode Code: 123456)',
+        message: isTestNumber
+          ? 'WhatsApp OTP sent! (Test Mode Code: 123456)'
+          : 'WhatsApp OTP sent! Please check your WhatsApp messages.',
         isDemoMode: true
       };
     }
@@ -327,8 +331,9 @@ export async function verifyOtpApi(data: { phone: string; otp: string; role?: st
   } catch (err: any) {
     if (err.name === 'TypeError' || err.message?.includes('Failed to fetch') || err.message === 'Failed to fetch') {
       console.warn('Backend API server unreachable, verifying in Demo mode.');
-      if (data.otp === '123456' || (data.otp && data.otp.length === 6)) {
-        const cleanDigits = data.phone.replace(/[^0-9]/g, '');
+      const cleanDigits = (data.phone || '').replace(/\D/g, '');
+      const isTestNumber = cleanDigits.endsWith('9961624063');
+      if (isTestNumber && data.otp === '123456') {
         return {
           success: true,
           isNewUser: false,
@@ -344,7 +349,7 @@ export async function verifyOtpApi(data: { phone: string; otp: string; role?: st
           }
         };
       } else {
-        throw new Error('Invalid OTP code. In Demo Mode, use code 123456');
+        throw new Error(isTestNumber ? 'Invalid OTP code. For test number, use code 123456' : 'Invalid OTP code. Please enter the valid OTP received on WhatsApp.');
       }
     }
     throw err;
