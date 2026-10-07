@@ -106,6 +106,13 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
     );
   };
 
+  const handleResetLocation = () => {
+    dispatch(setUserLocation({ latitude: undefined, longitude: undefined, locationName: 'Select Location', radiusKm: 100 }));
+    dispatch(setFilterCity('All Cities'));
+    onToast('📍 Location reset', 'info');
+    setShowLocationModal(false);
+  };
+
   const handleCityOrAddressSelect = async (cityName: string) => {
     setIsGeocoding(true);
     try {
@@ -179,7 +186,7 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
             <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
               <span style={{ fontSize: '0.62rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Location</span>
               <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                {userLocationName || 'Kochi'}
+                {(!userLocationName || userLocationName === 'All Cities' || userLocationName === 'Select Location') ? 'Select Location' : userLocationName}
               </span>
             </div>
             <ChevronDown size={13} style={{ color: '#94a3b8', marginLeft: '0.1rem' }} />
