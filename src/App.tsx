@@ -608,6 +608,12 @@ export default function App() {
     currentProducts: number;
     remaining: number;
     canAddProduct: boolean;
+    isExpired?: boolean;
+    endDate?: string | null;
+    startDate?: string | null;
+    daysRemaining?: number;
+    isExpiringSoon?: boolean;
+    durationDays?: number;
   } | null>(null);
 
   React.useEffect(() => {
@@ -1374,7 +1380,18 @@ export default function App() {
     }
 
     if (!activeShop.verified) {
-      triggerToast("⚠️ Verification Pending: Your shop registration is currently pending Admin approval. You can add products after Admin verifies your shop.", "info");
+      triggerToast("⏳ Verification Pending: Your shop registration is currently pending Admin approval. You can add products after Admin verifies your shop.", "info");
+      return;
+    }
+
+    const isSubExpired = Boolean(
+      activeShop.isSubscriptionExpired ||
+      activeShop.subscriptionUsage?.isExpired ||
+      shopSubscriptionUsage?.isExpired ||
+      (activeShop.subscriptionUsage?.endDate && new Date(activeShop.subscriptionUsage.endDate) <= new Date())
+    );
+    if (isSubExpired) {
+      triggerToast("⚠️ Subscription Expired: Your subscription plan has expired. You cannot create new products. Please contact Admin to buy or renew a subscription plan.", "warning");
       return;
     }
 
@@ -3093,9 +3110,21 @@ export default function App() {
                       </div>
                     )}
 
-                    {!isPending && slotsLeft === 0 && (
+                    {!isPending && Boolean(activeShop?.isSubscriptionExpired || activeShop?.subscriptionUsage?.isExpired || shopSubscriptionUsage?.isExpired) && (
+                      <div style={{ marginTop: '0.75rem', padding: '0.75rem 0.85rem', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.22) 0%, rgba(185, 28, 28, 0.12) 100%)', border: '1.5px solid rgba(239, 68, 68, 0.55)', boxShadow: '0 4px 14px rgba(239, 68, 68, 0.15)' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.25rem' }}>
+                          <AlertTriangle size={16} color="#f87171" style={{ flexShrink: 0 }} />
+                          <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#f87171' }}>Subscription Expired</span>
+                        </div>
+                        <p style={{ margin: 0, fontSize: '0.74rem', color: '#fecdd3', lineHeight: '1.4' }}>
+                          Your subscription plan has expired. You cannot create new products. Please contact Admin to buy or renew a subscription plan.
+                        </p>
+                      </div>
+                    )}
+
+                    {!isPending && !Boolean(activeShop?.isSubscriptionExpired || activeShop?.subscriptionUsage?.isExpired || shopSubscriptionUsage?.isExpired) && slotsLeft === 0 && (
                       <div style={{ marginTop: '0.65rem', padding: '0.4rem 0.6rem', borderRadius: '8px', background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)', color: '#fecdd3', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>
-                        🚫 Limit Reached! Upgrade plan to add more products.
+                        ⚠️ Limit Reached! Upgrade plan to add more products.
                       </div>
                     )}
                   </div>
@@ -4334,9 +4363,8 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => {
-                  dispatch(setUserLocation({ latitude: undefined, longitude: undefined, locationName: 'Select Location', radiusKm: 100 }));
+                  dispatch(setUserLocation({ latitude: null, longitude: null, locationName: 'Select Location', radiusKm: 100 }));
                   dispatch(setFilterCity('All Cities'));
-                  dispatch(setFilterCityState('All Cities'));
                   triggerToast('📍 Location reset', 'info');
                   setIsLocationModalOpen(false);
                 }}

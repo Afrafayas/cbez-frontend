@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, FormEvent } from 'react';
-import { X, Loader2, Store, ArrowRight, User, MapPin, CheckCircle2, MessageCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Loader2, Store, ArrowRight, User, MapPin, CheckCircle2, MessageCircle, ArrowLeft, RefreshCw } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { 
   setShowAuthModal, 
@@ -9,14 +9,15 @@ import {
 } from '../store/authSlice';
 import { addShop } from '../store/productsSlice';
 import { Shop, User as CustomerUser, SubscriptionPlan } from '../types';
-import { CITIES } from '../data/mockData';
 import { 
-  registerUser, 
+  
   loginUser, 
   sendOtpApi, 
   verifyOtpApi, 
   getActiveSubscriptionPlans, 
-  reverseGeocodeCoords 
+  reverseGeocodeCoords,
+  updateUser,
+  createOrUpdateMyShop
 } from '../services/apiService';
 import { PhoneInputWithCountry } from './PhoneInputWithCountry';
 import { LocationAutocompleteInput } from './LocationAutocompleteInput';
@@ -80,6 +81,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const [isLocating, setIsLocating] = useState(false);
   const [activePlans, setActivePlans] = useState<SubscriptionPlan[]>([]);
   const [regForm, setRegForm] = useState(INITIAL_REG_FORM);
+  const [verifiedUser, setVerifiedUser] = useState<any>(null);
 
   const resetAllForms = React.useCallback(() => {
     setLoginEmail('');
@@ -190,14 +192,21 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         role: authRole,
       });
 
-      // Step 3: If already an existing user, navigate to home/dashboard (Seller -> /seller-dashboard, Customer -> /)
-      if (!res.isNewUser && res.data?.token) {
-        const tokenVal = res.data.token;
-        const userObj = res.data.user;
-        const actualRole = userObj?.role || (userObj?.shop ? 'seller' : authRole);
+      const tokenVal = res.token || res.data?.token;
+      const userObj = res.user || res.data?.user;
+      const actualRole = userObj?.role || (userObj?.shop ? 'seller' : authRole);
 
+      if (tokenVal) {
         localStorage.setItem('mlx_token', tokenVal);
+      }
+      if (userObj) {
+        setVerifiedUser(userObj);
+      }
 
+      const isNew = Boolean(res.isNewUser || res.requiresRegistration || userObj?.isNew);
+
+      // Step 3: If already an existing completed user, navigate directly to dashboard/home
+      if (!isNew && tokenVal) {
         if (actualRole === 'seller' || userObj?.shop) {
           const shop: Shop = userObj?.shop || {
             id: userObj?.id || `shop-${Date.now()}`,
@@ -239,16 +248,20 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         return;
       }
 
-      // Step 4: If NOT an existing user, transition to the original registration form
-      if (res.isNewUser) {
-        onToast('Phone number verified! Please complete your registration details.', 'success');
-        setRegForm(prev => ({
-          ...prev,
-          phone: otpPhone.trim(),
-          whatsapp: otpPhone.trim(),
-        }));
-        setAuthStep('details');
-      }
+      // Step 4: If new user, populate existing fields and transition to details filling page
+      onToast('Phone number verified! Please complete your details.', 'success');
+      setRegForm(prev => ({
+        ...prev,
+        phone: userObj?.phone || otpPhone.trim(),
+        whatsapp: userObj?.shop?.whatsapp || userObj?.phone || otpPhone.trim(),
+        name: (userObj?.name && userObj.name !== 'Seller' && userObj.name !== 'Customer') ? userObj.name : prev.name,
+        ownerName: (userObj?.name && userObj.name !== 'Seller' && userObj.name !== 'Customer') ? userObj.name : prev.ownerName,
+        shopName: (userObj?.shop?.name && userObj.shop.name !== 'New Shop') ? userObj.shop.name : prev.shopName,
+        category: userObj?.shop?.category || prev.category || 'Mobiles & Tablets',
+        address: userObj?.shop?.address || prev.address || '',
+        city: userObj?.shop?.city || prev.city || 'Kochi',
+      }));
+      setAuthStep('details');
     } catch (err: any) {
       setOtpHasError(true);
       onToast(err.message || 'Invalid or expired OTP. Please check and try again.', 'info');
@@ -330,51 +343,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   };
 
   // Image file handler for seller registration
-  const handleLogoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      onToast('Please select a valid image file (JPG, PNG, WEBP)', 'info');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      if (!result) return;
-
-      const tempImg = new Image();
-      tempImg.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_DIM = 800;
-        let w = tempImg.width;
-        let h = tempImg.height;
-
-        if (w > h) {
-          if (w > MAX_DIM) {
-            h = Math.round((h * MAX_DIM) / w);
-            w = MAX_DIM;
-          }
-        } else {
-          if (h > MAX_DIM) {
-            w = Math.round((w * MAX_DIM) / h);
-            h = MAX_DIM;
-          }
-        }
-
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(tempImg, 0, 0, w, h);
-        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
-        setRegForm(prev => ({ ...prev, profileImage: compressedDataUrl }));
-        onToast('Shop Logo / Owner Photo uploaded successfully!', 'success');
-      };
-      tempImg.src = result;
-    };
-    reader.readAsDataURL(file);
-  };
 
   // Location handlers
   const handleUseCurrentLocation = () => {
@@ -458,38 +426,35 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
 
     try {
       setIsSubmitting(true);
+      const userId = verifiedUser?.id || 'me';
+
       if (authRole === 'customer') {
-        const resData = await registerUser({
+        const updatedUser = await updateUser(userId, {
           email: regForm.email,
-          password: regForm.password || 'cbez_otp_pass',
           name: regForm.name || 'Customer User',
           phone: regForm.phone || otpPhone.trim(),
           role: 'customer',
           latitude: regForm.latitude,
           longitude: regForm.longitude,
+          password: regForm.password || undefined,
         });
 
-        const tokenVal = resData?.token || resData?.data?.token;
-        const userObj = resData?.user || resData?.data?.user;
-
-        if (tokenVal) {
-          localStorage.setItem('mlx_token', tokenVal);
-        }
-
         const user: CustomerUser = {
-          id: userObj?.id || `user-${Date.now()}`,
-          name: userObj?.name || regForm.name || 'Customer User',
-          email: userObj?.email || regForm.email || '',
-          phone: userObj?.phone || regForm.phone || otpPhone.trim(),
-          latitude: userObj?.latitude ?? regForm.latitude ?? null,
-          longitude: userObj?.longitude ?? regForm.longitude ?? null,
+          id: updatedUser?.id || userId,
+          name: updatedUser?.name || regForm.name || 'Customer User',
+          email: updatedUser?.email || regForm.email || '',
+          phone: updatedUser?.phone || regForm.phone || otpPhone.trim(),
+          latitude: updatedUser?.latitude ?? regForm.latitude ?? null,
+          longitude: updatedUser?.longitude ?? regForm.longitude ?? null,
         };
+        dispatch(setActiveShop(null));
+        dispatch(setAuthRole('customer'));
         dispatch(setActiveUser(user));
-        onToast(`Customer account created! Welcome ${user.name}`, 'success');
+        onToast(`Customer profile saved! Welcome ${user.name}`, 'success');
         handleCloseModal();
         navigate('/');
       } else {
-        // Seller Registration
+        // Seller details update
         const sellerName = regForm.ownerName || regForm.name;
         if (!sellerName || !regForm.shopName || !regForm.address) {
           onToast('Please fill out all required fields: Name, Shop Name, and Business Address.', 'info');
@@ -497,14 +462,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           return;
         }
 
-        const resData = await registerUser({
+        // 1. Update user account info
+        await updateUser(userId, {
           email: regForm.email,
-          password: regForm.password || 'cbez_otp_pass',
-          name: regForm.shopName || sellerName,
+          name: sellerName,
           phone: regForm.phone || otpPhone.trim(),
           role: 'seller',
-          shopName: regForm.shopName,
+          latitude: regForm.latitude,
+          longitude: regForm.longitude,
+          password: regForm.password || undefined,
+        });
+
+        // 2. Update created shop info via shop update API
+        const shopPayload = {
+          name: regForm.shopName,
           ownerName: sellerName,
+          phone: regForm.phone || otpPhone.trim(),
           whatsapp: regForm.whatsapp || regForm.phone || otpPhone.trim(),
           address: regForm.address,
           city: regForm.city || 'Kochi',
@@ -514,7 +487,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           aadhaarNumber: regForm.aadhaarNumber,
           panNumber: regForm.panNumber,
           profileImage: regForm.profileImage,
-          subscriptionPlanId: regForm.subscriptionPlanId || activePlans[0]?.id,
           latitude: regForm.latitude,
           longitude: regForm.longitude,
           gstNumber: regForm.gstNumber,
@@ -522,17 +494,12 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           businessHours: regForm.businessHours,
           businessDescription: regForm.businessDescription,
           alternatePhone: regForm.alternatePhone,
-        });
+        };
 
-        const tokenVal = resData?.token || resData?.data?.token;
-        const userObj = resData?.user || resData?.data?.user;
+        const updatedShop = await createOrUpdateMyShop(shopPayload);
 
-        if (tokenVal) {
-          localStorage.setItem('mlx_token', tokenVal);
-        }
-
-        const newShop: Shop = userObj?.shop || {
-          id: userObj?.id || `shop-${Date.now()}`,
+        const newShop: Shop = updatedShop || {
+          id: verifiedUser?.shop?.id || `shop-${Date.now()}`,
           name: regForm.shopName,
           ownerName: sellerName,
           phone: regForm.phone || otpPhone.trim(),
@@ -558,15 +525,18 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           rating: 5.0,
           joinedDate: 'Today'
         };
+
+        dispatch(setActiveUser(null));
         dispatch(addShop(newShop));
         dispatch(setActiveShop(newShop));
+        dispatch(setAuthRole('seller'));
         dispatch(setDashboardTab('listings'));
-        onToast(`Merchant Shop Registered: ${newShop.name} (Status: PENDING Admin Approval)`, 'success');
+        onToast(`Merchant Shop Details Saved: ${newShop.name} (Status: PENDING Admin Approval)`, 'success');
         handleCloseModal();
         navigate('/seller-dashboard');
       }
     } catch (err: any) {
-      onToast(err.message || 'Registration failed', 'info');
+      onToast(err.message || 'Failed to update details', 'info');
     } finally {
       setIsSubmitting(false);
     }

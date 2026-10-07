@@ -38,12 +38,21 @@ export interface Shop {
   rating: number;
   joinedDate: string;
   subscriptionPlanId?: string;
+  isSubscriptionExpired?: boolean;
   subscriptionUsage?: {
     planName: string;
     productLimit: number;
     currentProducts: number;
     remaining: number;
     isLimitReached: boolean;
+    durationDays?: number;
+    startDate?: string | null;
+    endDate?: string | null;
+    isExpired?: boolean;
+    daysRemaining?: number;
+    isExpiringSoon?: boolean;
+    canAddProduct?: boolean;
+    expirationMessage?: string | null;
   };
   district?: string;
   country?: string;
