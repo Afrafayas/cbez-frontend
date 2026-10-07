@@ -758,7 +758,7 @@ export async function fetchLocationSuggestions(query: string): Promise<LocationP
     if (res.ok) {
       const data = await res.json();
       if (Array.isArray(data)) {
-        return data.map((item: any) => {
+        const mapped = data.map((item: any) => {
           const addr = item.address || {};
           const mainText = addr.shop || addr.amenity || addr.building || addr.suburb || addr.neighbourhood || addr.city || addr.town || item.display_name.split(',')[0];
           const secParts = [addr.county, addr.state_district, addr.state, 'India'].filter(Boolean);
@@ -771,6 +771,17 @@ export async function fetchLocationSuggestions(query: string): Promise<LocationP
             lng: parseFloat(item.lon),
           };
         });
+
+        const seen = new Set<string>();
+        const uniqueSuggestions: LocationPrediction[] = [];
+        for (const item of mapped) {
+          const key = `${item.mainText.trim().toLowerCase()}|${item.secondaryText.trim().toLowerCase()}`;
+          if (!seen.has(key)) {
+            seen.add(key);
+            uniqueSuggestions.push(item);
+          }
+        }
+        return uniqueSuggestions;
       }
     }
   } catch (nomErr) {

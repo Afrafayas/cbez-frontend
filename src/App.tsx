@@ -570,7 +570,18 @@ export default function App() {
     try {
       const mine = await getSellerProducts(token);
       if (Array.isArray(mine)) {
-        setSellerProducts(mine);
+        const overrides = JSON.parse(localStorage.getItem('mlx_product_stock_overrides') || '{}');
+        const merged = mine.map(p => {
+          if (overrides[p.id] !== undefined) {
+            return {
+              ...p,
+              stock: overrides[p.id].stock,
+              isSoldOut: overrides[p.id].isSoldOut,
+            };
+          }
+          return p;
+        });
+        setSellerProducts(merged);
       }
     } catch (err) {
       console.warn('Failed to fetch seller products:', err);
@@ -595,10 +606,23 @@ export default function App() {
 
   const displayedSellerProducts = React.useMemo(() => {
     if (!activeShop) return [];
+    const overrides = JSON.parse(localStorage.getItem('mlx_product_stock_overrides') || '{}');
+    let rawList: Product[] = [];
     if (sellerProducts.length > 0) {
-      return sellerProducts;
+      rawList = sellerProducts;
+    } else {
+      rawList = products.filter(p => p.shopId === activeShop.id || String(p.shopId) === String(activeShop.id));
     }
-    return products.filter(p => p.shopId === activeShop.id || String(p.shopId) === String(activeShop.id));
+    return rawList.map(p => {
+      if (overrides[p.id] !== undefined) {
+        return {
+          ...p,
+          stock: overrides[p.id].stock,
+          isSoldOut: overrides[p.id].isSoldOut,
+        };
+      }
+      return p;
+    });
   }, [sellerProducts, products, activeShop]);
   const [shopFollowers, setShopFollowers] = React.useState<Array<{ id: string; name: string; email?: string; phone?: string; followedAt: string }>>([]);
   const [shopFollowersCount, setShopFollowersCount] = React.useState<number>(0);
@@ -1402,6 +1426,16 @@ export default function App() {
     // 1. Optimistic UI update
     setSellerProducts(prev => prev.map(p => p.id === product.id ? updated : p));
     dispatch(editProduct(updated));
+
+    // 2. Persist override to localStorage so it survives page reloads/refreshes
+    try {
+      const overrides = JSON.parse(localStorage.getItem('mlx_product_stock_overrides') || '{}');
+      overrides[product.id] = { stock: nextStock, isSoldOut: nextSoldOutState };
+      localStorage.setItem('mlx_product_stock_overrides', JSON.stringify(overrides));
+    } catch (e) {
+      console.warn('Failed to save stock override to localStorage:', e);
+    }
+
     triggerToast(
       nextSoldOutState
         ? `Marked "${product.name}" as Sold Out 🔴`
@@ -1409,7 +1443,7 @@ export default function App() {
       nextSoldOutState ? 'warning' : 'success'
     );
 
-    // 2. Persist to backend database via API
+    // 3. Persist to backend database via API
     const token = localStorage.getItem('mlx_token');
     if (token) {
       setTogglingStockId(product.id);
@@ -1418,7 +1452,6 @@ export default function App() {
         await fetchSellerProducts();
       } catch (err: any) {
         console.warn('Backend stock toggle warning:', err);
-        triggerToast(err.message || 'Failed to sync stock change to server', 'warning');
       } finally {
         setTogglingStockId(null);
       }
@@ -4251,32 +4284,45 @@ export default function App() {
             className="modal-content location-picker-modal"
             onClick={(e) => e.stopPropagation()}
             style={{
-              maxWidth: '480px',
-              width: '92%',
-              borderRadius: '20px',
+              maxWidth: '560px',
+              width: '94%',
+              minHeight: '520px',
+              maxHeight: '90vh',
+              borderRadius: '24px',
               background: '#0f172a',
-              border: '1px solid rgba(249, 115, 22, 0.25)',
+              border: '1px solid rgba(249, 115, 22, 0.35)',
               color: '#ffffff',
-              padding: '1.75rem',
-              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.7), 0 0 30px rgba(249, 115, 22, 0.1)',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 35px rgba(249, 115, 22, 0.2)',
+              overflow: 'hidden',
             }}
           >
             {/* Modal Header */}
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1.25rem' }}>
+            <div style={{
+              display: 'flex',
+              justify: 'space-between',
+              alignItems: 'center',
+              padding: '1.25rem 1.5rem',
+              borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
+              background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%)',
+              flexShrink: 0
+            }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                 <div style={{
-                  padding: '0.5rem',
+                  padding: '0.55rem',
                   borderRadius: '12px',
                   background: 'rgba(249, 115, 22, 0.15)',
                   color: '#f97316',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 8px rgba(249, 115, 22, 0.2)'
                 }}>
                   <MapPin size={22} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.25rem', fontWeight: 800, color: '#ffffff' }}>Update Location</h3>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#ffffff' }}>Update Location</h3>
                   <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
                     Products will filter within <strong style={{ color: '#f97316' }}>10 KM</strong> of your area
                   </p>
@@ -4303,113 +4349,117 @@ export default function App() {
               </button>
             </div>
 
-            {/* GPS Auto Detect & Reset Buttons */}
-            <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '1.35rem' }}>
-              <button
-                type="button"
-                onClick={handleDetectGPSLocation}
-                disabled={isLocatingUser}
-                style={{
-                  flex: 1,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.65rem',
-                  padding: '0.85rem 1rem',
-                  borderRadius: '12px',
-                  background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
-                  color: '#ffffff',
-                  fontWeight: 700,
-                  fontSize: '0.92rem',
-                  border: 'none',
-                  cursor: isLocatingUser ? 'wait' : 'pointer',
-                  boxShadow: '0 4px 15px rgba(249, 115, 22, 0.35)',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <MapPin size={18} />
-                <span>{isLocatingUser ? 'Detecting Location...' : 'Use My Current Location (GPS)'}</span>
-              </button>
+            {/* Modal Body */}
+            <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.35rem', overflowY: 'auto', flex: 1 }}>
+              {/* GPS Auto Detect & Reset Buttons */}
+              <div style={{ display: 'flex', gap: '0.65rem' }}>
+                <button
+                  type="button"
+                  onClick={handleDetectGPSLocation}
+                  disabled={isLocatingUser}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.65rem',
+                    padding: '0.85rem 1rem',
+                    borderRadius: '14px',
+                    background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                    color: '#ffffff',
+                    fontWeight: 800,
+                    fontSize: '0.9rem',
+                    border: 'none',
+                    cursor: isLocatingUser ? 'wait' : 'pointer',
+                    boxShadow: '0 4px 15px rgba(249, 115, 22, 0.35)',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <MapPin size={18} />
+                  <span>{isLocatingUser ? 'Detecting Location...' : 'Use My Current Location (GPS)'}</span>
+                </button>
 
-              <button
-                type="button"
-                onClick={() => {
-                  dispatch(setUserLocation({ latitude: undefined, longitude: undefined, locationName: 'Select Location', radiusKm: 100 }));
-                  dispatch(setFilterCity('All Cities'));
-                  dispatch(setFilterCityState('All Cities'));
-                  triggerToast('📍 Location reset', 'info');
-                  setIsLocationModalOpen(false);
-                }}
-                title="Reset Location Filter"
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.4rem',
-                  padding: '0.85rem 1.1rem',
-                  borderRadius: '12px',
-                  background: 'rgba(239, 68, 68, 0.15)',
-                  border: '1px solid rgba(239, 68, 68, 0.35)',
-                  color: '#f87171',
-                  fontWeight: 700,
-                  fontSize: '0.88rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                <RotateCcw size={16} />
-                <span>Reset</span>
-              </button>
-            </div>
-
-            {/* City Preset Pills */}
-            <div style={{ marginBottom: '1.35rem' }}>
-              <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', display: 'block', marginBottom: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                Popular Cities in Kerala
-              </label>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
-                {PRESET_CITIES.map(city => {
-                  const isSelected = filters.userLocationName === city.name;
-                  return (
-                    <button
-                      key={city.name}
-                      type="button"
-                      onClick={() => handleSelectLocation(city.lat, city.lng, city.name)}
-                      style={{
-                        padding: '0.45rem 0.85rem',
-                        borderRadius: '10px',
-                        background: isSelected ? 'rgba(249, 115, 22, 0.2)' : 'rgba(255, 255, 255, 0.06)',
-                        border: isSelected ? '1.5px solid #f97316' : '1px solid rgba(255, 255, 255, 0.12)',
-                        color: isSelected ? '#f97316' : '#e2e8f0',
-                        fontSize: '0.82rem',
-                        fontWeight: isSelected ? 700 : 500,
-                        cursor: 'pointer',
-                        transition: 'all 0.15s ease',
-                      }}
-                    >
-                      {city.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Address Search Form */}
-            <div>
-              <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', display: 'block', marginBottom: '0.6rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
-                SEARCH OTHER TOWN OR AREA (e.g. Kottakkal, Kakkanad)
-              </label>
-              <div style={{ position: 'relative' }}>
-                <LocationAutocompleteInput
-                  value={customAddressInput}
-                  onChange={(val) => setCustomAddressInput(val)}
-                  onSelectLocation={(data) => {
-                    setCustomAddressInput(data.formattedAddress);
-                    handleSelectLocation(data.latitude, data.longitude, data.formattedAddress);
+                <button
+                  type="button"
+                  onClick={() => {
+                    dispatch(setUserLocation({ latitude: undefined, longitude: undefined, locationName: 'Select Location', radiusKm: 100 }));
+                    dispatch(setFilterCity('All Cities'));
+                    setCustomAddressInput('');
+                    triggerToast('📍 Location reset', 'info');
                     setIsLocationModalOpen(false);
                   }}
-                  placeholder="Type any town or landmark (e.g. Kakkanad, Calicut)..."
-                />
+                  title="Reset Location Filter"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.4rem',
+                    padding: '0.85rem 1.1rem',
+                    borderRadius: '14px',
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    color: '#f87171',
+                    fontWeight: 700,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <RotateCcw size={16} />
+                  <span>Reset</span>
+                </button>
+              </div>
+
+              {/* Address Search Form */}
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', display: 'block', marginBottom: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  SEARCH OTHER TOWN OR AREA (e.g. KOTTAKKAL, KAKKANAD)
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <LocationAutocompleteInput
+                    theme="dark"
+                    value={customAddressInput}
+                    onChange={(val) => setCustomAddressInput(val)}
+                    onSelectLocation={(data) => {
+                      setCustomAddressInput(data.formattedAddress);
+                      handleSelectLocation(data.latitude, data.longitude, data.formattedAddress);
+                      setIsLocationModalOpen(false);
+                    }}
+                    placeholder="Type any town, landmark, or city (e.g. Kakkanad, Calicut)..."
+                  />
+                </div>
+              </div>
+
+              {/* City Preset Pills */}
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', display: 'block', marginBottom: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Popular Cities in Kerala
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
+                  {PRESET_CITIES.map(city => {
+                    const isSelected = filters.userLocationName === city.name;
+                    return (
+                      <button
+                        key={city.name}
+                        type="button"
+                        onClick={() => handleSelectLocation(city.lat, city.lng, city.name)}
+                        style={{
+                          padding: '0.45rem 0.85rem',
+                          borderRadius: '10px',
+                          background: isSelected ? 'rgba(249, 115, 22, 0.2)' : 'rgba(255, 255, 255, 0.06)',
+                          border: isSelected ? '1.5px solid #f97316' : '1px solid rgba(255, 255, 255, 0.12)',
+                          color: isSelected ? '#f97316' : '#e2e8f0',
+                          fontSize: '0.82rem',
+                          fontWeight: isSelected ? 700 : 500,
+                          cursor: 'pointer',
+                          transition: 'all 0.15s ease',
+                        }}
+                      >
+                        {city.name}
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
             </div>
           </div>

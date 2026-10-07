@@ -634,14 +634,11 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
             borderBottomRightRadius: '20px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
+            justifyContent: 'flex-end',
             gap: '1rem',
             flexWrap: 'wrap'
           }}
         >
-          <div style={{ fontSize: '0.76rem', color: '#94a3b8' }}>
-            Product ID: <strong style={{ color: '#64748b' }}>{product.id}</strong>
-          </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem', flexWrap: 'wrap' }}>
 

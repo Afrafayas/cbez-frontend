@@ -952,6 +952,10 @@ body.modal-open {
   box-sizing: border-box;
 }
 
+.location-picker-modal {
+  overflow: visible !important;
+}
+
 /* Custom scrollbar inside modal to prevent scrollbar clipping rounded corners */
 .modal-content::-webkit-scrollbar {
   width: 6px;
