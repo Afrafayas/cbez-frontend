@@ -1,5 +1,5 @@
 import React, { useState, ChangeEvent } from 'react';
-import { Search, MapPin, Store, User, LogOut, LogIn, Smartphone, Heart, Crosshair, Loader2, X, ChevronDown } from 'lucide-react';
+import { Search, MapPin, Store, User, LogOut, LogIn, Smartphone, Heart, Crosshair, Loader2, X, ChevronDown, RotateCcw } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store';
 import {
@@ -108,7 +108,7 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
   };
 
   const handleResetLocation = () => {
-    dispatch(setUserLocation({ latitude: undefined, longitude: undefined, locationName: 'Select Location', radiusKm: 100 }));
+    dispatch(setUserLocation({ latitude: null, longitude: null, locationName: 'Select Location', radiusKm: 100 }));
     dispatch(setFilterCity('All Cities'));
     setLocationInput('');
     onToast('📍 Location reset', 'info');
@@ -125,13 +125,6 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
     } finally {
       setIsGeocoding(false);
     }
-  };
-
-  const handleManualLocationSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!locationInput.trim()) return;
-    await handleCityOrAddressSelect(locationInput.trim());
-    setLocationInput('');
   };
 
   const getFormattedUserName = (user: { name?: string; email?: string } | null): string => {
@@ -612,9 +605,7 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
             </div>
           </div>
         </div>
-        </div>
-  )
-}
-    </header >
+      )}
+    </header>
   );
 };
