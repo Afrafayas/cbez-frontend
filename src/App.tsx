@@ -33,6 +33,7 @@ import {
   Loader2,
   CheckCircle,
   AlertTriangle,
+  RotateCcw,
   HelpCircle,
   Info,
   Watch,
@@ -1732,28 +1733,6 @@ export default function App() {
                 <>
                   <div className="search-overlay-backdrop" onClick={() => setIsSearchFocused(false)}></div>
                   <div className="search-explore-overlay minimal-search-overlay">
-                    {/* Row 1: Detect Location & Cities */}
-                    <div className="overlay-minimal-row">
-                      <button
-                        type="button"
-                        className="detect-location-btn"
-                        onClick={() => {
-                          dispatch(setFilterCity('Kochi'));
-                          triggerToast("📍 Geolocation active: Selected Kochi as nearest city!", "success");
-                          setIsSearchFocused(false);
-                          navigate('/');
-                        }}
-                      >
-                        <MapPin size={13} style={{ flexShrink: 0 }} />
-                        <span>Near Me</span>
-                      </button>
-                      <div className="minimal-tags">
-                        {CITIES.filter(c => c !== "All Cities").map(city => (
-                          <button key={city} type="button" className="min-tag city" onMouseDown={(e) => e.preventDefault()} onClick={() => handleTagClick('city', city)}>{city}</button>
-                        ))}
-                      </div>
-                    </div>
-
                     {/* Row 2: Budgets & Categories */}
                     <div className="overlay-minimal-row">
                       <span className="min-row-lbl">Budgets:</span>
@@ -4324,33 +4303,64 @@ export default function App() {
               </button>
             </div>
 
-            {/* GPS Auto Detect Button (Theme Orange Gradient) */}
-            <button
-              type="button"
-              onClick={handleDetectGPSLocation}
-              disabled={isLocatingUser}
-              style={{
-                width: '100%',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '0.65rem',
-                padding: '0.85rem 1rem',
-                borderRadius: '12px',
-                background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
-                color: '#ffffff',
-                fontWeight: 700,
-                fontSize: '0.92rem',
-                border: 'none',
-                cursor: isLocatingUser ? 'wait' : 'pointer',
-                marginBottom: '1.35rem',
-                boxShadow: '0 4px 15px rgba(249, 115, 22, 0.35)',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <MapPin size={18} />
-              <span>{isLocatingUser ? 'Detecting Location...' : 'Use My Current Location (GPS)'}</span>
-            </button>
+            {/* GPS Auto Detect & Reset Buttons */}
+            <div style={{ display: 'flex', gap: '0.65rem', marginBottom: '1.35rem' }}>
+              <button
+                type="button"
+                onClick={handleDetectGPSLocation}
+                disabled={isLocatingUser}
+                style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.65rem',
+                  padding: '0.85rem 1rem',
+                  borderRadius: '12px',
+                  background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                  color: '#ffffff',
+                  fontWeight: 700,
+                  fontSize: '0.92rem',
+                  border: 'none',
+                  cursor: isLocatingUser ? 'wait' : 'pointer',
+                  boxShadow: '0 4px 15px rgba(249, 115, 22, 0.35)',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <MapPin size={18} />
+                <span>{isLocatingUser ? 'Detecting Location...' : 'Use My Current Location (GPS)'}</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  dispatch(setUserLocation({ latitude: undefined, longitude: undefined, locationName: 'All Cities', radiusKm: 100 }));
+                  dispatch(setFilterCity('All Cities'));
+                  dispatch(setFilterCityState('All Cities'));
+                  triggerToast('📍 Location reset to All Cities', 'info');
+                  setIsLocationModalOpen(false);
+                }}
+                title="Reset Location Filter"
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '0.4rem',
+                  padding: '0.85rem 1.1rem',
+                  borderRadius: '12px',
+                  background: 'rgba(239, 68, 68, 0.15)',
+                  border: '1px solid rgba(239, 68, 68, 0.35)',
+                  color: '#f87171',
+                  fontWeight: 700,
+                  fontSize: '0.88rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                <RotateCcw size={16} />
+                <span>Reset</span>
+              </button>
+            </div>
 
             {/* City Preset Pills */}
             <div style={{ marginBottom: '1.35rem' }}>

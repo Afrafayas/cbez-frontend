@@ -1,11 +1,11 @@
 import React, { useState, ChangeEvent } from 'react';
-import { Search, MapPin, Store, User, LogOut, LogIn, Smartphone, Heart, Crosshair, Loader2, X, ChevronDown } from 'lucide-react';
+import { Search, MapPin, Store, User, LogOut, LogIn, Smartphone, Heart, Crosshair, Loader2, X, ChevronDown, RotateCcw } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store';
-import { 
-  setSearchQuery, 
-  setFilterCity, 
-  setSelectedCategory, 
+import {
+  setSearchQuery,
+  setFilterCity,
+  setSelectedCategory,
   setFilterMaxBudget,
   setUserLocation
 } from '../store/filtersSlice';
@@ -157,41 +157,41 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
 
         {/* Location Display Widget (Immediately after Logo - Customer Users Only) */}
         {Boolean(activeUser && !activeShop) && (
-        <div 
-          className="navbar-location-selector"
-          onClick={() => setShowLocationModal(true)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.45rem',
-            cursor: 'pointer',
-            background: 'rgba(255, 255, 255, 0.08)',
-            padding: '0.35rem 0.65rem',
-            borderRadius: '10px',
-            border: '1px solid rgba(255, 255, 255, 0.15)',
-            transition: 'all 0.2s ease',
-            marginLeft: '0.2rem',
-            userSelect: 'none'
-          }}
-          title={`Selected Location: ${userLocationName || "None"} (Click to update)`}
-        >
-          <MapPin size={15} style={{ color: '#f97316', flexShrink: 0 }} />
-          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
-            <span style={{ fontSize: '0.62rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Location</span>
-            <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-              {userLocationName || 'Kochi'}
-            </span>
+          <div
+            className="navbar-location-selector"
+            onClick={() => setShowLocationModal(true)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '0.45rem',
+              cursor: 'pointer',
+              background: 'rgba(255, 255, 255, 0.08)',
+              padding: '0.35rem 0.65rem',
+              borderRadius: '10px',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              transition: 'all 0.2s ease',
+              marginLeft: '0.2rem',
+              userSelect: 'none'
+            }}
+            title={`Selected Location: ${userLocationName || "None"} (Click to update)`}
+          >
+            <MapPin size={15} style={{ color: '#f97316', flexShrink: 0 }} />
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
+              <span style={{ fontSize: '0.62rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Location</span>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {userLocationName || 'Kochi'}
+              </span>
+            </div>
+            <ChevronDown size={13} style={{ color: '#94a3b8', marginLeft: '0.1rem' }} />
           </div>
-          <ChevronDown size={13} style={{ color: '#94a3b8', marginLeft: '0.1rem' }} />
-        </div>
         )}
 
         {/* Real-time Multi-word Search Bar */}
         <div className="search-bar-wrapper">
           <div className="header-search-box">
             <Search className="search-box-icon" size={16} />
-            <input 
-              type="text" 
+            <input
+              type="text"
               className="search-input"
               placeholder="Search used iPhones, OnePlus, budget..."
               value={searchQuery}
@@ -212,23 +212,6 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
             <>
               <div className="search-overlay-backdrop" onClick={() => setIsSearchFocused(false)}></div>
               <div className="search-explore-overlay minimal-search-overlay">
-                {/* City Tags Row */}
-                <div className="overlay-minimal-row">
-                  <button 
-                    type="button"
-                    className="detect-location-btn" 
-                    onClick={handleDetectGPSLocation}
-                  >
-                    <MapPin size={13} style={{ flexShrink: 0 }} />
-                    <span>Near Me</span>
-                  </button>
-                  <div className="minimal-tags">
-                    {CITIES.filter(c => c !== "All Cities").map(city => (
-                      <button key={city} className="min-tag city" onClick={() => handleCityOrAddressSelect(city)}>{city}</button>
-                    ))}
-                  </div>
-                </div>
-
                 {/* Budgets & Categories */}
                 <div className="overlay-minimal-row">
                   <span className="min-row-lbl">Budgets:</span>
@@ -332,7 +315,7 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
 
           {activeShop ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <button 
+              <button
                 className={`action-btn sell-btn ${location.pathname === '/seller-dashboard' ? 'active' : ''}`}
                 onClick={() => { navigate('/seller-dashboard'); dispatch(setDashboardTab('listings')); }}
               >
@@ -366,8 +349,8 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
             </div>
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-              <button 
-                className="action-btn sell-btn" 
+              <button
+                className="action-btn sell-btn"
                 onClick={() => {
                   dispatch(setAuthRole('seller'));
                   dispatch(setAuthTab('login'));
@@ -380,7 +363,7 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
 
               {activeUser ? (
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <button 
+                  <button
                     className={`action-btn sell-btn ${location.pathname === '/customer-dashboard' ? 'active' : ''}`}
                     onClick={() => navigate('/customer-dashboard')}
                     title="Go to My Dashboard"
@@ -409,7 +392,7 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
                   </button>
                 </div>
               ) : (
-                <button 
+                <button
                   className="action-btn"
                   onClick={() => {
                     dispatch(setAuthRole('customer'));
