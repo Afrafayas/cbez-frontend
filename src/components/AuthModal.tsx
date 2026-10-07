@@ -1098,15 +1098,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                       onChange={(e) => setRegForm({ ...regForm, email: e.target.value })}
                     />
                   </div>
-
-                  <div className="form-group">
-                    <label className="form-label">Phone Number *</label>
-                    <PhoneInputWithCountry
-                      required
-                      value={regForm.phone}
-                      onChange={(val) => setRegForm({ ...regForm, phone: val })}
-                    />
-                  </div>
                 </>
               ) : (
                 <>
@@ -1204,11 +1195,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
                     <label className="form-label">Email Address *</label>
                     <input type="email" className="form-input-text" required placeholder="e.g. store@gmail.com" value={regForm.email} onChange={(e) => setRegForm({ ...regForm, email: e.target.value })} />
                   </div>
-                  <div className="form-group">
-                    <label className="form-label">Call Phone Number *</label>
-                    <PhoneInputWithCountry required value={regForm.phone} onChange={(val) => setRegForm({ ...regForm, phone: val })} />
-                  </div>
-
                 </>
               )}
 

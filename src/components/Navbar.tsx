@@ -14,6 +14,7 @@ import { setDashboardTab } from '../store/uiSlice';
 import { CITIES } from '../data/mockData';
 import { Product } from '../types';
 import { geocodeAddress, reverseGeocodeCoords, getNearestKnownCity, updateUser } from '../services/apiService';
+import { LocationAutocompleteInput } from './LocationAutocompleteInput';
 
 interface NavbarProps {
   filteredProducts: Product[];
@@ -106,6 +107,13 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
     );
   };
 
+  const handleResetLocation = () => {
+    dispatch(setUserLocation({ latitude: undefined, longitude: undefined, locationName: 'Select Location', radiusKm: 100 }));
+    dispatch(setFilterCity('All Cities'));
+    setLocationInput('');
+    onToast('📍 Location reset', 'info');
+    setShowLocationModal(false);
+  };
 
   const handleCityOrAddressSelect = async (cityName: string) => {
     setIsGeocoding(true);
@@ -429,139 +437,154 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
         }}>
           <div style={{
             background: '#0f172a',
-            border: '1px solid rgba(255, 255, 255, 0.15)',
-            borderRadius: '20px',
+            border: '1px solid rgba(249, 115, 22, 0.35)',
+            borderRadius: '24px',
             width: '100%',
-            maxWidth: '460px',
-            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+            maxWidth: '560px',
+            minHeight: '520px',
+            maxHeight: '90vh',
+            display: 'flex',
+            flexDirection: 'column',
             overflow: 'hidden',
-            color: '#f8fafc'
+            boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.8), 0 0 35px rgba(249, 115, 22, 0.2)',
+            color: '#f8fafc',
+            position: 'relative'
           }}>
             {/* Modal Header */}
             <div style={{
               display: 'flex',
               alignItems: 'center',
-              justifyContent: 'between',
+              justifyContent: 'space-between',
               padding: '1.25rem 1.5rem',
               borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
-              background: 'rgba(30, 41, 59, 0.5)'
+              background: 'linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%)',
+              flexShrink: 0
             }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.6rem' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.65rem' }}>
                 <div style={{
-                  padding: '0.5rem',
+                  padding: '0.55rem',
                   borderRadius: '12px',
                   background: 'rgba(249, 115, 22, 0.15)',
                   color: '#f97316',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center'
+                  justifyContent: 'center',
+                  boxShadow: '0 2px 8px rgba(249, 115, 22, 0.2)'
                 }}>
-                  <MapPin size={20} />
+                  <MapPin size={22} />
                 </div>
                 <div>
-                  <h3 style={{ margin: 0, fontSize: '1.1rem', fontWeight: 800, color: '#ffffff' }}>Update Location</h3>
-                  <p style={{ margin: '0.1rem 0 0 0', fontSize: '0.75rem', color: '#94a3b8' }}>Products will filter within 10 KM of your area</p>
+                  <h3 style={{ margin: 0, fontSize: '1.2rem', fontWeight: 800, color: '#ffffff' }}>Update Location</h3>
+                  <p style={{ margin: '0.15rem 0 0 0', fontSize: '0.78rem', color: '#94a3b8' }}>
+                    Products will filter within <strong style={{ color: '#f97316' }}>10 KM</strong> of your area
+                  </p>
                 </div>
               </div>
               <button
                 type="button"
                 onClick={() => setShowLocationModal(false)}
                 style={{
-                  background: 'transparent',
+                  background: 'rgba(255, 255, 255, 0.08)',
                   border: 'none',
                   color: '#94a3b8',
                   cursor: 'pointer',
-                  padding: '0.4rem',
-                  borderRadius: '8px',
+                  borderRadius: '50%',
+                  width: '32px',
+                  height: '32px',
                   display: 'flex',
                   alignItems: 'center',
-                  marginLeft: 'auto'
+                  justifyContent: 'center',
+                  transition: 'all 0.2s ease'
                 }}
               >
-                <X size={20} />
+                <X size={18} />
               </button>
             </div>
 
             {/* Modal Body */}
-            <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-              {/* GPS Auto-Detect Button */}
-              <button
-                type="button"
-                onClick={handleDetectGPSLocation}
-                disabled={isDetectingLocation || isGeocoding}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: '0.6rem',
-                  width: '100%',
-                  padding: '0.85rem 1rem',
-                  borderRadius: '14px',
-                  background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
-                  color: '#ffffff',
-                  fontWeight: 800,
-                  fontSize: '0.9rem',
-                  border: 'none',
-                  boxShadow: '0 4px 12px rgba(249, 115, 22, 0.3)',
-                  cursor: isDetectingLocation || isGeocoding ? 'not-allowed' : 'pointer',
-                  opacity: isDetectingLocation || isGeocoding ? 0.7 : 1,
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                {isDetectingLocation ? (
-                  <Loader2 size={18} className="spin-icon" style={{ animation: 'spin 1s linear infinite' }} />
-                ) : (
-                  <Crosshair size={18} />
-                )}
-                <span>{isDetectingLocation ? 'Detecting GPS Coordinates...' : 'Detect My Current Location (GPS)'}</span>
-              </button>
+            <div style={{ padding: '1.5rem', display: 'flex', flexDirection: 'column', gap: '1.35rem', overflowY: 'auto', flex: 1 }}>
+              {/* GPS Auto-Detect & Reset Buttons */}
+              <div style={{ display: 'flex', gap: '0.65rem' }}>
+                <button
+                  type="button"
+                  onClick={handleDetectGPSLocation}
+                  disabled={isDetectingLocation || isGeocoding}
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.6rem',
+                    padding: '0.85rem 1rem',
+                    borderRadius: '14px',
+                    background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)',
+                    color: '#ffffff',
+                    fontWeight: 800,
+                    fontSize: '0.9rem',
+                    border: 'none',
+                    boxShadow: '0 4px 15px rgba(249, 115, 22, 0.35)',
+                    cursor: isDetectingLocation || isGeocoding ? 'not-allowed' : 'pointer',
+                    opacity: isDetectingLocation || isGeocoding ? 0.7 : 1,
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  {isDetectingLocation ? (
+                    <Loader2 size={18} className="spin-icon" style={{ animation: 'spin 1s linear infinite' }} />
+                  ) : (
+                    <Crosshair size={18} />
+                  )}
+                  <span>{isDetectingLocation ? 'Detecting GPS Coordinates...' : 'Use My Current Location (GPS)'}</span>
+                </button>
 
-              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-                <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }}></div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase' }}>OR SEARCH OTHER TOWN / AREA (E.G. KOTTAKKAL)</span>
-                <div style={{ flex: 1, height: '1px', background: 'rgba(255, 255, 255, 0.1)' }}></div>
+                <button
+                  type="button"
+                  onClick={handleResetLocation}
+                  title="Reset Location Filter"
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '0.4rem',
+                    padding: '0.85rem 1.1rem',
+                    borderRadius: '14px',
+                    background: 'rgba(239, 68, 68, 0.15)',
+                    border: '1px solid rgba(239, 68, 68, 0.35)',
+                    color: '#f87171',
+                    fontWeight: 700,
+                    fontSize: '0.88rem',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease'
+                  }}
+                >
+                  <RotateCcw size={16} />
+                  <span>Reset</span>
+                </button>
               </div>
 
               {/* Address Search Form */}
-              <form onSubmit={handleManualLocationSubmit} style={{ display: 'flex', gap: '0.5rem' }}>
-                <input
-                  type="text"
-                  placeholder="Type any town (e.g. Kottakkal, Kakkanad)..."
-                  value={locationInput}
-                  onChange={(e) => setLocationInput(e.target.value)}
-                  style={{
-                    flex: 1,
-                    padding: '0.75rem 1rem',
-                    borderRadius: '12px',
-                    background: '#1e293b',
-                    border: '1px solid rgba(255, 255, 255, 0.15)',
-                    color: '#ffffff',
-                    fontSize: '0.85rem',
-                    outline: 'none'
-                  }}
-                />
-                <button
-                  type="submit"
-                  disabled={isGeocoding || !locationInput.trim()}
-                  style={{
-                    padding: '0.75rem 1.25rem',
-                    borderRadius: '12px',
-                    background: 'linear-gradient(135deg, #f97316 0%, #ea580c 100%)', boxShadow: '0 2px 10px rgba(249, 115, 22, 0.3)',
-                    color: '#ffffff',
-                    fontWeight: 700,
-                    fontSize: '0.85rem',
-                    border: 'none',
-                    cursor: (isGeocoding || !locationInput.trim()) ? 'not-allowed' : 'pointer',
-                    opacity: (isGeocoding || !locationInput.trim()) ? 0.6 : 1
-                  }}
-                >
-                  {isGeocoding ? 'Resolving...' : 'Locate Area'}
-                </button>
-              </form>
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', display: 'block', marginBottom: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  SEARCH OTHER TOWN OR AREA (e.g. KOTTAKKAL, KAKKANAD)
+                </label>
+                <div style={{ position: 'relative' }}>
+                  <LocationAutocompleteInput
+                    theme="dark"
+                    value={locationInput}
+                    onChange={(val) => setLocationInput(val)}
+                    onSelectLocation={(data) => {
+                      setLocationInput(data.formattedAddress);
+                      applyNewLocation(data.latitude, data.longitude, data.city || data.formattedAddress);
+                    }}
+                    placeholder="Type any town, landmark, or city (e.g. Kakkanad, Calicut)..."
+                  />
+                </div>
+              </div>
 
               {/* Preset Kerala Cities */}
               <div>
-                <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', display: 'block', marginBottom: '0.6rem' }}>Popular Cities:</span>
+                <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#94a3b8', display: 'block', marginBottom: '0.65rem', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+                  Popular Cities in Kerala
+                </label>
                 <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.45rem' }}>
                   {CITIES.filter(c => c !== 'All Cities').map(city => (
                     <button
@@ -570,13 +593,13 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
                       disabled={isGeocoding}
                       onClick={() => handleCityOrAddressSelect(city)}
                       style={{
-                        padding: '0.4rem 0.8rem',
+                        padding: '0.45rem 0.85rem',
                         borderRadius: '10px',
                         background: userLocationName === city ? 'rgba(249, 115, 22, 0.2)' : 'rgba(255, 255, 255, 0.06)',
-                        border: userLocationName === city ? '1px solid #f97316' : '1px solid rgba(255, 255, 255, 0.1)',
-                        color: userLocationName === city ? '#f97316' : '#cbd5e1',
-                        fontSize: '0.8rem',
-                        fontWeight: 600,
+                        border: userLocationName === city ? '1.5px solid #f97316' : '1px solid rgba(255, 255, 255, 0.12)',
+                        color: userLocationName === city ? '#f97316' : '#e2e8f0',
+                        fontSize: '0.82rem',
+                        fontWeight: userLocationName === city ? 700 : 500,
                         cursor: isGeocoding ? 'not-allowed' : 'pointer',
                         transition: 'all 0.15s ease'
                       }}
@@ -589,7 +612,9 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
             </div>
           </div>
         </div>
-      )}
-    </header>
+        </div>
+  )
+}
+    </header >
   );
 };
