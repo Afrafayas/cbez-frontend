@@ -4334,10 +4334,10 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => {
-                  dispatch(setUserLocation({ latitude: undefined, longitude: undefined, locationName: 'All Cities', radiusKm: 100 }));
+                  dispatch(setUserLocation({ latitude: undefined, longitude: undefined, locationName: 'Select Location', radiusKm: 100 }));
                   dispatch(setFilterCity('All Cities'));
                   dispatch(setFilterCityState('All Cities'));
-                  triggerToast('📍 Location reset to All Cities', 'info');
+                  triggerToast('📍 Location reset', 'info');
                   setIsLocationModalOpen(false);
                 }}
                 title="Reset Location Filter"
