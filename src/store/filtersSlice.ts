@@ -108,9 +108,9 @@ const filtersSlice = createSlice({
     setSortBy(state, action: PayloadAction<'featured' | 'price-asc' | 'price-desc' | 'stock' | 'rating' | 'newest' | 'alphabetical'>) {
       state.sortBy = action.payload;
     },
-    setUserLocation(state, action: PayloadAction<{ latitude: number | null; longitude: number | null; locationName: string; radiusKm?: number }>) {
-      state.userLatitude = action.payload.latitude;
-      state.userLongitude = action.payload.longitude;
+    setUserLocation(state, action: PayloadAction<{ latitude?: number | null; longitude?: number | null; locationName: string; radiusKm?: number }>) {
+      state.userLatitude = action.payload.latitude ?? null;
+      state.userLongitude = action.payload.longitude ?? null;
       state.userLocationName = action.payload.locationName;
       if (action.payload.radiusKm !== undefined) {
         state.radiusKm = action.payload.radiusKm;
