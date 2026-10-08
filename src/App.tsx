@@ -905,7 +905,7 @@ export default function App() {
 
   // --- Marketplace Catalog Pagination State ---
   const [catalogPage, setCatalogPage] = React.useState<number>(1);
-  const [catalogPerPage, setCatalogPerPage] = React.useState<number>(8);
+  const [catalogPerPage, setCatalogPerPage] = React.useState<number>(12);
 
   // --- Customer Dashboard Pagination States ---
   const [custInquiriesPage, setCustInquiriesPage] = React.useState<number>(1);
@@ -1164,7 +1164,7 @@ export default function App() {
   }, [selectedProduct]);
 
   // --- HELPERS ---
-  const getSellerShop = (shopId: string, productShop?: Shop): Shop => {
+  const getSellerShop = (shopId: string, productShop?: Shop | null): Shop => {
     if (productShop && (productShop.name || productShop.id)) {
       return productShop;
     }
@@ -1213,7 +1213,7 @@ export default function App() {
 
   // --- FILTER & SORT LOGIC ---
   const filteredProducts = products.filter(product => {
-    const seller = getSellerShop(product.shopId);
+    const seller = getSellerShop(product.shopId, product.shop);
 
     // 1. Multi-word keyword search with whitespace normalization
     const rawQuery = filters.searchQuery.trim().replace(/\s+/g, ' ').toLowerCase();
@@ -1292,8 +1292,8 @@ export default function App() {
     if (filters.sortBy === 'price-desc') return b.price - a.price;
     if (filters.sortBy === 'stock') return b.stock - a.stock;
     if (filters.sortBy === 'rating') {
-      const sellerA = getSellerShop(a.shopId);
-      const sellerB = getSellerShop(b.shopId);
+      const sellerA = getSellerShop(a.shopId, a.shop);
+      const sellerB = getSellerShop(b.shopId, b.shop);
       return sellerB.rating - sellerA.rating;
     }
     if (filters.sortBy === 'newest') {
@@ -2483,7 +2483,7 @@ export default function App() {
                         const paginatedCatalogProducts = sortedProducts.slice(catalogStartIndex, catalogEndIndex);
 
                         return paginatedCatalogProducts.map((product, index) => {
-                          const seller = getSellerShop(product.shopId);
+                          const seller = getSellerShop(product.shopId, product.shop);
                           const isOutOfStock = product.stock <= 0;
 
                           const renderCard = (
@@ -2557,11 +2557,11 @@ export default function App() {
                                 <div className="card-dealer-info">
                                   <div className="dealer-name">
                                     <Store size={14} className="verified-icon" />
-                                    <span>{seller.name}</span>
+                                    <span>{seller?.name || 'Verified Store'}</span>
                                   </div>
                                   <div className="dealer-location">
                                     <MapPin size={12} />
-                                    <span>{seller.address}, {seller.city}</span>
+                                    <span>{seller?.address || 'Main Location'}, {seller?.city || 'Kerala'}</span>
                                   </div>
                                 </div>
 
@@ -2668,9 +2668,9 @@ export default function App() {
                               cursor: 'pointer'
                             }}
                           >
-                            <option value={8}>8 items</option>
                             <option value={12}>12 items</option>
                             <option value={24}>24 items</option>
+                            <option value={36}>36 items</option>
                             <option value={48}>48 items</option>
                           </select>
                           <span style={{ fontSize: '0.82rem', color: '#94a3b8', fontWeight: 600 }}>
