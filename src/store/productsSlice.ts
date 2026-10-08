@@ -120,7 +120,17 @@ const productsSlice = createSlice({
       }
     },
     setProducts(state, action: PayloadAction<Product[]>) {
-      state.items = action.payload;
+      const map = new Map<string, Product>();
+      (state.items || []).forEach(p => {
+        if (p && p.id) map.set(String(p.id), p);
+      });
+      (action.payload || []).forEach(p => {
+        if (p && p.id) map.set(String(p.id), p);
+      });
+      state.items = Array.from(map.values());
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('mlx_products', JSON.stringify(state.items));
+      }
     },
     setShops(state, action: PayloadAction<Shop[]>) {
       const shopMap = new Map<string, Shop>();

@@ -598,26 +598,48 @@ export default function App() {
     setIsLoadingSellerProducts(true);
     try {
       const mine = await getSellerProducts(token);
+      const localProds: Product[] = JSON.parse(localStorage.getItem('mlx_products') || '[]');
+      const shopId = activeShop?.id ? String(activeShop.id).toLowerCase() : '';
+      const ownerId = activeShop?.ownerId ? String(activeShop.ownerId).toLowerCase() : (activeUser?.id ? String(activeUser.id).toLowerCase() : '');
+      const shopEmail = activeShop?.email ? activeShop.email.toLowerCase() : (activeUser?.email ? activeUser.email.toLowerCase() : '');
+
+      const localShopProds = localProds.filter(p => {
+        if (!p) return false;
+        const pShopId = p.shopId ? String(p.shopId).toLowerCase() : '';
+        const pShopObjId = p.shop?.id ? String(p.shop.id).toLowerCase() : '';
+        const pOwnerId = p.shop?.ownerId ? String(p.shop.ownerId).toLowerCase() : ((p.shop as any)?.owner?.id ? String((p.shop as any).owner.id).toLowerCase() : '');
+        const pShopEmail = p.shop?.email ? String(p.shop.email).toLowerCase() : ((p.shop as any)?.owner?.email ? String((p.shop as any).owner.email).toLowerCase() : '');
+
+        if (shopId && (pShopId === shopId || pShopObjId === shopId)) return true;
+        if (ownerId && (pShopId === ownerId || pOwnerId === ownerId)) return true;
+        if (shopEmail && pShopEmail && pShopEmail === shopEmail) return true;
+        return false;
+      });
+
+      const map = new Map<string, Product>();
+      localShopProds.forEach(p => { if (p && p.id) map.set(String(p.id), p); });
       if (Array.isArray(mine)) {
-        const overrides = JSON.parse(localStorage.getItem('mlx_product_stock_overrides') || '{}');
-        const merged = mine.map(p => {
-          if (overrides[p.id] !== undefined) {
-            return {
-              ...p,
-              stock: overrides[p.id].stock,
-              isSoldOut: overrides[p.id].isSoldOut,
-            };
-          }
-          return p;
-        });
-        setSellerProducts(merged);
+        mine.forEach(p => { if (p && p.id) map.set(String(p.id), p); });
       }
+
+      const overrides = JSON.parse(localStorage.getItem('mlx_product_stock_overrides') || '{}');
+      const merged = Array.from(map.values()).map(p => {
+        if (overrides[p.id] !== undefined) {
+          return {
+            ...p,
+            stock: overrides[p.id].stock,
+            isSoldOut: overrides[p.id].isSoldOut,
+          };
+        }
+        return p;
+      });
+      setSellerProducts(merged);
     } catch (err) {
       console.warn('Failed to fetch seller products:', err);
     } finally {
       setIsLoadingSellerProducts(false);
     }
-  }, [activeShop]);
+  }, [activeShop, activeUser]);
 
   React.useEffect(() => {
     if (activeShop) {

@@ -443,7 +443,11 @@ export async function getSellerProducts(token: string): Promise<Product[]> {
   });
   if (!res.ok) throw new Error('Failed to fetch shop products');
   const result = await res.json();
-  return result.data?.products ?? (Array.isArray(result) ? result : []);
+  if (Array.isArray(result)) return result;
+  if (Array.isArray(result.data)) return result.data;
+  if (Array.isArray(result.data?.products)) return result.data.products;
+  if (Array.isArray(result.products)) return result.products;
+  return [];
 }
 
 export async function createSellerProduct(
