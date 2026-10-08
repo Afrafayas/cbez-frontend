@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Plus, Trash2, FolderPlus, Tag, ChevronLeft, ShieldCheck } from 'lucide-react';
-import { Category, Brand, SubscriptionPlan } from '../types';
+import { X, Plus, Trash2, FolderPlus, Tag, ChevronLeft, ShieldCheck, Image as ImageIcon, Upload } from 'lucide-react';
+import { Category, Brand, SubscriptionPlan, Banner, Shop } from '../types';
 import { 
   getCategories, 
   createCategory, 
@@ -10,7 +10,15 @@ import {
   deleteBrand,
   getSubscriptionPlans,
   createSubscriptionPlan,
-  deleteSubscriptionPlan
+  deleteSubscriptionPlan,
+  getAllBanners,
+  getActiveBanners,
+  createBanner,
+  toggleBannerStatus,
+  deleteBannerApi,
+  getShops,
+  uploadBannerImageApi,
+  formatImageUrl
 } from '../services/apiService';
 import { useAppDispatch, useAppSelector } from '../store';
 import { 
@@ -33,10 +41,12 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
 }) => {
   const dispatch = useAppDispatch();
   const storePlans = useAppSelector(state => state.products.subscriptionPlans);
-  const [activeTab, setActiveTab] = useState<'categories' | 'brands' | 'subscriptions'>('categories');
+  const [activeTab, setActiveTab] = useState<'categories' | 'brands' | 'subscriptions' | 'banners'>('categories');
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<Brand[]>([]);
   const [plans, setPlans] = useState<SubscriptionPlan[]>(storePlans);
+  const [banners, setBanners] = useState<Banner[]>([]);
+  const [shopsList, setShopsList] = useState<Shop[]>([]);
   const [loading, setLoading] = useState(false);
 
   // New Category Form State
@@ -53,27 +63,41 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
   const [planDesc, setPlanDesc] = useState('');
   const [planLimit, setPlanLimit] = useState('10');
 
+  // New Banner Form State
+  const [bannerTitle, setBannerTitle] = useState('');
+  const [bannerDetails, setBannerDetails] = useState('');
+  const [bannerImage, setBannerImage] = useState('');
+  const [bannerType, setBannerType] = useState<'banner' | 'ads'>('banner');
+  const [bannerShopId, setBannerShopId] = useState('');
+  const [bannerIsActive, setBannerIsActive] = useState(true);
+  const [isUploadingBannerImg, setIsUploadingBannerImg] = useState(false);
+
   const token = localStorage.getItem('mlx_token') || '';
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [cats, brs, loadedPlans] = await Promise.all([
+      const [cats, brs, loadedPlans, loadedBanners, loadedShops] = await Promise.all([
         getCategories().catch(() => []),
         getBrands().catch(() => []),
-        getSubscriptionPlans().catch(() => storePlans)
+        getSubscriptionPlans().catch(() => storePlans),
+        getAllBanners(token).catch(() => getActiveBanners().catch(() => [])),
+        getShops().catch(() => [])
       ]);
       setCategories(cats);
       setBrands(brs);
+      setBanners(loadedBanners);
+      setShopsList(loadedShops);
       const finalPlans = loadedPlans.length > 0 ? loadedPlans : storePlans;
       setPlans(finalPlans);
       dispatch(setSubscriptionPlans(finalPlans));
     } catch (err) {
-      console.warn('Failed to load categories/brands/plans:', err);
+      console.warn('Failed to load categories/brands/plans/banners:', err);
     } finally {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     if (isOpen) {
@@ -199,7 +223,125 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
     onToast(`Plan "${name}" deleted`, 'info');
   };
 
+
+  const handleCreateBanner = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bannerTitle.trim()) {
+      onToast('Banner title is required', 'info');
+      return;
+    }
+    if (!bannerImage.trim()) {
+      onToast('Banner image URL or file is required', 'info');
+      return;
+    }
+    if (bannerType === 'ads' && !bannerShopId.trim()) {
+      onToast('Please select a shop for Ads type banner', 'info');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      await createBanner(
+        {
+          title: bannerTitle.trim(),
+          details: bannerDetails.trim() || undefined,
+          image: bannerImage.trim(),
+          type: bannerType,
+          shopId: bannerType === 'ads' ? bannerShopId.trim() : undefined,
+          isActive: bannerIsActive
+        },
+        token
+      );
+      onToast('Banner created successfully!', 'success');
+      setBannerTitle('');
+      setBannerDetails('');
+      setBannerImage('');
+      setBannerShopId('');
+      setBannerIsActive(true);
+      fetchData();
+    } catch (err: any) {
+      onToast(err.message || 'Failed to create banner', 'warning');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleToggleBanner = async (bannerId: string, currentActive: boolean) => {
+    try {
+      await toggleBannerStatus(bannerId, !currentActive, token);
+      setBanners(prev => prev.map(b => b.id === bannerId ? { ...b, isActive: !currentActive } : b));
+      onToast(`Banner ${!currentActive ? 'activated' : 'deactivated'} successfully`, 'info');
+    } catch (err: any) {
+      onToast(err.message || 'Failed to toggle banner status', 'warning');
+    }
+  };
+
+  const handleDeleteBanner = async (bannerId: string) => {
+    if (!window.confirm('Are you sure you want to delete this banner?')) return;
+    try {
+      await deleteBannerApi(bannerId, token);
+      setBanners(prev => prev.filter(b => b.id !== bannerId));
+      onToast('Banner deleted successfully', 'success');
+    } catch (err: any) {
+      onToast(err.message || 'Failed to delete banner', 'warning');
+    }
+  };
+
+  const handleBannerFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      onToast('Please select a valid image file (JPG, PNG, WEBP)', 'info');
+      return;
+    }
+
+    setIsUploadingBannerImg(true);
+    try {
+      if (token) {
+        const uploadedUrl = await uploadBannerImageApi(file, token).catch(() => '');
+        if (uploadedUrl) {
+          setBannerImage(uploadedUrl);
+          onToast('Banner image uploaded to server!', 'success');
+          return;
+        }
+      }
+      // Fallback base64 resize
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        if (!result) return;
+        const tempImg = new Image();
+        tempImg.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_DIM = 1200;
+          let w = tempImg.width;
+          let h = tempImg.height;
+          if (w > MAX_DIM) {
+            h = Math.round((h * MAX_DIM) / w);
+            w = MAX_DIM;
+          }
+          canvas.width = w;
+          canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx?.drawImage(tempImg, 0, 0, w, h);
+          const compressed = canvas.toDataURL('image/jpeg', 0.85);
+          setBannerImage(compressed);
+          onToast('Banner image processed!', 'success');
+        };
+        tempImg.src = result;
+      };
+      reader.readAsDataURL(file);
+    } catch (err: any) {
+      console.warn('Upload banner image error:', err);
+      onToast(err.message || 'Failed to upload image file', 'warning');
+    } finally {
+      setIsUploadingBannerImg(false);
+    }
+  };
+
   return (
+
     <div className="modal-overlay" onClick={onClose}>
       <div
         className="modal-content"
@@ -337,7 +479,33 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
             <ShieldCheck size={16} />
             Plans ({plans.length})
           </button>
+          <button
+            type="button"
+            className={`role-tab ${activeTab === 'banners' ? 'active' : ''}`}
+            onClick={() => setActiveTab('banners')}
+            style={{
+              flex: 1,
+              padding: '0.65rem 1rem',
+              borderRadius: '9px',
+              border: 'none',
+              fontWeight: activeTab === 'banners' ? 700 : 600,
+              fontSize: '0.9rem',
+              background: activeTab === 'banners' ? '#ffffff' : 'transparent',
+              color: activeTab === 'banners' ? '#ea580c' : '#64748b',
+              boxShadow: activeTab === 'banners' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '0.5rem',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+            }}
+          >
+            <ImageIcon size={16} />
+            Banners ({banners.length})
+          </button>
         </div>
+
 
         {activeTab === 'categories' ? (
           <div>
@@ -576,8 +744,9 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
               </div>
             )}
           </div>
-        ) : (
+        ) : activeTab === 'subscriptions' ? (
           <div>
+
             {/* Create Subscription Plan Form */}
             <form
               onSubmit={handleCreatePlan}
@@ -726,8 +895,292 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
               ))}
             </div>
           </div>
+        ) : (
+          /* Banners Tab Content */
+          <div>
+            {/* Create Banner Form */}
+            <form
+              onSubmit={handleCreateBanner}
+              style={{
+                background: '#f8fafc',
+                padding: '1.25rem',
+                borderRadius: '14px',
+                border: '1px solid #e2e8f0',
+                marginBottom: '1.5rem',
+              }}
+            >
+              <h4 style={{ margin: '0 0 1rem 0', color: '#0f172a', fontSize: '1rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                <Plus size={16} style={{ color: '#ea580c' }} />
+                Add New Banner / Ad Showcase
+              </h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' }}>
+                    Banner Headline *
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Festival Mega Sale on iPhones"
+                    value={bannerTitle}
+                    onChange={(e) => setBannerTitle(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.6rem 0.8rem',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '0.875rem'
+                    }}
+                  />
+                </div>
+
+                <div>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' }}>
+                    Banner Type
+                  </label>
+                  <select
+                    value={bannerType}
+                    onChange={(e) => setBannerType(e.target.value as 'banner' | 'ads')}
+                    style={{
+                      width: '100%',
+                      padding: '0.6rem 0.8rem',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '0.875rem',
+                      background: '#fff'
+                    }}
+                  >
+                    <option value="banner">Platform Banner (General Offer)</option>
+                    <option value="ads">Sponsored Store Ad (Linked to Shop)</option>
+                  </select>
+                </div>
+
+                {bannerType === 'ads' && (
+                  <div style={{ gridColumn: 'span 2' }}>
+                    <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' }}>
+                      Select Linked Shop *
+                    </label>
+                    <select
+                      value={bannerShopId}
+                      onChange={(e) => setBannerShopId(e.target.value)}
+                      required={bannerType === 'ads'}
+                      style={{
+                        width: '100%',
+                        padding: '0.6rem 0.8rem',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '0.875rem',
+                        background: '#fff'
+                      }}
+                    >
+                      <option value="">-- Choose Shop --</option>
+                      {shopsList.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.city})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' }}>
+                    Details / Description Subtext
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Up to 40% off on Grade A devices with store warranty"
+                    value={bannerDetails}
+                    onChange={(e) => setBannerDetails(e.target.value)}
+                    style={{
+                      width: '100%',
+                      padding: '0.6rem 0.8rem',
+                      borderRadius: '8px',
+                      border: '1px solid #cbd5e1',
+                      fontSize: '0.875rem'
+                    }}
+                  />
+                </div>
+
+                <div style={{ gridColumn: 'span 2' }}>
+                  <label style={{ display: 'block', fontSize: '0.8rem', fontWeight: 600, color: '#475569', marginBottom: '0.35rem' }}>
+                    Banner Image (Upload Image File or paste URL) *
+                  </label>
+                  <div style={{ display: 'flex', gap: '0.75rem', alignItems: 'center' }}>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Image URL or pick file..."
+                      value={bannerImage}
+                      onChange={(e) => setBannerImage(e.target.value)}
+                      style={{
+                        flex: 1,
+                        padding: '0.6rem 0.8rem',
+                        borderRadius: '8px',
+                        border: '1px solid #cbd5e1',
+                        fontSize: '0.875rem'
+                      }}
+                    />
+                    <label
+                      style={{
+                        padding: '0.6rem 1rem',
+                        borderRadius: '8px',
+                        background: '#ea580c',
+                        color: '#fff',
+                        fontSize: '0.85rem',
+                        fontWeight: 600,
+                        cursor: 'pointer',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '0.4rem',
+                        whiteSpace: 'nowrap'
+                      }}
+                    >
+                      <Upload size={14} />
+                      {isUploadingBannerImg ? 'Uploading...' : 'Browse File'}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleBannerFileSelect}
+                        style={{ display: 'none' }}
+                      />
+                    </label>
+                  </div>
+                  {bannerImage && (
+                    <div style={{ marginTop: '0.75rem', display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                      <img
+                        src={formatImageUrl(bannerImage)}
+                        alt="Preview"
+                        style={{ width: '120px', height: '60px', objectFit: 'cover', borderRadius: '8px', border: '1px solid #e2e8f0' }}
+                        onError={(e) => { (e.target as HTMLImageElement).src = "/images/iphone_17_pro_1.png"; }}
+                      />
+                      <span style={{ fontSize: '0.75rem', color: '#16a34a', fontWeight: 600 }}>✓ Image Preview Loaded</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{ marginTop: '1.25rem', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.85rem', fontWeight: 600, color: '#334155', cursor: 'pointer' }}>
+                  <input
+                    type="checkbox"
+                    checked={bannerIsActive}
+                    onChange={(e) => setBannerIsActive(e.target.checked)}
+                  />
+                  <span>Active immediately on main hero slider</span>
+                </label>
+                <button
+                  type="submit"
+                  disabled={loading || isUploadingBannerImg}
+                  style={{
+                    padding: '0.65rem 1.5rem',
+                    background: '#ea580c',
+                    color: '#fff',
+                    border: 'none',
+                    borderRadius: '8px',
+                    fontWeight: 700,
+                    fontSize: '0.875rem',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {loading ? 'Saving...' : 'Publish Banner'}
+                </button>
+              </div>
+            </form>
+
+            {/* Banners List */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', maxHeight: '350px', overflowY: 'auto' }}>
+              {banners.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '2rem 1rem', color: '#94a3b8', fontSize: '0.9rem' }}>
+                  No banners created yet. Add your first promotional banner or store ad above!
+                </div>
+              ) : (
+                banners.map((b) => (
+                  <div
+                    key={b.id}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      padding: '0.9rem 1rem',
+                      background: '#ffffff',
+                      borderRadius: '10px',
+                      border: '1px solid #e2e8f0',
+                      gap: '1rem'
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', flex: 1, minWidth: 0 }}>
+                      <img
+                        src={formatImageUrl(b.image)}
+                        alt={b.title}
+                        style={{ width: '80px', height: '48px', objectFit: 'cover', borderRadius: '6px', border: '1px solid #cbd5e1', flexShrink: 0 }}
+                        onError={(e) => { (e.target as HTMLImageElement).src = "/images/iphone_17_pro_1.png"; }}
+                      />
+                      <div style={{ minWidth: 0 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', flexWrap: 'wrap' }}>
+                          <strong style={{ fontSize: '0.95rem', color: '#0f172a' }}>{b.title}</strong>
+                          <span
+                            style={{
+                              fontSize: '0.7rem',
+                              padding: '2px 8px',
+                              borderRadius: '10px',
+                              fontWeight: 700,
+                              background: b.type === 'ads' ? '#eff6ff' : '#fff7ed',
+                              color: b.type === 'ads' ? '#2563eb' : '#ea580c',
+                              border: b.type === 'ads' ? '1px solid #bfdbfe' : '1px solid #ffedd5'
+                            }}
+                          >
+                            {b.type === 'ads' ? `Ad (${b.shop?.name || 'Shop'})` : 'Platform Banner'}
+                          </span>
+                        </div>
+                        {b.details && (
+                          <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.2rem 0 0 0', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {b.details}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', flexShrink: 0 }}>
+                      <button
+                        type="button"
+                        onClick={() => handleToggleBanner(b.id, b.isActive)}
+                        style={{
+                          padding: '0.35rem 0.75rem',
+                          fontSize: '0.78rem',
+                          fontWeight: 700,
+                          borderRadius: '6px',
+                          border: b.isActive ? '1px solid #bbf7d0' : '1px solid #e2e8f0',
+                          background: b.isActive ? '#f0fdf4' : '#f8fafc',
+                          color: b.isActive ? '#16a34a' : '#64748b',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        {b.isActive ? 'Active' : 'Inactive'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteBanner(b.id)}
+                        style={{
+                          background: '#fef2f2',
+                          border: '1px solid #fee2e2',
+                          color: '#ef4444',
+                          cursor: 'pointer',
+                          padding: '0.4rem',
+                          borderRadius: '6px'
+                        }}
+                      >
+                        <Trash2 size={15} />
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         )}
       </div>
     </div>
   );
 };
+

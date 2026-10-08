@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '../config/api';
-import { Product, Shop, Lead, Category, Brand, SubscriptionPlan } from '../types';
+import { Product, Shop, Lead, Category, Brand, SubscriptionPlan, Banner } from '../types';
+
 
 export async function getProducts(params?: {
   search?: string;
@@ -1096,4 +1097,117 @@ export async function deleteProductApi(productId: string, token: string): Promis
   }
   return result;
 }
+
+/* Image URL Formatter Helper */
+export function formatImageUrl(path?: string): string {
+  if (!path) return '';
+  if (path.startsWith('http://') || path.startsWith('https://') || path.startsWith('data:')) {
+    return path;
+  }
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  if (cleanPath.startsWith('/uploads/')) {
+    const origin = API_BASE_URL.replace(/\/api\/?$/, '');
+    return `${origin}${cleanPath}`;
+  }
+  return path;
+}
+
+/* --- BANNER API SERVICES --- */
+
+export async function getActiveBanners(type?: string): Promise<Banner[]> {
+  const query = type ? `?type=${encodeURIComponent(type)}` : '';
+  const res = await fetch(`${API_BASE_URL}/banners/active${query}`);
+  if (!res.ok) throw new Error('Failed to fetch active banners');
+  const result = await res.json();
+  return result.data ?? (Array.isArray(result) ? result : []);
+}
+
+export async function getAllBanners(token: string, type?: string): Promise<Banner[]> {
+  const query = type ? `?type=${encodeURIComponent(type)}` : '';
+  const res = await fetch(`${API_BASE_URL}/banners${query}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!res.ok) throw new Error('Failed to fetch banners list');
+  const result = await res.json();
+  return result.data ?? (Array.isArray(result) ? result : []);
+}
+
+export async function createBanner(
+  data: { title: string; details?: string; image: string; type: 'banner' | 'ads'; shopId?: string; isActive?: boolean },
+  token: string
+): Promise<Banner> {
+  const res = await fetch(`${API_BASE_URL}/banners`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.message || 'Failed to create banner');
+  return result.data || result;
+}
+
+export async function updateBanner(
+  id: string,
+  data: Partial<{ title: string; details: string; image: string; type: 'banner' | 'ads'; shopId: string; isActive: boolean }>,
+  token: string
+): Promise<Banner> {
+  const res = await fetch(`${API_BASE_URL}/banners/${id}`, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(data),
+  });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.message || 'Failed to update banner');
+  return result.data || result;
+}
+
+export async function toggleBannerStatus(id: string, isActive: boolean, token: string): Promise<Banner> {
+  const res = await fetch(`${API_BASE_URL}/banners/${id}/status`, {
+    method: 'PATCH',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify({ isActive }),
+  });
+  const result = await res.json();
+  if (!res.ok) throw new Error(result.message || 'Failed to update banner status');
+  return result.data || result;
+}
+
+export async function deleteBannerApi(id: string, token: string): Promise<{ success: boolean; message?: string }> {
+  const res = await fetch(`${API_BASE_URL}/banners/${id}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+  });
+  const result = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(result.message || 'Failed to delete banner');
+  return result;
+}
+
+export async function uploadBannerImageApi(file: File, token?: string): Promise<string> {
+  const formData = new FormData();
+  formData.append('file', file);
+  const headers: Record<string, string> = {};
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${API_BASE_URL}/upload/single?folder=banners`, {
+    method: 'POST',
+    headers,
+    body: formData,
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.message || 'Failed to upload banner image');
+  return data.data?.url || data.url || '';
+}
+
 
