@@ -6,9 +6,11 @@ import { AddEditProductModal } from './components/AddEditProductModal';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { Footer } from './components/Footer';
 import { useFilterSearchParams } from './hooks/useFilterSearchParams';
-import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, reverseGeocodeCoords, getNearestKnownCity, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, getBrands, deleteProductApi, getSellerProducts, updateSellerProduct, getSellerCustomerActivityLogs } from './services/apiService';
+import { ManageCategoriesBrandsModal } from './components/ManageCategoriesBrandsModal';
+import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, reverseGeocodeCoords, getNearestKnownCity, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, getBrands, deleteProductApi, getSellerProducts, updateSellerProduct, getSellerCustomerActivityLogs, getActiveBanners, formatImageUrl } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import { LocationAutocompleteInput } from './components/LocationAutocompleteInput';
+
 import React, { ChangeEvent, FormEvent } from 'react';
 import {
   Search,
@@ -90,7 +92,8 @@ import {
   setDashboardTab
 } from './store/uiSlice';
 import { CATEGORIES, CITIES, BUDGET_PRESETS, BRANDS, INITIAL_SHOPS } from './data/mockData';
-import { Product, Shop, Lead, User as CustomerUser, calculateShopProfileCompletion } from './types';
+import { Product, Shop, Lead, User as CustomerUser, calculateShopProfileCompletion, Banner } from './types';
+
 
 interface CustomSelectProps {
   value: string;
@@ -727,39 +730,85 @@ export default function App() {
     fetchFollowers();
   }, [fetchFollowers, dashboardTab, location.pathname]);
 
-  const slides = [
-    {
-      badge: "🔥 Hot Deal of the Week",
-      title: "Up to 40% Off on Certified Used iPhones",
-      subtext: "Hand-tested Grade A devices with store warranty. Direct deals, zero platform commission.",
-      offerText: "Limited stock starting at ₹12,000",
-      image: "/images/iphone_17_pro_1.png",
-      bgColor: "#111217"
-    },
-    {
-      badge: "💻 Tech For Students",
-      title: "Spotless Refurbished MacBooks & Laptops",
-      subtext: "Corporate refurbished items. Minimum 3 months seller warranty and fast chargers included.",
-      offerText: "Deals starting at ₹18,000",
-      image: "/images/macbook_air_m3.png",
-      bgColor: "#0f172a"
-    },
-    {
-      badge: "🛡️ MLX Verified Local Stores",
-      title: "Buy Directly From Local Dealers Near You",
-      subtext: "Pick your city location, click Call/WhatsApp to inspect before you buy. 100% safe store checks.",
-      offerText: "Available in Kochi, Calicut, Trivandrum & Thrissur",
-      image: "/images/watch_ultra_2.png",
-      bgColor: "#022c22"
+  const [activeBanners, setActiveBanners] = React.useState<Banner[]>([]);
+  const [showManageBannersModal, setShowManageBannersModal] = React.useState<boolean>(false);
+
+  const loadActiveBanners = React.useCallback(async () => {
+    try {
+      const list = await getActiveBanners();
+      if (Array.isArray(list)) {
+        setActiveBanners(list);
+      }
+    } catch (err) {
+      console.warn('Failed to fetch active banners from backend:', err);
     }
-  ];
+  }, []);
 
   React.useEffect(() => {
+    loadActiveBanners();
+  }, [loadActiveBanners, location.pathname]);
+
+  const slides = React.useMemo(() => {
+    const defaultSlides = [
+      {
+        badge: "🔥 Hot Deal of the Week",
+        title: "Up to 40% Off on Certified Used iPhones",
+        subtext: "Hand-tested Grade A devices with store warranty. Direct deals, zero platform commission.",
+        offerText: "Limited stock starting at ₹12,000",
+        image: "/images/iphone_17_pro_1.png",
+        bgColor: "#111217",
+        shopId: null,
+        shop: null
+      },
+      {
+        badge: "💻 Tech For Students",
+        title: "Spotless Refurbished MacBooks & Laptops",
+        subtext: "Corporate refurbished items. Minimum 3 months seller warranty and fast chargers included.",
+        offerText: "Deals starting at ₹18,000",
+        image: "/images/macbook_air_m3.png",
+        bgColor: "#0f172a",
+        shopId: null,
+        shop: null
+      },
+      {
+        badge: "🛡️ MLX Verified Local Stores",
+        title: "Buy Directly From Local Dealers Near You",
+        subtext: "Pick your city location, click Call/WhatsApp to inspect before you buy. 100% safe store checks.",
+        offerText: "Available in Kochi, Calicut, Trivandrum & Thrissur",
+        image: "/images/watch_ultra_2.png",
+        bgColor: "#022c22",
+        shopId: null,
+        shop: null
+      }
+    ];
+
+    if (!activeBanners || activeBanners.length === 0) return defaultSlides;
+
+    const bgColors = ["#111217", "#0f172a", "#022c22", "#1e1b4b", "#31101e", "#064e3b"];
+    return activeBanners.map((b, idx) => {
+      const isAd = b.type === 'ads';
+      const shopName = b.shop?.name || (shops.find(s => s.id === b.shopId)?.name) || 'Featured Store';
+      return {
+        badge: isAd ? `🏪 Sponsored Ad • ${shopName}` : '🔥 Special Platform Banner',
+        title: b.title,
+        subtext: b.details || (isAd ? `Explore verified deals from ${shopName} in ${b.shop?.city || 'your area'}.` : 'Certified devices with store warranty.'),
+        offerText: isAd ? `📍 ${b.shop?.city || 'Local Store'}${b.shop?.phone ? ` • Contact: ${b.shop.phone}` : ''}` : 'Special Verified Offers',
+        image: formatImageUrl(b.image),
+        bgColor: bgColors[idx % bgColors.length],
+        shopId: b.shopId,
+        shop: b.shop || shops.find(s => s.id === b.shopId) || null
+      };
+    });
+  }, [activeBanners, shops]);
+
+  React.useEffect(() => {
+    if (slides.length <= 1) return;
     const timer = setInterval(() => {
-      setCurrentSlide(prev => (prev + 1) % 3);
+      setCurrentSlide(prev => (prev + 1) % slides.length);
     }, 4500);
     return () => clearInterval(timer);
-  }, []);
+  }, [slides.length]);
+
 
   const isAnyModalActive = Boolean(
     showAuthModal ||
@@ -2073,25 +2122,56 @@ export default function App() {
       )}
 
       {/* --- TOP DYNAMIC SLIDER (Marketplace Main View Only) --- */}
-      {location.pathname === '/' && !activeShop && (
-        <section className="slider-banner-section" style={{ background: slides[currentSlide].bgColor }}>
+      {location.pathname === '/' && !activeShop && slides.length > 0 && (
+        <section className="slider-banner-section" style={{ background: slides[currentSlide % slides.length]?.bgColor || '#111217' }}>
           <div className="slider-banner-container">
             <div className="slider-content-pane">
               <span className="slider-badge">
                 <ShieldCheck size={14} />
-                <span>{slides[currentSlide].badge}</span>
+                <span>{slides[currentSlide % slides.length]?.badge}</span>
               </span>
-              <h2 className="slider-title">{slides[currentSlide].title}</h2>
-              <p className="slider-subtext">{slides[currentSlide].subtext}</p>
+              <h2 className="slider-title">{slides[currentSlide % slides.length]?.title}</h2>
+              <p className="slider-subtext">{slides[currentSlide % slides.length]?.subtext}</p>
               <div className="slider-offer-badge">
                 <Tag size={14} />
-                <span>{slides[currentSlide].offerText}</span>
+                <span>{slides[currentSlide % slides.length]?.offerText}</span>
               </div>
+              {slides[currentSlide % slides.length]?.shopId && (
+                <button
+                  className="btn-primary"
+                  onClick={() => {
+                    const shop = slides[currentSlide % slides.length]?.shop || shops.find(s => s.id === slides[currentSlide % slides.length]?.shopId);
+                    if (shop) {
+                      dispatch(setSearchQuery(shop.name));
+                      triggerToast(`Filtered catalog for ${shop.name} (${shop.city})`, 'info');
+                    }
+                  }}
+                  style={{
+                    marginTop: '0.85rem',
+                    padding: '0.5rem 1.1rem',
+                    borderRadius: '8px',
+                    fontSize: '0.85rem',
+                    fontWeight: 700,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    cursor: 'pointer',
+                    width: 'fit-content',
+                    background: '#ea580c',
+                    color: '#fff',
+                    border: 'none'
+                  }}
+                >
+                  <Store size={15} />
+                  <span>Visit Store: {slides[currentSlide % slides.length]?.shop?.name || 'Local Partner'}</span>
+                  <ChevronRight size={15} />
+                </button>
+              )}
               <div className="slider-controls">
                 {slides.map((_, idx) => (
                   <button
                     key={idx}
-                    className={`slider-dot ${idx === currentSlide ? 'active' : ''}`}
+                    className={`slider-dot ${idx === (currentSlide % slides.length) ? 'active' : ''}`}
                     onClick={() => setCurrentSlide(idx)}
                     title={`Slide ${idx + 1}`}
                   />
@@ -2101,11 +2181,19 @@ export default function App() {
 
             <div className="slider-image-pane">
               <div className="slider-radial-glow"></div>
-              <img src={slides[currentSlide].image} alt="Promotion device" className="slider-floating-img" />
+              <img
+                src={slides[currentSlide % slides.length]?.image}
+                alt={slides[currentSlide % slides.length]?.title || "Promotion device"}
+                className="slider-floating-img"
+                onError={(e) => {
+                  (e.target as HTMLImageElement).src = "/images/iphone_17_pro_1.png";
+                }}
+              />
             </div>
           </div>
         </section>
       )}
+
 
       {/* --- MAIN MARKETPLACE / DASHBOARD VIEWS --- */}
       <Routes>
@@ -3323,7 +3411,17 @@ export default function App() {
                   <User size={16} />
                   <span>Edit Shop Profile ({calculateShopProfileCompletion(activeShop, activeUser?.email).completionPercentage}%)</span>
                 </button>
+
+                <button
+                  className="dash-menu-btn"
+                  onClick={() => setShowManageBannersModal(true)}
+                  style={{ color: '#ea580c', border: '1px solid #ffedd5', background: '#fff7ed' }}
+                >
+                  <Tag size={16} />
+                  <span>Manage Banners & Ads</span>
+                </button>
               </div>
+
             </aside>
 
             <section style={{ flex: 1 }}>
@@ -4930,8 +5028,19 @@ export default function App() {
         </div>
       )}
 
+      {/* --- PLATFORM BANNERS & CATEGORIES MANAGEMENT MODAL --- */}
+      <ManageCategoriesBrandsModal
+        isOpen={showManageBannersModal}
+        onClose={() => {
+          setShowManageBannersModal(false);
+          loadActiveBanners();
+        }}
+        onToast={triggerToast}
+      />
+
       {/* --- AUTHENTICATION MODAL (LOGIN & REGISTRATION) --- */}
       <AuthModal onToast={triggerToast} />
     </div>
   );
 }
+

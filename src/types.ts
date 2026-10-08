@@ -151,6 +151,28 @@ export interface Brand {
   updatedAt?: string;
 }
 
+export interface Banner {
+  id: string;
+  title: string;
+  details?: string | null;
+  image: string;
+  type: 'banner' | 'ads';
+  shopId?: string | null;
+  shop?: {
+    id: string;
+    name: string;
+    phone?: string;
+    whatsapp?: string;
+    city?: string;
+    district?: string;
+    profileImage?: string;
+  } | null;
+  isActive: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+
 export interface Lead {
   id: string;
   shopId: string;
