@@ -59,6 +59,7 @@ import {
 } from './store/authSlice';
 import {
   updateShop,
+  addProduct,
   editProduct,
   deleteProduct,
   setSelectedProduct,
@@ -70,6 +71,7 @@ import {
   setSubscriptionPlans,
   setCategories
 } from './store/productsSlice';
+
 import {
   setSearchQuery,
   setSelectedCategory,
@@ -4653,9 +4655,18 @@ export default function App() {
         onToast={triggerToast}
         onProductSaved={(savedProd) => {
           if (savedProd) {
-            setSellerProducts(prev => [savedProd, ...prev.filter(p => p.id !== savedProd.id)]);
+            dispatch(addProduct(savedProd));
+            setSellerProducts(prev => {
+              const filtered = prev.filter(p => p.id !== savedProd.id);
+              return [savedProd, ...filtered];
+            });
           }
           fetchSellerProducts();
+          getProducts().then(prods => {
+            if (Array.isArray(prods) && prods.length > 0) {
+              dispatch(setProducts(prods));
+            }
+          }).catch(() => {});
           if (activeShop?.id) {
             getShopSubscription(activeShop.id).then(subData => {
               if (subData?.usage) setShopSubscriptionUsage(subData.usage);
@@ -4663,6 +4674,7 @@ export default function App() {
           }
         }}
       />
+
 
       {/* --- DELETE PRODUCT CONFIRMATION MODAL (MATCHING MLX THEME) --- */}
       {productToDelete && (

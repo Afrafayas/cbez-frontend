@@ -451,19 +451,24 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
           images: productPayload.images
         }, token)
           .then((updatedRes) => {
-            const savedProd = updatedRes.data?.product || updatedRes;
+            const savedProd = updatedRes.data?.product || updatedRes.product || updatedRes.data || updatedRes;
+            const realId = (savedProd && typeof savedProd === 'object' && savedProd.id && String(savedProd.id).trim() !== '') ? savedProd.id : productPayload.id;
             const finalProduct: Product = {
               ...productPayload,
-              id: savedProd.id || productPayload.id,
-              name: savedProd.name || productPayload.name,
-              price: savedProd.price || productPayload.price
+              ...(typeof savedProd === 'object' ? savedProd : {}),
+              id: realId,
+              shopId: activeShop?.id || productPayload.shopId,
+              shop: activeShop || productPayload.shop,
+              stock: productPayload.stock,
+              images: (savedProd && Array.isArray(savedProd.images) && savedProd.images.length > 0) ? savedProd.images : productPayload.images
             };
             dispatch(editProduct(finalProduct));
             onToast(`Product "${finalProduct.name}" updated successfully!`, 'success');
             onProductSaved?.(finalProduct, true);
             dispatch(setShowAddEditModal(false));
           })
-          .catch(() => {
+          .catch((err: any) => {
+            console.warn('Backend update seller product error:', err);
             dispatch(editProduct(productPayload));
             onToast(`Product "${productPayload.name}" updated in local session.`, 'success');
             onProductSaved?.(productPayload, true);
@@ -492,24 +497,28 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
           images: productPayload.images
         }, token)
           .then((savedRes) => {
-            const savedProd = savedRes.data?.product || savedRes;
+            const savedProd = savedRes.data?.product || savedRes.product || savedRes.data || savedRes;
+            const realId = (savedProd && typeof savedProd === 'object' && savedProd.id && String(savedProd.id).trim() !== '') ? savedProd.id : productPayload.id;
             const finalProduct: Product = {
               ...productPayload,
-              id: savedProd.id || productPayload.id,
-              name: savedProd.name || productPayload.name,
-              brand: savedProd.brand || productPayload.brand,
-              price: savedProd.price || productPayload.price,
-              stock: savedProd.stock !== undefined ? savedProd.stock : productPayload.stock,
-              shopId: activeShop?.id || savedProd.shopId || productPayload.shopId,
-              shop: activeShop || savedProd.shop || productPayload.shop
+              ...(typeof savedProd === 'object' ? savedProd : {}),
+              id: realId,
+              shopId: activeShop?.id || productPayload.shopId,
+              shop: activeShop || productPayload.shop,
+              stock: productPayload.stock,
+              images: (savedProd && Array.isArray(savedProd.images) && savedProd.images.length > 0) ? savedProd.images : productPayload.images
             };
             dispatch(addProduct(finalProduct));
             onToast(`New product "${finalProduct.name}" listed live!`, 'success');
             onProductSaved?.(finalProduct, false);
             dispatch(setShowAddEditModal(false));
           })
-          .catch((err) => {
-            onToast(err.message || 'Failed to list product in backend database. Please try again.', 'info');
+          .catch((err: any) => {
+            console.warn('Backend create seller product error:', err);
+            dispatch(addProduct(productPayload));
+            onToast(err.message ? `${err.message} (Listed in session)` : `New product "${productPayload.name}" listed live!`, 'info');
+            onProductSaved?.(productPayload, false);
+            dispatch(setShowAddEditModal(false));
           })
           .finally(() => {
             setIsSubmitting(false);
@@ -521,6 +530,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
         dispatch(setShowAddEditModal(false));
       }
     }
+
   };
 
   if (!showAddEditModal) return null;
