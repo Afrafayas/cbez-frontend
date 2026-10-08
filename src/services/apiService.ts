@@ -554,8 +554,13 @@ export async function checkFollowStatus(shopId: string, token: string): Promise<
 }
 
 export async function getShopFollowers(token: string): Promise<{ count: number; followers: Array<{ id: string; name: string; email?: string; phone?: string; followedAt: string }> }> {
-  const res = await fetch(`${API_BASE_URL}/follows/shop-followers`, {
-    headers: { Authorization: `Bearer ${token}` },
+  const ts = Date.now();
+  const res = await fetch(`${API_BASE_URL}/follows/shop-followers?_t=${ts}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    cache: 'no-store',
   });
   if (!res.ok) throw new Error('Failed to fetch shop followers');
   const result = await res.json();

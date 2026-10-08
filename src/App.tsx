@@ -43,7 +43,8 @@ import {
   Clock,
   Calendar,
   Heart,
-  Activity
+  Activity,
+  RefreshCw
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from './store';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
@@ -700,22 +701,31 @@ export default function App() {
     loadShopSubscription();
   }, [activeShop?.id, dispatch]);
 
-  React.useEffect(() => {
-    async function fetchFollowers() {
-      if (activeShop && dashboardTab === 'followers') {
-        const token = localStorage.getItem('mlx_token');
-        if (!token) return;
-        try {
-          const res = await getShopFollowers(token);
-          setShopFollowers(res.followers || []);
-          setShopFollowersCount(res.count || (res.followers ? res.followers.length : 0));
-        } catch (err) {
-          console.warn('Failed to load shop followers:', err);
-        }
-      }
+  const [isRefreshingFollowers, setIsRefreshingFollowers] = React.useState<boolean>(false);
+
+  const fetchFollowers = React.useCallback(async (isManual = false) => {
+    if (!activeShop) return;
+    const token = localStorage.getItem('mlx_token');
+    if (!token) return;
+
+    if (isManual) setIsRefreshingFollowers(true);
+    try {
+      const res = await getShopFollowers(token);
+      const list = res.followers || [];
+      setShopFollowers(list);
+      setShopFollowersCount(res.count || list.length);
+      if (isManual) triggerToast('⚡ Followers list refreshed in real-time!', 'success');
+    } catch (err) {
+      console.warn('Failed to load shop followers:', err);
+      if (isManual) triggerToast('Failed to refresh followers list', 'info');
+    } finally {
+      if (isManual) setIsRefreshingFollowers(false);
     }
+  }, [activeShop]);
+
+  React.useEffect(() => {
     fetchFollowers();
-  }, [activeShop, dashboardTab]);
+  }, [fetchFollowers, dashboardTab, location.pathname]);
 
   const slides = [
     {
@@ -3720,21 +3730,50 @@ export default function App() {
                 /* My Store Followers Panel */
                 <div className="dashboard-panel">
                   {(() => {
-                    const validFollowers = shopFollowers.filter(
-                      (follower) => follower.id !== activeShop?.id && follower.name !== activeShop?.name
-                    );
+                    const validFollowers = Array.isArray(shopFollowers) ? shopFollowers : [];
 
                     return (
                       <>
-                        <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                           <div>
                             <h3 className="panel-title">My Store Followers</h3>
                             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary-light)' }}>
                               Customers who are following <strong>{activeShop?.name}</strong> for inventory updates
                             </div>
                           </div>
-                          <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '0.4rem 0.85rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, color: '#2563eb' }}>
-                            Total Followers: {validFollowers.length}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <button
+                              type="button"
+                              onClick={() => fetchFollowers(true)}
+                              disabled={isRefreshingFollowers}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.4rem',
+                                padding: '0.4rem 0.85rem',
+                                borderRadius: '10px',
+                                border: '1px solid #cbd5e1',
+                                background: '#ffffff',
+                                color: '#0f172a',
+                                fontWeight: 600,
+                                fontSize: '0.82rem',
+                                cursor: isRefreshingFollowers ? 'not-allowed' : 'pointer',
+                                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.05)',
+                                transition: 'all 0.2s ease'
+                              }}
+                            >
+                              <RefreshCw
+                                size={14}
+                                style={{
+                                  color: '#ea580c',
+                                  animation: isRefreshingFollowers ? 'spin 1s linear infinite' : 'none'
+                                }}
+                              />
+                              <span>{isRefreshingFollowers ? 'Refreshing...' : 'Refresh'}</span>
+                            </button>
+                            <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '0.4rem 0.85rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, color: '#2563eb' }}>
+                              Total Followers: {validFollowers.length}
+                            </div>
                           </div>
                         </div>
 
