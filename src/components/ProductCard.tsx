@@ -15,6 +15,7 @@ interface ProductCardProps {
   onWhatsAppSeller: (product: Product, seller: Shop) => void;
   isWishlisted?: boolean;
   onToggleWishlist?: (product: Product) => void;
+  onGetDirections?: (seller: Shop) => void;
 }
 
 export const ProductCard: React.FC<ProductCardProps> = ({
@@ -23,7 +24,8 @@ export const ProductCard: React.FC<ProductCardProps> = ({
   onCallSeller,
   onWhatsAppSeller,
   isWishlisted = false,
-  onToggleWishlist
+  onToggleWishlist,
+  onGetDirections
 }) => {
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
@@ -369,9 +371,23 @@ export const ProductCard: React.FC<ProductCardProps> = ({
             )}
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.74rem', color: '#64748b', marginTop: '0.3rem' }}>
-            <MapPin size={12} style={{ color: '#94a3b8', flexShrink: 0 }} />
-            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+          <div
+            onClick={(e) => {
+              e.stopPropagation();
+              if (seller) {
+                if (onGetDirections) {
+                  onGetDirections(seller);
+                } else {
+                  const locationQuery = seller.address ? `${seller.name}, ${seller.address}, ${seller.city}` : `${seller.name}, ${seller.city}`;
+                  window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationQuery)}`, '_blank');
+                }
+              }
+            }}
+            title="Click for store directions"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.25rem', fontSize: '0.74rem', color: '#2563eb', marginTop: '0.3rem', cursor: 'pointer' }}
+          >
+            <MapPin size={12} style={{ color: '#2563eb', flexShrink: 0 }} />
+            <span style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', textDecoration: 'underline' }}>
               {seller?.city || seller?.address || 'Kerala, India'}
             </span>
           </div>

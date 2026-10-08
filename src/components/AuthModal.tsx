@@ -7,19 +7,15 @@ import {
   setActiveUser, 
   setActiveShop 
 } from '../store/authSlice';
-import { setUserLocation, setFilterCity } from '../store/filtersSlice';
 import { addShop } from '../store/productsSlice';
 import { Shop, User as CustomerUser, SubscriptionPlan } from '../types';
 import { 
-  
+  registerUser, 
   loginUser, 
   sendOtpApi, 
   verifyOtpApi, 
   getActiveSubscriptionPlans, 
-  reverseGeocodeCoords,
-  getNearestKnownCity,
-  updateUser,
-  createOrUpdateMyShop
+  reverseGeocodeCoords 
 } from '../services/apiService';
 import { PhoneInputWithCountry } from './PhoneInputWithCountry';
 import { LocationAutocompleteInput } from './LocationAutocompleteInput';
@@ -83,7 +79,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const [isLocating, setIsLocating] = useState(false);
   const [activePlans, setActivePlans] = useState<SubscriptionPlan[]>([]);
   const [regForm, setRegForm] = useState(INITIAL_REG_FORM);
-  const [verifiedUser, setVerifiedUser] = useState<any>(null);
 
   const resetAllForms = React.useCallback(() => {
     setLoginEmail('');
@@ -194,21 +189,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         role: authRole,
       });
 
-      const tokenVal = res.token || res.data?.token;
-      const userObj = res.user || res.data?.user;
-      const actualRole = userObj?.role || (userObj?.shop ? 'seller' : authRole);
+      // Step 3: If already an existing user, navigate to home/dashboard (Seller -> /seller-dashboard, Customer -> /)
+      if (!res.isNewUser && res.data?.token) {
+        const tokenVal = res.data.token;
+        const userObj = res.data.user;
+        const actualRole = userObj?.role || (userObj?.shop ? 'seller' : authRole);
 
-      if (tokenVal) {
         localStorage.setItem('mlx_token', tokenVal);
-      }
-      if (userObj) {
-        setVerifiedUser(userObj);
-      }
 
-      const isNew = Boolean(res.isNewUser || res.requiresRegistration || userObj?.isNew);
-
-      // Step 3: If already an existing completed user, navigate directly to dashboard/home
-      if (!isNew && tokenVal) {
         if (actualRole === 'seller' || userObj?.shop) {
           const shop: Shop = userObj?.shop || {
             id: userObj?.id || `shop-${Date.now()}`,
@@ -227,11 +215,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           dispatch(setActiveUser(null));
           dispatch(setAuthRole('seller'));
           dispatch(setActiveShop(shop));
-          if (shop.latitude && shop.longitude) {
-            const locName = shop.city || shop.address || 'Shop Location';
-            dispatch(setUserLocation({ latitude: shop.latitude, longitude: shop.longitude, locationName: locName }));
-            dispatch(setFilterCity(locName));
-          }
           dispatch(setDashboardTab('listings'));
           onToast(`Welcome back, ${shop.name}! Store signed in.`, 'success');
           handleCloseModal();
@@ -248,11 +231,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           dispatch(setActiveShop(null));
           dispatch(setAuthRole('customer'));
           dispatch(setActiveUser(user));
-          if (user.latitude && user.longitude) {
-            const locName = (userObj?.location) || getNearestKnownCity(user.latitude, user.longitude);
-            dispatch(setUserLocation({ latitude: user.latitude, longitude: user.longitude, locationName: locName }));
-            dispatch(setFilterCity(locName));
-          }
           onToast(`Welcome back, ${user.name}!`, 'success');
           handleCloseModal();
           navigate('/');
@@ -260,20 +238,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         return;
       }
 
-      // Step 4: If new user, populate existing fields and transition to details filling page
-      onToast('Phone number verified! Please complete your details.', 'success');
-      setRegForm(prev => ({
-        ...prev,
-        phone: userObj?.phone || otpPhone.trim(),
-        whatsapp: userObj?.shop?.whatsapp || userObj?.phone || otpPhone.trim(),
-        name: (userObj?.name && userObj.name !== 'Seller' && userObj.name !== 'Customer') ? userObj.name : prev.name,
-        ownerName: (userObj?.name && userObj.name !== 'Seller' && userObj.name !== 'Customer') ? userObj.name : prev.ownerName,
-        shopName: (userObj?.shop?.name && userObj.shop.name !== 'New Shop') ? userObj.shop.name : prev.shopName,
-        category: userObj?.shop?.category || prev.category || 'Mobiles & Tablets',
-        address: userObj?.shop?.address || prev.address || '',
-        city: userObj?.shop?.city || prev.city || 'Kochi',
-      }));
-      setAuthStep('details');
+      // Step 4: If NOT an existing user, transition to the original registration form
+      if (res.isNewUser) {
+        onToast('Phone number verified! Please complete your registration details.', 'success');
+        setRegForm(prev => ({
+          ...prev,
+          phone: otpPhone.trim(),
+          whatsapp: otpPhone.trim(),
+        }));
+        setAuthStep('details');
+      }
     } catch (err: any) {
       setOtpHasError(true);
       onToast(err.message || 'Invalid or expired OTP. Please check and try again.', 'info');
@@ -353,8 +327,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
       otpInputRefs.current[index + 1]?.focus();
     }
   };
-
-  // Image file handler for seller registration
 
   // Location handlers
   const handleUseCurrentLocation = () => {
@@ -438,40 +410,38 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
 
     try {
       setIsSubmitting(true);
-      const userId = verifiedUser?.id || 'me';
-
       if (authRole === 'customer') {
-        const updatedUser = await updateUser(userId, {
+        const resData = await registerUser({
           email: regForm.email,
+          password: regForm.password || 'cbez_otp_pass',
           name: regForm.name || 'Customer User',
           phone: regForm.phone || otpPhone.trim(),
           role: 'customer',
           latitude: regForm.latitude,
           longitude: regForm.longitude,
-          password: regForm.password || undefined,
         });
 
-        const user: CustomerUser = {
-          id: updatedUser?.id || userId,
-          name: updatedUser?.name || regForm.name || 'Customer User',
-          email: updatedUser?.email || regForm.email || '',
-          phone: updatedUser?.phone || regForm.phone || otpPhone.trim(),
-          latitude: updatedUser?.latitude ?? regForm.latitude ?? null,
-          longitude: updatedUser?.longitude ?? regForm.longitude ?? null,
-        };
-        dispatch(setActiveShop(null));
-        dispatch(setAuthRole('customer'));
-        dispatch(setActiveUser(user));
-        if (user.latitude && user.longitude) {
-          const locName = (updatedUser as any)?.location || regForm.city || regForm.address || getNearestKnownCity(user.latitude, user.longitude);
-          dispatch(setUserLocation({ latitude: user.latitude, longitude: user.longitude, locationName: locName }));
-          dispatch(setFilterCity(locName));
+        const tokenVal = resData?.token || resData?.data?.token;
+        const userObj = resData?.user || resData?.data?.user;
+
+        if (tokenVal) {
+          localStorage.setItem('mlx_token', tokenVal);
         }
-        onToast(`Customer profile saved! Welcome ${user.name}`, 'success');
+
+        const user: CustomerUser = {
+          id: userObj?.id || `user-${Date.now()}`,
+          name: userObj?.name || regForm.name || 'Customer User',
+          email: userObj?.email || regForm.email || '',
+          phone: userObj?.phone || regForm.phone || otpPhone.trim(),
+          latitude: userObj?.latitude ?? regForm.latitude ?? null,
+          longitude: userObj?.longitude ?? regForm.longitude ?? null,
+        };
+        dispatch(setActiveUser(user));
+        onToast(`Customer account created! Welcome ${user.name}`, 'success');
         handleCloseModal();
         navigate('/');
       } else {
-        // Seller details update
+        // Seller Registration
         const sellerName = regForm.ownerName || regForm.name;
         if (!sellerName || !regForm.shopName || !regForm.address) {
           onToast('Please fill out all required fields: Name, Shop Name, and Business Address.', 'info');
@@ -479,22 +449,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           return;
         }
 
-        // 1. Update user account info
-        await updateUser(userId, {
+        const resData = await registerUser({
           email: regForm.email,
-          name: sellerName,
+          password: regForm.password || 'cbez_otp_pass',
+          name: regForm.shopName || sellerName,
           phone: regForm.phone || otpPhone.trim(),
           role: 'seller',
-          latitude: regForm.latitude,
-          longitude: regForm.longitude,
-          password: regForm.password || undefined,
-        });
-
-        // 2. Update created shop info via shop update API
-        const shopPayload = {
-          name: regForm.shopName,
+          shopName: regForm.shopName,
           ownerName: sellerName,
-          phone: regForm.phone || otpPhone.trim(),
           whatsapp: regForm.whatsapp || regForm.phone || otpPhone.trim(),
           address: regForm.address,
           city: regForm.city || 'Kochi',
@@ -504,6 +466,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           aadhaarNumber: regForm.aadhaarNumber,
           panNumber: regForm.panNumber,
           profileImage: regForm.profileImage,
+          subscriptionPlanId: regForm.subscriptionPlanId || activePlans[0]?.id,
           latitude: regForm.latitude,
           longitude: regForm.longitude,
           gstNumber: regForm.gstNumber,
@@ -511,12 +474,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           businessHours: regForm.businessHours,
           businessDescription: regForm.businessDescription,
           alternatePhone: regForm.alternatePhone,
-        };
+        });
 
-        const updatedShop = await createOrUpdateMyShop(shopPayload);
+        const tokenVal = resData?.token || resData?.data?.token;
+        const userObj = resData?.user || resData?.data?.user;
 
-        const newShop: Shop = updatedShop || {
-          id: verifiedUser?.shop?.id || `shop-${Date.now()}`,
+        if (tokenVal) {
+          localStorage.setItem('mlx_token', tokenVal);
+        }
+
+        const newShop: Shop = userObj?.shop || {
+          id: userObj?.id || `shop-${Date.now()}`,
           name: regForm.shopName,
           ownerName: sellerName,
           phone: regForm.phone || otpPhone.trim(),
@@ -542,23 +510,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           rating: 5.0,
           joinedDate: 'Today'
         };
-
-        dispatch(setActiveUser(null));
         dispatch(addShop(newShop));
         dispatch(setActiveShop(newShop));
-        dispatch(setAuthRole('seller'));
-        if (newShop.latitude && newShop.longitude) {
-          const locName = newShop.city || newShop.address || 'Shop Location';
-          dispatch(setUserLocation({ latitude: newShop.latitude, longitude: newShop.longitude, locationName: locName }));
-          dispatch(setFilterCity(locName));
-        }
         dispatch(setDashboardTab('listings'));
-        onToast(`Merchant Shop Details Saved: ${newShop.name} (Status: PENDING Admin Approval)`, 'success');
+        onToast(`Merchant Shop Registered: ${newShop.name} (Status: PENDING Admin Approval)`, 'success');
         handleCloseModal();
         navigate('/seller-dashboard');
       }
     } catch (err: any) {
-      onToast(err.message || 'Failed to update details', 'info');
+      onToast(err.message || 'Registration failed', 'info');
     } finally {
       setIsSubmitting(false);
     }
@@ -607,11 +567,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         dispatch(setActiveUser(null));
         dispatch(setAuthRole('seller'));
         dispatch(setActiveShop(shop));
-        if (shop.latitude && shop.longitude) {
-          const locName = shop.city || shop.address || 'Shop Location';
-          dispatch(setUserLocation({ latitude: shop.latitude, longitude: shop.longitude, locationName: locName }));
-          dispatch(setFilterCity(locName));
-        }
         dispatch(setDashboardTab('listings'));
         onToast(`Merchant Shop Signed In: ${shop.name}`, 'success');
         handleCloseModal();
@@ -628,11 +583,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         dispatch(setActiveShop(null));
         dispatch(setAuthRole('customer'));
         dispatch(setActiveUser(user));
-        if (user.latitude && user.longitude) {
-          const locName = userObj?.location || getNearestKnownCity(user.latitude, user.longitude);
-          dispatch(setUserLocation({ latitude: user.latitude, longitude: user.longitude, locationName: locName }));
-          dispatch(setFilterCity(locName));
-        }
         onToast(`Welcome back, ${user.name}!`, 'success');
         handleCloseModal();
         navigate('/');
@@ -647,7 +597,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const isSeller = authRole === 'seller';
 
   return (
-    <div className="modal-overlay" onClick={handleCloseModal}>
+    <div className="modal-overlay">
       <div
         ref={modalContentRef}
         className="modal-content"

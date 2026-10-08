@@ -6,7 +6,7 @@ import { AddEditProductModal } from './components/AddEditProductModal';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { Footer } from './components/Footer';
 import { useFilterSearchParams } from './hooks/useFilterSearchParams';
-import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, reverseGeocodeCoords, getNearestKnownCity, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, getBrands, deleteProductApi, getSellerProducts, updateSellerProduct } from './services/apiService';
+import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, reverseGeocodeCoords, getNearestKnownCity, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, getBrands, deleteProductApi, getSellerProducts, updateSellerProduct, getSellerCustomerActivityLogs } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import { LocationAutocompleteInput } from './components/LocationAutocompleteInput';
 import React, { ChangeEvent, FormEvent } from 'react';
@@ -43,7 +43,8 @@ import {
   Clock,
   Calendar,
   Heart,
-  Activity
+  Activity,
+  RefreshCw
 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from './store';
 import { Routes, Route, useNavigate, useLocation, Navigate } from 'react-router-dom';
@@ -473,105 +474,29 @@ export default function App() {
   const [customAddressInput, setCustomAddressInput] = React.useState('');
   const [isLocatingUser, setIsLocatingUser] = React.useState(false);
 
-  // 1. Customer Location Auto-Sync (Customer Users ONLY - Dealer flow unchanged)
+  // Sync logged in user profile location to Redux state on login/init
   React.useEffect(() => {
-    if (!activeUser || activeShop) return;
-
-    let isSubscribed = true;
-
-    const fallbackToDbLocation = () => {
-      if (!isSubscribed) return;
-      const targetLat = activeUser.latitude;
-      const targetLng = activeUser.longitude;
-      const targetLoc = (activeUser as any).location || (activeUser as any).locationName;
-
-      if (targetLat && targetLng) {
-        if (targetLoc) {
-          dispatch(setUserLocation({ latitude: targetLat, longitude: targetLng, locationName: targetLoc }));
-        } else {
-          const defaultCity = getNearestKnownCity(targetLat, targetLng);
-          reverseGeocodeCoords(targetLat, targetLng)
-            .then(geo => {
-              const name = geo.city && geo.district && !geo.city.toLowerCase().includes(geo.district.toLowerCase())
-                ? `${geo.city}, ${geo.district}`
-                : (geo.city || geo.district || defaultCity);
-              if (isSubscribed) {
-                dispatch(setUserLocation({ latitude: targetLat, longitude: targetLng, locationName: name }));
-              }
-            })
-            .catch(() => {
-              if (isSubscribed) {
-                dispatch(setUserLocation({ latitude: targetLat, longitude: targetLng, locationName: defaultCity }));
-              }
-            });
-        }
+    if (activeUser && activeUser.latitude && activeUser.longitude) {
+      if (activeUser.latitude !== filters.userLatitude || activeUser.longitude !== filters.userLongitude) {
+        reverseGeocodeCoords(activeUser.latitude, activeUser.longitude)
+          .then(geo => {
+            const name = geo.city || geo.district || geo.formattedAddress || 'My Saved Location';
+            dispatch(setUserLocation({ latitude: activeUser.latitude!, longitude: activeUser.longitude!, locationName: name }));
+          })
+          .catch(() => {
+            dispatch(setUserLocation({ latitude: activeUser.latitude!, longitude: activeUser.longitude!, locationName: 'Saved Profile Location' }));
+          });
       }
-    };
-
-    // Attempt GPS detection for Customer on login/init
-    if (typeof window !== 'undefined' && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        async (position) => {
-          if (!isSubscribed) return;
-          const { latitude, longitude } = position.coords;
-          try {
-            const geo = await reverseGeocodeCoords(latitude, longitude);
-            const fallback = getNearestKnownCity(latitude, longitude);
-            const name = geo.city && geo.district && !geo.city.toLowerCase().includes(geo.district.toLowerCase())
-              ? `${geo.city}, ${geo.district}`
-              : (geo.city || geo.district || (geo.formattedAddress ? geo.formattedAddress.split(',')[0] : fallback));
-
-            // Save detected current location to Customer DB record via existing updateUser API
-            if (activeUser.id) {
-              try {
-                const updated = await updateUser(activeUser.id, { latitude, longitude, city: name, location: name } as any);
-                if (updated && isSubscribed) {
-                  dispatch(setActiveUser({ ...activeUser, latitude, longitude, location: name } as any));
-                }
-              } catch (err) {
-                console.warn('Failed to update customer GPS location to DB:', err);
-              }
-            }
-
-            if (isSubscribed) {
-              dispatch(setUserLocation({ latitude, longitude, locationName: name }));
-            }
-          } catch (err) {
-            console.warn('Reverse geocode failed on GPS sync:', err);
-            fallbackToDbLocation();
-          }
-        },
-        (error) => {
-          console.warn('Customer GPS auto-detection denied/failed:', error.message);
-          fallbackToDbLocation();
-        },
-        { timeout: 7000, enableHighAccuracy: true }
-      );
-    } else {
-      fallbackToDbLocation();
     }
-
-    return () => {
-      isSubscribed = false;
-    };
   }, [activeUser?.id]);
-
-  // 2. Dealer/Shop Location Sync (Dealer Flow - No changes)
-  React.useEffect(() => {
-    if (activeShop && activeShop.latitude && activeShop.longitude) {
-      const shopLoc = activeShop.city || activeShop.address || 'Shop Location';
-      dispatch(setUserLocation({ latitude: activeShop.latitude, longitude: activeShop.longitude, locationName: shopLoc }));
-    }
-  }, [activeShop?.id, activeShop?.latitude, activeShop?.longitude, activeShop?.city]);
 
   const handleSelectLocation = async (lat: number, lng: number, name: string) => {
     dispatch(setUserLocation({ latitude: lat, longitude: lng, locationName: name }));
-    dispatch(setFilterCity(name));
     if (activeUser?.id) {
       try {
-        const updated = await updateUser(activeUser.id, { latitude: lat, longitude: lng, city: name } as any);
+        const updated = await updateUser(activeUser.id, { latitude: lat, longitude: lng });
         if (updated) {
-          dispatch(setActiveUser({ ...activeUser, latitude: lat, longitude: lng, location: name } as any));
+          dispatch(setActiveUser({ ...activeUser, latitude: lat, longitude: lng }));
         }
       } catch (err) {
         console.warn('Failed to update user location profile:', err);
@@ -637,6 +562,24 @@ export default function App() {
   const [viewingSellerProduct, setViewingSellerProduct] = React.useState<Product | null>(null);
   const [sellerProducts, setSellerProducts] = React.useState<Product[]>([]);
   const [isLoadingSellerProducts, setIsLoadingSellerProducts] = React.useState<boolean>(false);
+  const [sellerActivityCount, setSellerActivityCount] = React.useState<number>(0);
+
+  React.useEffect(() => {
+    async function loadSellerActivityCount() {
+      if (!activeShop) return;
+      const token = localStorage.getItem('mlx_token');
+      if (!token) return;
+      try {
+        const data = await getSellerCustomerActivityLogs(token, activeShop.id);
+        if (data && Array.isArray(data.logs)) {
+          setSellerActivityCount(data.logs.length);
+        }
+      } catch (err) {
+        console.warn('Failed to load seller activity count:', err);
+      }
+    }
+    loadSellerActivityCount();
+  }, [activeShop?.id, location.pathname]);
 
   const fetchSellerProducts = React.useCallback(async () => {
     if (!activeShop) return;
@@ -681,14 +624,35 @@ export default function App() {
   }, [activeShop, location.pathname, fetchSellerProducts]);
 
   const displayedSellerProducts = React.useMemo(() => {
-    if (!activeShop) return [];
+    if (!activeShop && !activeUser) return [];
     const overrides = JSON.parse(localStorage.getItem('mlx_product_stock_overrides') || '{}');
-    let rawList: Product[] = [];
-    if (sellerProducts.length > 0) {
-      rawList = sellerProducts;
-    } else {
-      rawList = products.filter(p => p.shopId === activeShop.id || String(p.shopId) === String(activeShop.id));
-    }
+    const shopId = activeShop?.id ? String(activeShop.id).toLowerCase() : '';
+    const ownerId = activeShop?.ownerId ? String(activeShop.ownerId).toLowerCase() : (activeUser?.id ? String(activeUser.id).toLowerCase() : '');
+    const shopEmail = activeShop?.email ? activeShop.email.toLowerCase() : (activeUser?.email ? activeUser.email.toLowerCase() : '');
+
+    const isMatch = (p: any) => {
+      if (!p) return false;
+      const pShopId = p.shopId ? String(p.shopId).toLowerCase() : '';
+      const pShopObjId = p.shop?.id ? String(p.shop.id).toLowerCase() : '';
+      const pOwnerId = p.shop?.ownerId ? String(p.shop.ownerId).toLowerCase() : (p.shop?.owner?.id ? String(p.shop.owner.id).toLowerCase() : '');
+      const pShopEmail = p.shop?.email ? String(p.shop.email).toLowerCase() : (p.shop?.owner?.email ? String(p.shop.owner.email).toLowerCase() : '');
+
+      if (shopId && (pShopId === shopId || pShopObjId === shopId)) return true;
+      if (ownerId && (pShopId === ownerId || pOwnerId === ownerId)) return true;
+      if (shopEmail && pShopEmail && pShopEmail === shopEmail) return true;
+      return false;
+    };
+
+    const shopProdsFromRedux = products.filter(isMatch);
+    
+    const map = new Map<string, Product>();
+    [...sellerProducts, ...shopProdsFromRedux].forEach(p => {
+      if (p && p.id) {
+        map.set(p.id, p);
+      }
+    });
+    const rawList = Array.from(map.values());
+
     return rawList.map(p => {
       if (overrides[p.id] !== undefined) {
         return {
@@ -699,7 +663,7 @@ export default function App() {
       }
       return p;
     });
-  }, [sellerProducts, products, activeShop]);
+  }, [sellerProducts, products, activeShop, activeUser]);
   const [shopFollowers, setShopFollowers] = React.useState<Array<{ id: string; name: string; email?: string; phone?: string; followedAt: string }>>([]);
   const [shopFollowersCount, setShopFollowersCount] = React.useState<number>(0);
   const [shopSubscriptionUsage, setShopSubscriptionUsage] = React.useState<{
@@ -708,12 +672,6 @@ export default function App() {
     currentProducts: number;
     remaining: number;
     canAddProduct: boolean;
-    isExpired?: boolean;
-    endDate?: string | null;
-    startDate?: string | null;
-    daysRemaining?: number;
-    isExpiringSoon?: boolean;
-    durationDays?: number;
   } | null>(null);
 
   React.useEffect(() => {
@@ -743,22 +701,31 @@ export default function App() {
     loadShopSubscription();
   }, [activeShop?.id, dispatch]);
 
-  React.useEffect(() => {
-    async function fetchFollowers() {
-      if (activeShop && dashboardTab === 'followers') {
-        const token = localStorage.getItem('mlx_token');
-        if (!token) return;
-        try {
-          const res = await getShopFollowers(token);
-          setShopFollowers(res.followers || []);
-          setShopFollowersCount(res.count || (res.followers ? res.followers.length : 0));
-        } catch (err) {
-          console.warn('Failed to load shop followers:', err);
-        }
-      }
+  const [isRefreshingFollowers, setIsRefreshingFollowers] = React.useState<boolean>(false);
+
+  const fetchFollowers = React.useCallback(async (isManual = false) => {
+    if (!activeShop) return;
+    const token = localStorage.getItem('mlx_token');
+    if (!token) return;
+
+    if (isManual) setIsRefreshingFollowers(true);
+    try {
+      const res = await getShopFollowers(token);
+      const list = res.followers || [];
+      setShopFollowers(list);
+      setShopFollowersCount(res.count || list.length);
+      if (isManual) triggerToast('⚡ Followers list refreshed in real-time!', 'success');
+    } catch (err) {
+      console.warn('Failed to load shop followers:', err);
+      if (isManual) triggerToast('Failed to refresh followers list', 'info');
+    } finally {
+      if (isManual) setIsRefreshingFollowers(false);
     }
+  }, [activeShop]);
+
+  React.useEffect(() => {
     fetchFollowers();
-  }, [activeShop, dashboardTab]);
+  }, [fetchFollowers, dashboardTab, location.pathname]);
 
   const slides = [
     {
@@ -975,6 +942,13 @@ export default function App() {
       const shop = getSellerShop(product.shopId);
       nextItems = [{ ...product, shop, wishlistedAt: new Date().toISOString() }, ...wishlistItems];
       triggerToast(`Added "${product.name}" to wishlist ❤️`, "success");
+
+      logActivity({
+        action: 'WISHLIST',
+        details: `Added product "${product.name}" (ID: ${product.id}, Price: ₹${(product.offerPrice || product.price).toLocaleString('en-IN')}) listed by "${shop?.name || 'Shop'}" to Wishlist. Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
+        userId: activeUser?.id,
+        sellerId: shop?.ownerId || shop?.id,
+      });
     }
 
     setWishlistProductIds(nextIds);
@@ -1025,6 +999,8 @@ export default function App() {
     businessDescription: '',
     alternatePhone: ''
   });
+
+  const [isProfileLocating, setIsProfileLocating] = React.useState(false);
 
   const handleProfileLogoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -1478,18 +1454,7 @@ export default function App() {
     }
 
     if (!activeShop.verified) {
-      triggerToast("⏳ Verification Pending: Your shop registration is currently pending Admin approval. You can add products after Admin verifies your shop.", "info");
-      return;
-    }
-
-    const isSubExpired = Boolean(
-      activeShop.isSubscriptionExpired ||
-      activeShop.subscriptionUsage?.isExpired ||
-      shopSubscriptionUsage?.isExpired ||
-      (activeShop.subscriptionUsage?.endDate && new Date(activeShop.subscriptionUsage.endDate) <= new Date())
-    );
-    if (isSubExpired) {
-      triggerToast("⚠️ Subscription Expired: Your subscription plan has expired. You cannot create new products. Please contact Admin to buy or renew a subscription plan.", "warning");
+      triggerToast("⚠️ Verification Pending: Your shop registration is currently pending Admin approval. You can add products after Admin verifies your shop.", "info");
       return;
     }
 
@@ -1626,9 +1591,7 @@ export default function App() {
 
     logActivity({
       action: 'CALL_CLICK',
-      details: isSameUser
-        ? `Call button clicked for product: "${product.name}" (Self test by owner)`
-        : `Call button clicked for product: "${product.name}" (Shop: "${seller.name}", Phone: ${seller.phone || 'N/A'}). Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
+      details: `Call button clicked for product: "${product.name}" (Shop: "${seller.name}", Phone: ${seller.phone || 'N/A'}). Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
       userId: activeUser?.id,
       sellerId: seller.ownerId || seller.id,
     });
@@ -1653,9 +1616,7 @@ export default function App() {
 
     logActivity({
       action: 'WHATSAPP_CLICK',
-      details: isSameUser
-        ? `WhatsApp clicked for product: "${product.name}" (Self test by owner)`
-        : `WhatsApp clicked for product: "${product.name}" (Shop: "${seller.name}"). Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
+      details: `WhatsApp clicked for product: "${product.name}" (Shop: "${seller.name}"). Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
       userId: activeUser?.id,
       sellerId: seller.ownerId || seller.id,
     });
@@ -1679,8 +1640,9 @@ export default function App() {
   const handleGetDirections = (seller: Shop) => {
     logActivity({
       action: 'LOCATION_CLICK',
-      details: `Location & Directions clicked for shop: "${seller.name}" (Address: ${seller.address || 'N/A'}, City: ${seller.city || 'N/A'})`,
+      details: `Location & Directions clicked for shop: "${seller.name}" (Address: ${seller.address || 'N/A'}, City: ${seller.city || 'N/A'}). Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
       userId: activeUser?.id,
+      sellerId: seller.ownerId || seller.id,
     });
     const locationQuery = seller.address ? `${seller.name}, ${seller.address}, ${seller.city}` : `${seller.name}, ${seller.city}`;
     const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationQuery)}`;
@@ -3142,7 +3104,7 @@ export default function App() {
                 </div>
                 <div className="profile-stat-box">
                   <div className="profile-stat-num">
-                    {leads.filter(l => activeShop && (l.shopId === activeShop.id || String(l.shopId) === String(activeShop.id))).length}
+                    {Math.max(sellerActivityCount, leads.filter(l => activeShop && (l.shopId === activeShop.id || String(l.shopId) === String(activeShop.id))).length)}
                   </div>
                   <div className="profile-stat-lbl">Total Leads</div>
                 </div>
@@ -3217,21 +3179,9 @@ export default function App() {
                       </div>
                     )}
 
-                    {!isPending && Boolean(activeShop?.isSubscriptionExpired || activeShop?.subscriptionUsage?.isExpired || shopSubscriptionUsage?.isExpired) && (
-                      <div style={{ marginTop: '0.75rem', padding: '0.75rem 0.85rem', borderRadius: '12px', background: 'linear-gradient(135deg, rgba(239, 68, 68, 0.22) 0%, rgba(185, 28, 28, 0.12) 100%)', border: '1.5px solid rgba(239, 68, 68, 0.55)', boxShadow: '0 4px 14px rgba(239, 68, 68, 0.15)' }}>
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '0.45rem', marginBottom: '0.25rem' }}>
-                          <AlertTriangle size={16} color="#f87171" style={{ flexShrink: 0 }} />
-                          <span style={{ fontSize: '0.82rem', fontWeight: 800, color: '#f87171' }}>Subscription Expired</span>
-                        </div>
-                        <p style={{ margin: 0, fontSize: '0.74rem', color: '#fecdd3', lineHeight: '1.4' }}>
-                          Your subscription plan has expired. You cannot create new products. Please contact Admin to buy or renew a subscription plan.
-                        </p>
-                      </div>
-                    )}
-
-                    {!isPending && !Boolean(activeShop?.isSubscriptionExpired || activeShop?.subscriptionUsage?.isExpired || shopSubscriptionUsage?.isExpired) && slotsLeft === 0 && (
+                    {!isPending && slotsLeft === 0 && (
                       <div style={{ marginTop: '0.65rem', padding: '0.4rem 0.6rem', borderRadius: '8px', background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)', color: '#fecdd3', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>
-                        ⚠️ Limit Reached! Upgrade plan to add more products.
+                        🚫 Limit Reached! Upgrade plan to add more products.
                       </div>
                     )}
                   </div>
@@ -3780,21 +3730,50 @@ export default function App() {
                 /* My Store Followers Panel */
                 <div className="dashboard-panel">
                   {(() => {
-                    const validFollowers = shopFollowers.filter(
-                      (follower) => follower.id !== activeShop?.id && follower.name !== activeShop?.name
-                    );
+                    const validFollowers = Array.isArray(shopFollowers) ? shopFollowers : [];
 
                     return (
                       <>
-                        <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
                           <div>
                             <h3 className="panel-title">My Store Followers</h3>
                             <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary-light)' }}>
                               Customers who are following <strong>{activeShop?.name}</strong> for inventory updates
                             </div>
                           </div>
-                          <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '0.4rem 0.85rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, color: '#2563eb' }}>
-                            Total Followers: {validFollowers.length}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                            <button
+                              type="button"
+                              onClick={() => fetchFollowers(true)}
+                              disabled={isRefreshingFollowers}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.4rem',
+                                padding: '0.4rem 0.85rem',
+                                borderRadius: '10px',
+                                border: '1px solid #cbd5e1',
+                                background: '#ffffff',
+                                color: '#0f172a',
+                                fontWeight: 600,
+                                fontSize: '0.82rem',
+                                cursor: isRefreshingFollowers ? 'not-allowed' : 'pointer',
+                                boxShadow: '0 2px 6px rgba(0, 0, 0, 0.05)',
+                                transition: 'all 0.2s ease'
+                              }}
+                            >
+                              <RefreshCw
+                                size={14}
+                                style={{
+                                  color: '#ea580c',
+                                  animation: isRefreshingFollowers ? 'spin 1s linear infinite' : 'none'
+                                }}
+                              />
+                              <span>{isRefreshingFollowers ? 'Refreshing...' : 'Refresh'}</span>
+                            </button>
+                            <div style={{ background: '#eff6ff', border: '1px solid #bfdbfe', padding: '0.4rem 0.85rem', borderRadius: '20px', fontSize: '0.8rem', fontWeight: 700, color: '#2563eb' }}>
+                              Total Followers: {validFollowers.length}
+                            </div>
                           </div>
                         </div>
 
@@ -4134,7 +4113,139 @@ export default function App() {
                       />
                     </div>
 
+                    {/* MANDATORY LOCATION SELECTION SECTION IN EDIT PROFILE */}
+                    <div className="form-group full-width" style={{ background: '#f8fafc', border: '1.5px dashed #ff9e40', padding: '1.25rem', borderRadius: '16px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
+                        <label className="form-label" style={{ fontWeight: 800, color: '#c2410c', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.95rem' }}>
+                          <MapPin size={18} />
+                          <span>Shop Map Coordinates (Mandatory) *</span>
+                        </label>
+                        {typeof profileForm.latitude === 'number' && typeof profileForm.longitude === 'number' && !isNaN(profileForm.latitude) && !isNaN(profileForm.longitude) && (
+                          <span style={{ fontSize: '0.78rem', background: '#dcfce7', color: '#15803d', padding: '0.25rem 0.75rem', borderRadius: '12px', fontWeight: 700, border: '1px solid #86efac' }}>
+                            ✓ Coordinates Set ({profileForm.latitude.toFixed(4)}, {profileForm.longitude.toFixed(4)})
+                          </span>
+                        )}
+                      </div>
 
+                      <p style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '0.85rem' }}>
+                        Detect GPS location or search address to pin exact coordinates on Google Maps:
+                      </p>
+
+                      <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '0.85rem' }}>
+                        <button
+                          type="button"
+                          disabled={isProfileLocating}
+                          onClick={() => {
+                            if (!navigator.geolocation) {
+                              triggerToast('Geolocation is not supported by your browser.', 'info');
+                              return;
+                            }
+                            setIsProfileLocating(true);
+                            navigator.geolocation.getCurrentPosition(
+                              (position) => {
+                                setProfileForm(prev => ({
+                                  ...prev,
+                                  latitude: position.coords.latitude,
+                                  longitude: position.coords.longitude
+                                }));
+                                setIsProfileLocating(false);
+                                triggerToast(`GPS Coordinates detected: (${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)})`, 'success');
+                              },
+                              (err) => {
+                                setIsProfileLocating(false);
+                                triggerToast(`Geolocation permission denied: ${err.message}`, 'info');
+                              }
+                            );
+                          }}
+                          style={{
+                            background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
+                            color: '#ffffff',
+                            border: 'none',
+                            padding: '0.55rem 1rem',
+                            borderRadius: '10px',
+                            fontWeight: 700,
+                            fontSize: '0.82rem',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.4rem'
+                          }}
+                        >
+                          <MapPin size={15} />
+                          <span>{isProfileLocating ? 'Detecting GPS...' : '🎯 Detect My GPS Location'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          disabled={isProfileLocating}
+                          onClick={async () => {
+                            const query = profileForm.address || profileForm.city || 'Kochi';
+                            if (!query) {
+                              triggerToast('Please enter business address or city name', 'info');
+                              return;
+                            }
+                            try {
+                              setIsProfileLocating(true);
+                              const res = await geocodeAddress(`${query}, ${profileForm.city || ''}, India`);
+                              setProfileForm(prev => ({
+                                ...prev,
+                                latitude: res.latitude,
+                                longitude: res.longitude,
+                                address: prev.address || res.formattedAddress
+                              }));
+                              triggerToast(`Map coordinates found: (${res.latitude.toFixed(4)}, ${res.longitude.toFixed(4)})`, 'success');
+                            } catch (err: any) {
+                              triggerToast(err.message || 'Could not find map location.', 'info');
+                            } finally {
+                              setIsProfileLocating(false);
+                            }
+                          }}
+                          style={{
+                            background: '#f1f5f9',
+                            color: '#1e293b',
+                            border: '1px solid #cbd5e1',
+                            padding: '0.55rem 1rem',
+                            borderRadius: '10px',
+                            fontWeight: 700,
+                            fontSize: '0.82rem',
+                            cursor: 'pointer',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '0.4rem'
+                          }}
+                        >
+                          <Search size={15} />
+                          <span>🔍 Search Map Address</span>
+                        </button>
+                      </div>
+
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.2rem' }}>Latitude *</label>
+                          <input
+                            type="number"
+                            step="any"
+                            className="form-input-text"
+                            required
+                            placeholder="e.g. 9.9312"
+                            value={profileForm.latitude !== undefined && profileForm.latitude !== null ? profileForm.latitude : ''}
+                            onChange={(e) => setProfileForm({ ...profileForm, latitude: e.target.value ? parseFloat(e.target.value) : undefined })}
+                          />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.2rem' }}>Longitude *</label>
+                          <input
+                            type="number"
+                            step="any"
+                            className="form-input-text"
+                            required
+                            placeholder="e.g. 76.2673"
+                            value={profileForm.longitude !== undefined && profileForm.longitude !== null ? profileForm.longitude : ''}
+                            onChange={(e) => setProfileForm({ ...profileForm, longitude: e.target.value ? parseFloat(e.target.value) : undefined })}
+                          />
+                        </div>
+                      </div>
+                    </div>
 
                     <div className="form-actions-row full-width">
                       <button
@@ -4442,7 +4553,10 @@ export default function App() {
       {/* --- ADD / EDIT PRODUCT MODAL --- */}
       <AddEditProductModal
         onToast={triggerToast}
-        onProductSaved={() => {
+        onProductSaved={(savedProd) => {
+          if (savedProd) {
+            setSellerProducts(prev => [savedProd, ...prev.filter(p => p.id !== savedProd.id)]);
+          }
           fetchSellerProducts();
           if (activeShop?.id) {
             getShopSubscription(activeShop.id).then(subData => {

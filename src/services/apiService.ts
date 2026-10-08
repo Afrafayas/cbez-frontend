@@ -435,8 +435,10 @@ export async function getSellerLeads(token: string): Promise<Lead[]> {
 }
 
 export async function getSellerProducts(token: string): Promise<Product[]> {
-  const res = await fetch(`${API_BASE_URL}/products/mine`, {
+  const ts = Date.now();
+  const res = await fetch(`${API_BASE_URL}/products/mine?_t=${ts}`, {
     headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
   });
   if (!res.ok) throw new Error('Failed to fetch shop products');
   const result = await res.json();
@@ -552,8 +554,13 @@ export async function checkFollowStatus(shopId: string, token: string): Promise<
 }
 
 export async function getShopFollowers(token: string): Promise<{ count: number; followers: Array<{ id: string; name: string; email?: string; phone?: string; followedAt: string }> }> {
-  const res = await fetch(`${API_BASE_URL}/follows/shop-followers`, {
-    headers: { Authorization: `Bearer ${token}` },
+  const ts = Date.now();
+  const res = await fetch(`${API_BASE_URL}/follows/shop-followers?_t=${ts}`, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    cache: 'no-store',
   });
   if (!res.ok) throw new Error('Failed to fetch shop followers');
   const result = await res.json();
@@ -980,14 +987,16 @@ export async function logActivity(data: {
 
 /* Seller Customer Activity Logs API */
 export async function getSellerCustomerActivityLogs(token: string, shopId?: string): Promise<any> {
+  const ts = Date.now();
   const url = shopId
-    ? `${API_BASE_URL}/activity-logs/seller/customers?shopId=${encodeURIComponent(shopId)}`
-    : `${API_BASE_URL}/activity-logs/seller/customers`;
+    ? `${API_BASE_URL}/activity-logs/seller/customers?shopId=${encodeURIComponent(shopId)}&_t=${ts}`
+    : `${API_BASE_URL}/activity-logs/seller/customers?_t=${ts}`;
   const res = await fetch(url, {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
+    cache: 'no-store',
   });
   const result = await res.json();
   if (!res.ok) {
