@@ -82,3 +82,38 @@ export function getSubscriptionExpiryInfo(shop: Shop | null | undefined): Subscr
     isExpired: daysLeft <= 0,
   };
 }
+
+export function getDeletedProductIds(): Set<string> {
+  if (typeof window === 'undefined') return new Set();
+  try {
+    const saved = localStorage.getItem('mlx_deleted_product_ids');
+    const arr = saved ? JSON.parse(saved) : [];
+    return new Set(Array.isArray(arr) ? arr.map(String) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+export function addDeletedProductId(id: string | number) {
+  if (typeof window === 'undefined' || !id) return;
+  try {
+    const idStr = String(id);
+    const current = getDeletedProductIds();
+    current.add(idStr);
+    localStorage.setItem('mlx_deleted_product_ids', JSON.stringify(Array.from(current)));
+  } catch (err) {
+    console.warn('Failed to save deleted product id:', err);
+  }
+}
+
+export function removeDeletedProductId(id: string | number) {
+  if (typeof window === 'undefined' || !id) return;
+  try {
+    const idStr = String(id);
+    const current = getDeletedProductIds();
+    current.delete(idStr);
+    localStorage.setItem('mlx_deleted_product_ids', JSON.stringify(Array.from(current)));
+  } catch (err) {
+    console.warn('Failed to remove deleted product id:', err);
+  }
+}

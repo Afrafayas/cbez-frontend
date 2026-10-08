@@ -1,6 +1,7 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { Product, Shop, Lead, SubscriptionPlan, Category } from '../types';
 import { INITIAL_SHOPS, INITIAL_PRODUCTS, INITIAL_LEADS, INITIAL_SUBSCRIPTION_PLANS } from '../data/mockData';
+import { getDeletedProductIds, addDeletedProductId, removeDeletedProductId } from '../utils/subscriptionUtils';
 
 interface ProductsState {
   items: Product[];
@@ -81,12 +82,17 @@ const productsSlice = createSlice({
       }
     },
     addProduct(state, action: PayloadAction<Product>) {
+      if (action.payload && action.payload.id) {
+        removeDeletedProductId(action.payload.id);
+      }
       const exists = state.items.some(p => p.id === action.payload.id);
       if (!exists) {
         state.items.unshift(action.payload);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('mlx_products', JSON.stringify(state.items));
-        }
+      } else {
+        state.items = state.items.map(p => p.id === action.payload.id ? action.payload : p);
+      }
+      if (typeof window !== 'undefined') {
+        localStorage.setItem('mlx_products', JSON.stringify(state.items));
       }
     },
     editProduct(state, action: PayloadAction<Product>) {
@@ -99,7 +105,10 @@ const productsSlice = createSlice({
       }
     },
     deleteProduct(state, action: PayloadAction<string>) {
-      state.items = state.items.filter(p => p.id !== action.payload);
+      if (action.payload) {
+        addDeletedProductId(action.payload);
+      }
+      state.items = state.items.filter(p => String(p.id) !== String(action.payload));
       if (typeof window !== 'undefined') {
         localStorage.setItem('mlx_products', JSON.stringify(state.items));
       }
@@ -120,12 +129,13 @@ const productsSlice = createSlice({
       }
     },
     setProducts(state, action: PayloadAction<Product[]>) {
+      const deletedIds = getDeletedProductIds();
       const map = new Map<string, Product>();
       (state.items || []).forEach(p => {
-        if (p && p.id) map.set(String(p.id), p);
+        if (p && p.id && !deletedIds.has(String(p.id))) map.set(String(p.id), p);
       });
       (action.payload || []).forEach(p => {
-        if (p && p.id) map.set(String(p.id), p);
+        if (p && p.id && !deletedIds.has(String(p.id))) map.set(String(p.id), p);
       });
       state.items = Array.from(map.values());
       if (typeof window !== 'undefined') {

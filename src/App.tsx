@@ -10,7 +10,7 @@ import { ManageCategoriesBrandsModal } from './components/ManageCategoriesBrands
 import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, reverseGeocodeCoords, getNearestKnownCity, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, getBrands, deleteProductApi, getSellerProducts, updateSellerProduct, getSellerCustomerActivityLogs, getActiveBanners, formatImageUrl } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import { LocationAutocompleteInput } from './components/LocationAutocompleteInput';
-import { getSubscriptionExpiryInfo } from './utils/subscriptionUtils';
+import { getSubscriptionExpiryInfo, getDeletedProductIds, addDeletedProductId } from './utils/subscriptionUtils';
 
 import React, { ChangeEvent, FormEvent } from 'react';
 import {
@@ -443,7 +443,9 @@ export default function App() {
           setDbBrands(liveBrands.map((b: any) => b.name || b));
         }
         if (liveProducts) {
-          dispatch(setProducts(liveProducts));
+          const deletedIds = getDeletedProductIds();
+          const filteredLive = liveProducts.filter(p => p && p.id && !deletedIds.has(String(p.id)));
+          dispatch(setProducts(filteredLive));
         }
         if (liveShops && liveShops.length > 0) {
           dispatch(setShops(liveShops));
@@ -677,24 +679,27 @@ export default function App() {
 
     const shopProdsFromRedux = products.filter(isMatch);
     
+    const deletedIds = getDeletedProductIds();
     const map = new Map<string, Product>();
     [...sellerProducts, ...shopProdsFromRedux].forEach(p => {
-      if (p && p.id) {
-        map.set(p.id, p);
+      if (p && p.id && !deletedIds.has(String(p.id))) {
+        map.set(String(p.id), p);
       }
     });
     const rawList = Array.from(map.values());
 
-    return rawList.map(p => {
-      if (overrides[p.id] !== undefined) {
-        return {
-          ...p,
-          stock: overrides[p.id].stock,
-          isSoldOut: overrides[p.id].isSoldOut,
-        };
-      }
-      return p;
-    });
+    return rawList
+      .filter(p => p && p.id && !deletedIds.has(String(p.id)))
+      .map(p => {
+        if (overrides[p.id] !== undefined) {
+          return {
+            ...p,
+            stock: overrides[p.id].stock,
+            isSoldOut: overrides[p.id].isSoldOut,
+          };
+        }
+        return p;
+      });
   }, [sellerProducts, products, activeShop, activeUser]);
   const [shopFollowers, setShopFollowers] = React.useState<Array<{ id: string; name: string; email?: string; phone?: string; followedAt: string }>>([]);
   const [shopFollowersCount, setShopFollowersCount] = React.useState<number>(0);
@@ -1604,7 +1609,8 @@ export default function App() {
     setIsDeletingProduct(true);
 
     const token = localStorage.getItem('mlx_token');
-    setSellerProducts(prev => prev.filter(p => p.id !== target.id));
+    addDeletedProductId(target.id);
+    setSellerProducts(prev => prev.filter(p => String(p.id) !== String(target.id)));
     dispatch(deleteProduct(target.id));
     triggerToast(`Product listing "${target.name}" removed from inventory.`, 'info');
 
