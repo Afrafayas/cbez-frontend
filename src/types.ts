@@ -6,6 +6,7 @@ export interface SubscriptionPlan {
   description: string;
   productLimit: number;
   status: 'ACTIVE' | 'INACTIVE';
+  durationDays?: number;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -24,6 +25,10 @@ export interface Shop {
     id: string;
     planId: string;
     plan?: SubscriptionPlan;
+    startDate?: string;
+    endDate?: string;
+    durationDays?: number;
+    status?: string;
   };
   id: string;
   ownerId?: string;
@@ -37,8 +42,12 @@ export interface Shop {
   verified: boolean;
   rating: number;
   joinedDate: string;
+  createdAt?: string;
   subscriptionPlanId?: string;
   isSubscriptionExpired?: boolean;
+  subscriptionStartDate?: string;
+  subscriptionEndDate?: string;
+  subscriptionExpiresAt?: string;
   subscriptionUsage?: {
     planName: string;
     productLimit: number;
@@ -48,6 +57,8 @@ export interface Shop {
     durationDays?: number;
     startDate?: string | null;
     endDate?: string | null;
+    expiresAt?: string;
+    daysLeft?: number;
     isExpired?: boolean;
     daysRemaining?: number;
     isExpiringSoon?: boolean;

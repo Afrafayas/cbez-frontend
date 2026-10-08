@@ -10,6 +10,7 @@ import { ManageCategoriesBrandsModal } from './components/ManageCategoriesBrands
 import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, reverseGeocodeCoords, getNearestKnownCity, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, getBrands, deleteProductApi, getSellerProducts, updateSellerProduct, getSellerCustomerActivityLogs, getActiveBanners, formatImageUrl } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import { LocationAutocompleteInput } from './components/LocationAutocompleteInput';
+import { getSubscriptionExpiryInfo, getDeletedProductIds, addDeletedProductId } from './utils/subscriptionUtils';
 
 import React, { ChangeEvent, FormEvent } from 'react';
 import {
@@ -388,6 +389,10 @@ export default function App() {
 
   // --- REDUX SELECTORS ---
   const { activeShop, activeUser, showAuthModal } = useAppSelector(state => state.auth);
+
+  const activeShopExpiryInfo = React.useMemo(() => {
+    return getSubscriptionExpiryInfo(activeShop);
+  }, [activeShop]);
   const { items: products, shops, leads, selectedProduct, showAddEditModal, subscriptionPlans } = useAppSelector(state => state.products);
   const { toasts, dashboardTab } = useAppSelector(state => state.ui);
   const filters = useAppSelector(state => state.filters);
@@ -438,7 +443,9 @@ export default function App() {
           setDbBrands(liveBrands.map((b: any) => b.name || b));
         }
         if (liveProducts) {
-          dispatch(setProducts(liveProducts));
+          const deletedIds = getDeletedProductIds();
+          const filteredLive = liveProducts.filter(p => p && p.id && !deletedIds.has(String(p.id)));
+          dispatch(setProducts(filteredLive));
         }
         if (liveShops && liveShops.length > 0) {
           dispatch(setShops(liveShops));
@@ -593,26 +600,48 @@ export default function App() {
     setIsLoadingSellerProducts(true);
     try {
       const mine = await getSellerProducts(token);
+      const localProds: Product[] = JSON.parse(localStorage.getItem('mlx_products') || '[]');
+      const shopId = activeShop?.id ? String(activeShop.id).toLowerCase() : '';
+      const ownerId = activeShop?.ownerId ? String(activeShop.ownerId).toLowerCase() : (activeUser?.id ? String(activeUser.id).toLowerCase() : '');
+      const shopEmail = activeShop?.email ? activeShop.email.toLowerCase() : (activeUser?.email ? activeUser.email.toLowerCase() : '');
+
+      const localShopProds = localProds.filter(p => {
+        if (!p) return false;
+        const pShopId = p.shopId ? String(p.shopId).toLowerCase() : '';
+        const pShopObjId = p.shop?.id ? String(p.shop.id).toLowerCase() : '';
+        const pOwnerId = p.shop?.ownerId ? String(p.shop.ownerId).toLowerCase() : ((p.shop as any)?.owner?.id ? String((p.shop as any).owner.id).toLowerCase() : '');
+        const pShopEmail = p.shop?.email ? String(p.shop.email).toLowerCase() : ((p.shop as any)?.owner?.email ? String((p.shop as any).owner.email).toLowerCase() : '');
+
+        if (shopId && (pShopId === shopId || pShopObjId === shopId)) return true;
+        if (ownerId && (pShopId === ownerId || pOwnerId === ownerId)) return true;
+        if (shopEmail && pShopEmail && pShopEmail === shopEmail) return true;
+        return false;
+      });
+
+      const map = new Map<string, Product>();
+      localShopProds.forEach(p => { if (p && p.id) map.set(String(p.id), p); });
       if (Array.isArray(mine)) {
-        const overrides = JSON.parse(localStorage.getItem('mlx_product_stock_overrides') || '{}');
-        const merged = mine.map(p => {
-          if (overrides[p.id] !== undefined) {
-            return {
-              ...p,
-              stock: overrides[p.id].stock,
-              isSoldOut: overrides[p.id].isSoldOut,
-            };
-          }
-          return p;
-        });
-        setSellerProducts(merged);
+        mine.forEach(p => { if (p && p.id) map.set(String(p.id), p); });
       }
+
+      const overrides = JSON.parse(localStorage.getItem('mlx_product_stock_overrides') || '{}');
+      const merged = Array.from(map.values()).map(p => {
+        if (overrides[p.id] !== undefined) {
+          return {
+            ...p,
+            stock: overrides[p.id].stock,
+            isSoldOut: overrides[p.id].isSoldOut,
+          };
+        }
+        return p;
+      });
+      setSellerProducts(merged);
     } catch (err) {
       console.warn('Failed to fetch seller products:', err);
     } finally {
       setIsLoadingSellerProducts(false);
     }
-  }, [activeShop]);
+  }, [activeShop, activeUser]);
 
   React.useEffect(() => {
     if (activeShop) {
@@ -650,24 +679,27 @@ export default function App() {
 
     const shopProdsFromRedux = products.filter(isMatch);
     
+    const deletedIds = getDeletedProductIds();
     const map = new Map<string, Product>();
     [...sellerProducts, ...shopProdsFromRedux].forEach(p => {
-      if (p && p.id) {
-        map.set(p.id, p);
+      if (p && p.id && !deletedIds.has(String(p.id))) {
+        map.set(String(p.id), p);
       }
     });
     const rawList = Array.from(map.values());
 
-    return rawList.map(p => {
-      if (overrides[p.id] !== undefined) {
-        return {
-          ...p,
-          stock: overrides[p.id].stock,
-          isSoldOut: overrides[p.id].isSoldOut,
-        };
-      }
-      return p;
-    });
+    return rawList
+      .filter(p => p && p.id && !deletedIds.has(String(p.id)))
+      .map(p => {
+        if (overrides[p.id] !== undefined) {
+          return {
+            ...p,
+            stock: overrides[p.id].stock,
+            isSoldOut: overrides[p.id].isSoldOut,
+          };
+        }
+        return p;
+      });
   }, [sellerProducts, products, activeShop, activeUser]);
   const [shopFollowers, setShopFollowers] = React.useState<Array<{ id: string; name: string; email?: string; phone?: string; followedAt: string }>>([]);
   const [shopFollowersCount, setShopFollowersCount] = React.useState<number>(0);
@@ -791,7 +823,7 @@ export default function App() {
       const isAd = b.type === 'ads';
       const shopName = b.shop?.name || (shops.find(s => s.id === b.shopId)?.name) || 'Featured Store';
       return {
-        badge: isAd ? `🏪 Sponsored Ad • ${shopName}` : '🔥 Special Platform Banner',
+        badge: isAd ? `✨ Featured Store Offer • ${shopName}` : '🌟 Special Featured Deal',
         title: b.title,
         subtext: b.details || (isAd ? `Explore verified deals from ${shopName} in ${b.shop?.city || 'your area'}.` : 'Certified devices with store warranty.'),
         offerText: isAd ? `📍 ${b.shop?.city || 'Local Store'}${b.shop?.phone ? ` • Contact: ${b.shop.phone}` : ''}` : 'Special Verified Offers',
@@ -873,7 +905,7 @@ export default function App() {
 
   // --- Marketplace Catalog Pagination State ---
   const [catalogPage, setCatalogPage] = React.useState<number>(1);
-  const [catalogPerPage, setCatalogPerPage] = React.useState<number>(8);
+  const [catalogPerPage, setCatalogPerPage] = React.useState<number>(12);
 
   // --- Customer Dashboard Pagination States ---
   const [custInquiriesPage, setCustInquiriesPage] = React.useState<number>(1);
@@ -1132,7 +1164,7 @@ export default function App() {
   }, [selectedProduct]);
 
   // --- HELPERS ---
-  const getSellerShop = (shopId: string, productShop?: Shop): Shop => {
+  const getSellerShop = (shopId: string, productShop?: Shop | null): Shop => {
     if (productShop && (productShop.name || productShop.id)) {
       return productShop;
     }
@@ -1181,7 +1213,7 @@ export default function App() {
 
   // --- FILTER & SORT LOGIC ---
   const filteredProducts = products.filter(product => {
-    const seller = getSellerShop(product.shopId);
+    const seller = getSellerShop(product.shopId, product.shop);
 
     // 1. Multi-word keyword search with whitespace normalization
     const rawQuery = filters.searchQuery.trim().replace(/\s+/g, ' ').toLowerCase();
@@ -1260,8 +1292,8 @@ export default function App() {
     if (filters.sortBy === 'price-desc') return b.price - a.price;
     if (filters.sortBy === 'stock') return b.stock - a.stock;
     if (filters.sortBy === 'rating') {
-      const sellerA = getSellerShop(a.shopId);
-      const sellerB = getSellerShop(b.shopId);
+      const sellerA = getSellerShop(a.shopId, a.shop);
+      const sellerB = getSellerShop(b.shopId, b.shop);
       return sellerB.rating - sellerA.rating;
     }
     if (filters.sortBy === 'newest') {
@@ -1577,7 +1609,8 @@ export default function App() {
     setIsDeletingProduct(true);
 
     const token = localStorage.getItem('mlx_token');
-    setSellerProducts(prev => prev.filter(p => p.id !== target.id));
+    addDeletedProductId(target.id);
+    setSellerProducts(prev => prev.filter(p => String(p.id) !== String(target.id)));
     dispatch(deleteProduct(target.id));
     triggerToast(`Product listing "${target.name}" removed from inventory.`, 'info');
 
@@ -1945,7 +1978,7 @@ export default function App() {
               )}
             </div>
           ) : (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               <div style={{
                 background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.03) 100%)',
                 border: '1px solid rgba(255, 158, 64, 0.4)',
@@ -1982,6 +2015,43 @@ export default function App() {
                   </span>
                 </div>
               </div>
+
+              {/* Navbar Alert / Warning Pill for shops with <= 5 days left */}
+              {activeShopExpiryInfo.isExpiringSoon && (
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.45rem',
+                    background: activeShopExpiryInfo.isExpired
+                      ? 'linear-gradient(135deg, rgba(225, 29, 72, 0.95) 0%, rgba(159, 18, 57, 0.95) 100%)'
+                      : 'linear-gradient(135deg, rgba(225, 29, 72, 0.9) 0%, rgba(217, 119, 6, 0.9) 100%)',
+                    color: '#ffffff',
+                    padding: '0.38rem 0.85rem',
+                    borderRadius: '9999px',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    border: '1.5px solid rgba(255, 255, 255, 0.4)',
+                    boxShadow: '0 4px 14px rgba(225, 29, 72, 0.45)',
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer',
+                    userSelect: 'none'
+                  }}
+                  onClick={() => {
+                    if (location.pathname !== '/seller-dashboard') {
+                      navigate('/seller-dashboard');
+                    }
+                  }}
+                  title={`Plan Expiry Date: ${activeShopExpiryInfo.formattedDate}. Click to open shop dashboard.`}
+                >
+                  <AlertTriangle size={15} color="#ffffff" style={{ flexShrink: 0 }} />
+                  <span>
+                    {activeShopExpiryInfo.isExpired
+                      ? `⚠️ Subscription Expired (${activeShopExpiryInfo.formattedDate})`
+                      : `⚠️ Plan Expiring: ${activeShopExpiryInfo.daysText} (${activeShopExpiryInfo.formattedDate})`}
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
@@ -2413,7 +2483,7 @@ export default function App() {
                         const paginatedCatalogProducts = sortedProducts.slice(catalogStartIndex, catalogEndIndex);
 
                         return paginatedCatalogProducts.map((product, index) => {
-                          const seller = getSellerShop(product.shopId);
+                          const seller = getSellerShop(product.shopId, product.shop);
                           const isOutOfStock = product.stock <= 0;
 
                           const renderCard = (
@@ -2487,11 +2557,11 @@ export default function App() {
                                 <div className="card-dealer-info">
                                   <div className="dealer-name">
                                     <Store size={14} className="verified-icon" />
-                                    <span>{seller.name}</span>
+                                    <span>{seller?.name || 'Verified Store'}</span>
                                   </div>
                                   <div className="dealer-location">
                                     <MapPin size={12} />
-                                    <span>{seller.address}, {seller.city}</span>
+                                    <span>{seller?.address || 'Main Location'}, {seller?.city || 'Kerala'}</span>
                                   </div>
                                 </div>
 
@@ -2598,9 +2668,9 @@ export default function App() {
                               cursor: 'pointer'
                             }}
                           >
-                            <option value={8}>8 items</option>
                             <option value={12}>12 items</option>
                             <option value={24}>24 items</option>
+                            <option value={36}>36 items</option>
                             <option value={48}>48 items</option>
                           </select>
                           <span style={{ fontSize: '0.82rem', color: '#94a3b8', fontWeight: 600 }}>
@@ -3268,6 +3338,46 @@ export default function App() {
                         <p style={{ margin: 0, fontSize: "0.72rem", color: "#cbd5ea", lineHeight: "1.4" }}>Your store profile is currently being reviewed by MLX admins. Verification updates automatically here.</p>
                       </div>
                     )}
+
+                    {/* Subscription Expiry Information Section (For All Dealers, matching Admin panel UI) */}
+                    <div style={{
+                      marginTop: '0.75rem',
+                      paddingTop: '0.65rem',
+                      borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '0.5rem'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <Clock size={13} style={{ color: activeShopExpiryInfo.isExpiringSoon ? '#f43f5e' : '#94a3b8', flexShrink: 0 }} />
+                        <span style={{ fontSize: '0.78rem', color: activeShopExpiryInfo.isExpiringSoon ? '#fca5a5' : '#cbd5e1', fontWeight: 600 }}>
+                          {activeShopExpiryInfo.formattedDate}
+                        </span>
+                      </div>
+
+                      <span style={{
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        padding: '0.2rem 0.6rem',
+                        borderRadius: '12px',
+                        background: activeShopExpiryInfo.isExpiringSoon
+                          ? 'rgba(244, 63, 94, 0.25)'
+                          : 'rgba(51, 65, 85, 0.7)',
+                        color: activeShopExpiryInfo.isExpiringSoon ? '#f43f5e' : '#94a3b8',
+                        border: activeShopExpiryInfo.isExpiringSoon
+                          ? '1px solid rgba(244, 63, 94, 0.5)'
+                          : '1px solid rgba(255, 255, 255, 0.12)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.25rem'
+                      }}>
+                        {activeShopExpiryInfo.isExpiringSoon && (
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#f43f5e', display: 'inline-block' }} />
+                        )}
+                        {activeShopExpiryInfo.daysText}
+                      </span>
+                    </div>
 
                     {!isPending && slotsLeft === 0 && (
                       <div style={{ marginTop: '0.65rem', padding: '0.4rem 0.6rem', borderRadius: '8px', background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)', color: '#fecdd3', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>

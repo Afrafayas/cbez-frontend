@@ -1,5 +1,5 @@
 import React, { useState, ChangeEvent } from 'react';
-import { Search, MapPin, Store, User, LogOut, LogIn, Smartphone, Heart, Crosshair, Loader2, X, ChevronDown, RotateCcw } from 'lucide-react';
+import { Search, MapPin, Store, User, LogOut, LogIn, Smartphone, Heart, Crosshair, Loader2, X, ChevronDown, RotateCcw, AlertTriangle } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAppDispatch, useAppSelector } from '../store';
 import {
@@ -15,6 +15,7 @@ import { CITIES } from '../data/mockData';
 import { Product } from '../types';
 import { geocodeAddress, reverseGeocodeCoords, getNearestKnownCity, updateUser } from '../services/apiService';
 import { LocationAutocompleteInput } from './LocationAutocompleteInput';
+import { getSubscriptionExpiryInfo } from '../utils/subscriptionUtils';
 
 interface NavbarProps {
   filteredProducts: Product[];
@@ -29,6 +30,9 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
 
   const { searchQuery, userLocationName, radiusKm } = useAppSelector(state => state.filters);
   const { activeShop, activeUser } = useAppSelector(state => state.auth);
+  const activeShopExpiryInfo = React.useMemo(() => {
+    return getSubscriptionExpiryInfo(activeShop);
+  }, [activeShop]);
   const [isSearchFocused, setIsSearchFocused] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [isDetectingLocation, setIsDetectingLocation] = useState(false);
@@ -330,6 +334,38 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
 
           {activeShop ? (
             <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+              {activeShopExpiryInfo.isExpiringSoon && (
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.4rem',
+                    background: activeShopExpiryInfo.isExpired
+                      ? 'linear-gradient(135deg, rgba(225, 29, 72, 0.95) 0%, rgba(159, 18, 57, 0.95) 100%)'
+                      : 'linear-gradient(135deg, rgba(225, 29, 72, 0.9) 0%, rgba(217, 119, 6, 0.9) 100%)',
+                    color: '#ffffff',
+                    padding: '0.35rem 0.75rem',
+                    borderRadius: '9999px',
+                    fontSize: '0.75rem',
+                    fontWeight: 700,
+                    border: '1.5px solid rgba(255, 255, 255, 0.4)',
+                    boxShadow: '0 4px 12px rgba(225, 29, 72, 0.4)',
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => {
+                    navigate('/seller-dashboard');
+                  }}
+                  title={`Plan Expiry Date: ${activeShopExpiryInfo.formattedDate}`}
+                >
+                  <AlertTriangle size={14} color="#ffffff" style={{ flexShrink: 0 }} />
+                  <span>
+                    {activeShopExpiryInfo.isExpired
+                      ? `⚠️ Expired (${activeShopExpiryInfo.formattedDate})`
+                      : `⚠️ Expiring: ${activeShopExpiryInfo.daysText} (${activeShopExpiryInfo.formattedDate})`}
+                  </span>
+                </div>
+              )}
               <button
                 className={`action-btn sell-btn ${location.pathname === '/seller-dashboard' ? 'active' : ''}`}
                 onClick={() => { navigate('/seller-dashboard'); dispatch(setDashboardTab('listings')); }}
