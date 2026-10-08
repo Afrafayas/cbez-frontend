@@ -597,7 +597,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
   const isSeller = authRole === 'seller';
 
   return (
-    <div className="modal-overlay" onClick={handleCloseModal}>
+    <div className="modal-overlay">
       <div
         ref={modalContentRef}
         className="modal-content"
