@@ -473,30 +473,96 @@ export default function App() {
   const [customAddressInput, setCustomAddressInput] = React.useState('');
   const [isLocatingUser, setIsLocatingUser] = React.useState(false);
 
-  // Sync logged in user profile location to Redux state on login/init
+  // 1. Customer Location Auto-Sync (Customer Users ONLY - Dealer flow unchanged)
   React.useEffect(() => {
-    const targetLat = activeUser?.latitude ?? activeShop?.latitude ?? null;
-    const targetLng = activeUser?.longitude ?? activeShop?.longitude ?? null;
-    const targetLoc = (activeUser as any)?.location || (activeShop as any)?.city || (activeShop as any)?.address;
+    if (!activeUser || activeShop) return;
 
-    if (targetLat && targetLng) {
-      if (targetLat !== filters.userLatitude || targetLng !== filters.userLongitude || !filters.userLocationName || filters.userLocationName === 'Select Location') {
+    let isSubscribed = true;
+
+    const fallbackToDbLocation = () => {
+      if (!isSubscribed) return;
+      const targetLat = activeUser.latitude;
+      const targetLng = activeUser.longitude;
+      const targetLoc = (activeUser as any).location || (activeUser as any).locationName;
+
+      if (targetLat && targetLng) {
         if (targetLoc) {
           dispatch(setUserLocation({ latitude: targetLat, longitude: targetLng, locationName: targetLoc }));
         } else {
           const defaultCity = getNearestKnownCity(targetLat, targetLng);
           reverseGeocodeCoords(targetLat, targetLng)
             .then(geo => {
-              const name = geo.city || geo.district || (geo.formattedAddress ? geo.formattedAddress.split(',')[0] : defaultCity);
-              dispatch(setUserLocation({ latitude: targetLat, longitude: targetLng, locationName: name }));
+              const name = geo.city && geo.district && !geo.city.toLowerCase().includes(geo.district.toLowerCase())
+                ? `${geo.city}, ${geo.district}`
+                : (geo.city || geo.district || defaultCity);
+              if (isSubscribed) {
+                dispatch(setUserLocation({ latitude: targetLat, longitude: targetLng, locationName: name }));
+              }
             })
             .catch(() => {
-              dispatch(setUserLocation({ latitude: targetLat, longitude: targetLng, locationName: defaultCity }));
+              if (isSubscribed) {
+                dispatch(setUserLocation({ latitude: targetLat, longitude: targetLng, locationName: defaultCity }));
+              }
             });
         }
       }
+    };
+
+    // Attempt GPS detection for Customer on login/init
+    if (typeof window !== 'undefined' && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        async (position) => {
+          if (!isSubscribed) return;
+          const { latitude, longitude } = position.coords;
+          try {
+            const geo = await reverseGeocodeCoords(latitude, longitude);
+            const fallback = getNearestKnownCity(latitude, longitude);
+            const name = geo.city && geo.district && !geo.city.toLowerCase().includes(geo.district.toLowerCase())
+              ? `${geo.city}, ${geo.district}`
+              : (geo.city || geo.district || (geo.formattedAddress ? geo.formattedAddress.split(',')[0] : fallback));
+
+            // Save detected current location to Customer DB record via existing updateUser API
+            if (activeUser.id) {
+              try {
+                const updated = await updateUser(activeUser.id, { latitude, longitude, city: name, location: name } as any);
+                if (updated && isSubscribed) {
+                  dispatch(setActiveUser({ ...activeUser, latitude, longitude, location: name } as any));
+                }
+              } catch (err) {
+                console.warn('Failed to update customer GPS location to DB:', err);
+              }
+            }
+
+            if (isSubscribed) {
+              dispatch(setUserLocation({ latitude, longitude, locationName: name }));
+            }
+          } catch (err) {
+            console.warn('Reverse geocode failed on GPS sync:', err);
+            fallbackToDbLocation();
+          }
+        },
+        (error) => {
+          console.warn('Customer GPS auto-detection denied/failed:', error.message);
+          fallbackToDbLocation();
+        },
+        { timeout: 7000, enableHighAccuracy: true }
+      );
+    } else {
+      fallbackToDbLocation();
     }
-  }, [activeUser?.id, activeUser?.latitude, activeUser?.longitude, (activeUser as any)?.location, activeShop?.id, activeShop?.latitude, activeShop?.longitude]);
+
+    return () => {
+      isSubscribed = false;
+    };
+  }, [activeUser?.id]);
+
+  // 2. Dealer/Shop Location Sync (Dealer Flow - No changes)
+  React.useEffect(() => {
+    if (activeShop && activeShop.latitude && activeShop.longitude) {
+      const shopLoc = activeShop.city || activeShop.address || 'Shop Location';
+      dispatch(setUserLocation({ latitude: activeShop.latitude, longitude: activeShop.longitude, locationName: shopLoc }));
+    }
+  }, [activeShop?.id, activeShop?.latitude, activeShop?.longitude, activeShop?.city]);
 
   const handleSelectLocation = async (lat: number, lng: number, name: string) => {
     dispatch(setUserLocation({ latitude: lat, longitude: lng, locationName: name }));
