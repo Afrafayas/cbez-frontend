@@ -499,7 +499,9 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
               name: savedProd.name || productPayload.name,
               brand: savedProd.brand || productPayload.brand,
               price: savedProd.price || productPayload.price,
-              stock: savedProd.stock !== undefined ? savedProd.stock : productPayload.stock
+              stock: savedProd.stock !== undefined ? savedProd.stock : productPayload.stock,
+              shopId: activeShop?.id || savedProd.shopId || productPayload.shopId,
+              shop: activeShop || savedProd.shop || productPayload.shop
             };
             dispatch(addProduct(finalProduct));
             onToast(`New product "${finalProduct.name}" listed live!`, 'success');

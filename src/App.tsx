@@ -607,12 +607,17 @@ export default function App() {
   const displayedSellerProducts = React.useMemo(() => {
     if (!activeShop) return [];
     const overrides = JSON.parse(localStorage.getItem('mlx_product_stock_overrides') || '{}');
-    let rawList: Product[] = [];
-    if (sellerProducts.length > 0) {
-      rawList = sellerProducts;
-    } else {
-      rawList = products.filter(p => p.shopId === activeShop.id || String(p.shopId) === String(activeShop.id));
-    }
+    
+    const shopProdsFromRedux = products.filter(p => p && (p.shopId === activeShop.id || String(p.shopId) === String(activeShop.id) || (p.shop && (p.shop.id === activeShop.id || String(p.shop.id) === String(activeShop.id)))));
+    
+    const map = new Map<string, Product>();
+    [...sellerProducts, ...shopProdsFromRedux].forEach(p => {
+      if (p && p.id) {
+        map.set(p.id, p);
+      }
+    });
+    const rawList = Array.from(map.values());
+
     return rawList.map(p => {
       if (overrides[p.id] !== undefined) {
         return {
@@ -4471,7 +4476,10 @@ export default function App() {
       {/* --- ADD / EDIT PRODUCT MODAL --- */}
       <AddEditProductModal
         onToast={triggerToast}
-        onProductSaved={() => {
+        onProductSaved={(savedProd) => {
+          if (savedProd) {
+            setSellerProducts(prev => [savedProd, ...prev.filter(p => p.id !== savedProd.id)]);
+          }
           fetchSellerProducts();
           if (activeShop?.id) {
             getShopSubscription(activeShop.id).then(subData => {

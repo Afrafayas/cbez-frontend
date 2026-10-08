@@ -190,6 +190,7 @@ export interface Product {
   deviceAge?: string;
   imeiNumber?: string;
   documents?: string[];
+  shop?: Shop | null;
 
   // Mobile / Tablet specs
   processor?: string;

@@ -435,8 +435,10 @@ export async function getSellerLeads(token: string): Promise<Lead[]> {
 }
 
 export async function getSellerProducts(token: string): Promise<Product[]> {
-  const res = await fetch(`${API_BASE_URL}/products/mine`, {
+  const ts = Date.now();
+  const res = await fetch(`${API_BASE_URL}/products/mine?_t=${ts}`, {
     headers: { Authorization: `Bearer ${token}` },
+    cache: 'no-store',
   });
   if (!res.ok) throw new Error('Failed to fetch shop products');
   const result = await res.json();
