@@ -823,7 +823,7 @@ export default function App() {
       const isAd = b.type === 'ads';
       const shopName = b.shop?.name || (shops.find(s => s.id === b.shopId)?.name) || 'Featured Store';
       return {
-        badge: isAd ? `🏪 Sponsored Ad • ${shopName}` : '🔥 Special Platform Banner',
+        badge: isAd ? `✨ Featured Store Offer • ${shopName}` : '🌟 Special Featured Deal',
         title: b.title,
         subtext: b.details || (isAd ? `Explore verified deals from ${shopName} in ${b.shop?.city || 'your area'}.` : 'Certified devices with store warranty.'),
         offerText: isAd ? `📍 ${b.shop?.city || 'Local Store'}${b.shop?.phone ? ` • Contact: ${b.shop.phone}` : ''}` : 'Special Verified Offers',
