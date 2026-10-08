@@ -20,7 +20,7 @@ export async function getProducts(params?: {
   if (params?.brand && params.brand !== 'all') query.append('brand', params.brand);
   if (params?.minPrice) query.append('minPrice', params.minPrice.toString());
   if (params?.maxPrice) query.append('maxPrice', params.maxPrice.toString());
-  if (params?.city && params.city !== 'all' && params.city !== 'All Cities' && params.city !== 'All' && params.city !== 'Select Location') query.append('city', params.city);
+  if (params?.city && params.city !== 'all' && params.city !== 'All Cities' && params.city !== 'All' && params.city !== 'Select Location' && (params?.lat === undefined || params?.lat === null)) query.append('city', params.city);
   if (params?.sortBy) query.append('sortBy', params.sortBy);
   if (params?.shopId) query.append('shopId', params.shopId);
   if (params?.lat !== undefined && params?.lat !== null) query.append('lat', params.lat.toString());
@@ -615,12 +615,23 @@ export async function geocodeAddress(address: string): Promise<{ latitude: numbe
 }
 
 const KNOWN_CITIES = [
-  { name: 'Kochi', lat: 9.9312, lng: 76.2673 },
-  { name: 'Calicut', lat: 11.2588, lng: 75.7804 },
+  { name: 'Kochi, Ernakulam', lat: 9.9312, lng: 76.2673 },
+  { name: 'Kakkanad, Ernakulam', lat: 10.0159, lng: 76.3419 },
+  { name: 'Edappally, Ernakulam', lat: 10.0261, lng: 76.3084 },
+  { name: 'Aluva, Ernakulam', lat: 10.1080, lng: 76.3570 },
+  { name: 'Edappal, Malappuram', lat: 10.7550, lng: 76.0072 },
+  { name: 'Ponnani, Malappuram', lat: 10.7667, lng: 75.9250 },
+  { name: 'Tirur, Malappuram', lat: 10.9158, lng: 75.9239 },
+  { name: 'Kuttippuram, Malappuram', lat: 10.8333, lng: 76.0333 },
+  { name: 'Calicut, Kozhikode', lat: 11.2588, lng: 75.7804 },
   { name: 'Trivandrum', lat: 8.5241, lng: 76.9366 },
   { name: 'Thrissur', lat: 10.5276, lng: 76.2144 },
+  { name: 'Guruvayur, Thrissur', lat: 10.5946, lng: 76.0416 },
+  { name: 'Chavakkad, Thrissur', lat: 10.5847, lng: 76.0270 },
   { name: 'Palakkad', lat: 10.7867, lng: 76.6548 },
   { name: 'Malappuram', lat: 11.0720, lng: 76.0740 },
+  { name: 'Manjeri, Malappuram', lat: 11.1200, lng: 76.1200 },
+  { name: 'Perinthalmanna, Malappuram', lat: 10.9780, lng: 76.2260 },
   { name: 'Kannur', lat: 11.8745, lng: 75.3704 },
   { name: 'Kottayam', lat: 9.5916, lng: 76.5222 },
   { name: 'Alappuzha', lat: 9.4981, lng: 76.3388 },
@@ -639,12 +650,19 @@ const KNOWN_CITIES = [
 export function getNearestKnownCity(lat: number, lng: number): string {
   let minDistance = Infinity;
   let nearest = 'Kochi';
+  const R = 6371; // Earth's radius in km
   for (const c of KNOWN_CITIES) {
-    const dLat = c.lat - lat;
-    const dLng = c.lng - lng;
-    const distSq = dLat * dLat + dLng * dLng;
-    if (distSq < minDistance) {
-      minDistance = distSq;
+    const dLat = ((c.lat - lat) * Math.PI) / 180;
+    const dLng = ((c.lng - lng) * Math.PI) / 180;
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos((lat * Math.PI) / 180) *
+        Math.cos((c.lat * Math.PI) / 180) *
+        Math.sin(dLng / 2) *
+        Math.sin(dLng / 2);
+    const dist = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    if (dist < minDistance) {
+      minDistance = dist;
       nearest = c.name;
     }
   }

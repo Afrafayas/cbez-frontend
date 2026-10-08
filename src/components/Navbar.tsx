@@ -64,9 +64,9 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
 
     if (activeUser && activeUser.id) {
       try {
-        const updated = await updateUser(activeUser.id, { latitude: lat, longitude: lng });
+        const updated = await updateUser(activeUser.id, { latitude: lat, longitude: lng, city: locName } as any);
         if (updated) {
-          dispatch(setActiveUser({ ...activeUser, latitude: lat, longitude: lng }));
+          dispatch(setActiveUser({ ...activeUser, latitude: lat, longitude: lng, location: locName } as any));
         }
       } catch (err) {
         console.warn('Failed to update user profile location:', err);
@@ -165,26 +165,39 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
             style={{
               display: 'flex',
               alignItems: 'center',
-              gap: '0.45rem',
+              gap: '0.65rem',
               cursor: 'pointer',
-              background: 'rgba(255, 255, 255, 0.08)',
-              padding: '0.35rem 0.65rem',
-              borderRadius: '10px',
-              border: '1px solid rgba(255, 255, 255, 0.15)',
-              transition: 'all 0.2s ease',
-              marginLeft: '0.2rem',
+              background: 'linear-gradient(135deg, rgba(249, 115, 22, 0.15) 0%, rgba(30, 41, 59, 0.75) 100%)',
+              padding: '0.45rem 0.95rem',
+              borderRadius: '12px',
+              border: '1px solid rgba(249, 115, 22, 0.35)',
+              boxShadow: '0 4px 14px -2px rgba(249, 115, 22, 0.18)',
+              transition: 'all 0.25s cubic-bezier(0.4, 0, 0.2, 1)',
+              marginLeft: '0.4rem',
               userSelect: 'none'
             }}
-            title={`Selected Location: ${userLocationName || "None"} (Click to update)`}
+            title={`Selected Location: ${userLocationName || "None"} (Click to change)`}
           >
-            <MapPin size={15} style={{ color: '#f97316', flexShrink: 0 }} />
-            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.1 }}>
-              <span style={{ fontSize: '0.62rem', color: '#94a3b8', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.5px' }}>Location</span>
-              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: '28px',
+              height: '28px',
+              borderRadius: '8px',
+              background: 'rgba(249, 115, 22, 0.22)',
+              border: '1px solid rgba(249, 115, 22, 0.45)',
+              flexShrink: 0
+            }}>
+              <MapPin size={16} style={{ color: '#ff8533' }} />
+            </div>
+            <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.15 }}>
+              <span style={{ fontSize: '0.65rem', color: '#fb923c', textTransform: 'uppercase', fontWeight: 800, letterSpacing: '0.6px' }}>Primary Location</span>
+              <span style={{ fontSize: '0.92rem', fontWeight: 700, color: '#ffffff', whiteSpace: 'nowrap', maxWidth: '240px', overflow: 'hidden', textOverflow: 'ellipsis', letterSpacing: '-0.2px' }}>
                 {(!userLocationName || userLocationName === 'All Cities' || userLocationName === 'Select Location') ? 'Select Location' : userLocationName}
               </span>
             </div>
-            <ChevronDown size={13} style={{ color: '#94a3b8', marginLeft: '0.1rem' }} />
+            <ChevronDown size={15} style={{ color: '#cbd5e1', marginLeft: '0.2rem', flexShrink: 0 }} />
           </div>
         )}
 

@@ -7,6 +7,7 @@ import {
   setActiveUser, 
   setActiveShop 
 } from '../store/authSlice';
+import { setUserLocation, setFilterCity } from '../store/filtersSlice';
 import { addShop } from '../store/productsSlice';
 import { Shop, User as CustomerUser, SubscriptionPlan } from '../types';
 import { 
@@ -16,6 +17,7 @@ import {
   verifyOtpApi, 
   getActiveSubscriptionPlans, 
   reverseGeocodeCoords,
+  getNearestKnownCity,
   updateUser,
   createOrUpdateMyShop
 } from '../services/apiService';
@@ -225,6 +227,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           dispatch(setActiveUser(null));
           dispatch(setAuthRole('seller'));
           dispatch(setActiveShop(shop));
+          if (shop.latitude && shop.longitude) {
+            const locName = shop.city || shop.address || 'Shop Location';
+            dispatch(setUserLocation({ latitude: shop.latitude, longitude: shop.longitude, locationName: locName }));
+            dispatch(setFilterCity(locName));
+          }
           dispatch(setDashboardTab('listings'));
           onToast(`Welcome back, ${shop.name}! Store signed in.`, 'success');
           handleCloseModal();
@@ -241,6 +248,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           dispatch(setActiveShop(null));
           dispatch(setAuthRole('customer'));
           dispatch(setActiveUser(user));
+          if (user.latitude && user.longitude) {
+            const locName = (userObj?.location) || getNearestKnownCity(user.latitude, user.longitude);
+            dispatch(setUserLocation({ latitude: user.latitude, longitude: user.longitude, locationName: locName }));
+            dispatch(setFilterCity(locName));
+          }
           onToast(`Welcome back, ${user.name}!`, 'success');
           handleCloseModal();
           navigate('/');
@@ -450,6 +462,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         dispatch(setActiveShop(null));
         dispatch(setAuthRole('customer'));
         dispatch(setActiveUser(user));
+        if (user.latitude && user.longitude) {
+          const locName = (updatedUser as any)?.location || regForm.city || regForm.address || getNearestKnownCity(user.latitude, user.longitude);
+          dispatch(setUserLocation({ latitude: user.latitude, longitude: user.longitude, locationName: locName }));
+          dispatch(setFilterCity(locName));
+        }
         onToast(`Customer profile saved! Welcome ${user.name}`, 'success');
         handleCloseModal();
         navigate('/');
@@ -530,6 +547,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         dispatch(addShop(newShop));
         dispatch(setActiveShop(newShop));
         dispatch(setAuthRole('seller'));
+        if (newShop.latitude && newShop.longitude) {
+          const locName = newShop.city || newShop.address || 'Shop Location';
+          dispatch(setUserLocation({ latitude: newShop.latitude, longitude: newShop.longitude, locationName: locName }));
+          dispatch(setFilterCity(locName));
+        }
         dispatch(setDashboardTab('listings'));
         onToast(`Merchant Shop Details Saved: ${newShop.name} (Status: PENDING Admin Approval)`, 'success');
         handleCloseModal();
@@ -585,6 +607,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         dispatch(setActiveUser(null));
         dispatch(setAuthRole('seller'));
         dispatch(setActiveShop(shop));
+        if (shop.latitude && shop.longitude) {
+          const locName = shop.city || shop.address || 'Shop Location';
+          dispatch(setUserLocation({ latitude: shop.latitude, longitude: shop.longitude, locationName: locName }));
+          dispatch(setFilterCity(locName));
+        }
         dispatch(setDashboardTab('listings'));
         onToast(`Merchant Shop Signed In: ${shop.name}`, 'success');
         handleCloseModal();
@@ -601,6 +628,11 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         dispatch(setActiveShop(null));
         dispatch(setAuthRole('customer'));
         dispatch(setActiveUser(user));
+        if (user.latitude && user.longitude) {
+          const locName = userObj?.location || getNearestKnownCity(user.latitude, user.longitude);
+          dispatch(setUserLocation({ latitude: user.latitude, longitude: user.longitude, locationName: locName }));
+          dispatch(setFilterCity(locName));
+        }
         onToast(`Welcome back, ${user.name}!`, 'success');
         handleCloseModal();
         navigate('/');

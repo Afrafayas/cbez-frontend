@@ -475,27 +475,37 @@ export default function App() {
 
   // Sync logged in user profile location to Redux state on login/init
   React.useEffect(() => {
-    if (activeUser && activeUser.latitude && activeUser.longitude) {
-      if (activeUser.latitude !== filters.userLatitude || activeUser.longitude !== filters.userLongitude) {
-        reverseGeocodeCoords(activeUser.latitude, activeUser.longitude)
-          .then(geo => {
-            const name = geo.city || geo.district || geo.formattedAddress || 'My Saved Location';
-            dispatch(setUserLocation({ latitude: activeUser.latitude!, longitude: activeUser.longitude!, locationName: name }));
-          })
-          .catch(() => {
-            dispatch(setUserLocation({ latitude: activeUser.latitude!, longitude: activeUser.longitude!, locationName: 'Saved Profile Location' }));
-          });
+    const targetLat = activeUser?.latitude ?? activeShop?.latitude ?? null;
+    const targetLng = activeUser?.longitude ?? activeShop?.longitude ?? null;
+    const targetLoc = (activeUser as any)?.location || (activeShop as any)?.city || (activeShop as any)?.address;
+
+    if (targetLat && targetLng) {
+      if (targetLat !== filters.userLatitude || targetLng !== filters.userLongitude || !filters.userLocationName || filters.userLocationName === 'Select Location') {
+        if (targetLoc) {
+          dispatch(setUserLocation({ latitude: targetLat, longitude: targetLng, locationName: targetLoc }));
+        } else {
+          const defaultCity = getNearestKnownCity(targetLat, targetLng);
+          reverseGeocodeCoords(targetLat, targetLng)
+            .then(geo => {
+              const name = geo.city || geo.district || (geo.formattedAddress ? geo.formattedAddress.split(',')[0] : defaultCity);
+              dispatch(setUserLocation({ latitude: targetLat, longitude: targetLng, locationName: name }));
+            })
+            .catch(() => {
+              dispatch(setUserLocation({ latitude: targetLat, longitude: targetLng, locationName: defaultCity }));
+            });
+        }
       }
     }
-  }, [activeUser?.id]);
+  }, [activeUser?.id, activeUser?.latitude, activeUser?.longitude, (activeUser as any)?.location, activeShop?.id, activeShop?.latitude, activeShop?.longitude]);
 
   const handleSelectLocation = async (lat: number, lng: number, name: string) => {
     dispatch(setUserLocation({ latitude: lat, longitude: lng, locationName: name }));
+    dispatch(setFilterCity(name));
     if (activeUser?.id) {
       try {
-        const updated = await updateUser(activeUser.id, { latitude: lat, longitude: lng });
+        const updated = await updateUser(activeUser.id, { latitude: lat, longitude: lng, city: name } as any);
         if (updated) {
-          dispatch(setActiveUser({ ...activeUser, latitude: lat, longitude: lng }));
+          dispatch(setActiveUser({ ...activeUser, latitude: lat, longitude: lng, location: name } as any));
         }
       } catch (err) {
         console.warn('Failed to update user location profile:', err);
@@ -4060,139 +4070,7 @@ export default function App() {
                       />
                     </div>
 
-                    {/* MANDATORY LOCATION SELECTION SECTION IN EDIT PROFILE */}
-                    <div className="form-group full-width" style={{ background: '#f8fafc', border: '1.5px dashed #ff9e40', padding: '1.25rem', borderRadius: '16px', marginTop: '0.5rem', marginBottom: '0.5rem' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '0.5rem', flexWrap: 'wrap', gap: '0.5rem' }}>
-                        <label className="form-label" style={{ fontWeight: 800, color: '#c2410c', margin: 0, display: 'flex', alignItems: 'center', gap: '0.4rem', fontSize: '0.95rem' }}>
-                          <MapPin size={18} />
-                          <span>Shop Map Coordinates (Mandatory) *</span>
-                        </label>
-                        {typeof profileForm.latitude === 'number' && typeof profileForm.longitude === 'number' && !isNaN(profileForm.latitude) && !isNaN(profileForm.longitude) && (
-                          <span style={{ fontSize: '0.78rem', background: '#dcfce7', color: '#15803d', padding: '0.25rem 0.75rem', borderRadius: '12px', fontWeight: 700, border: '1px solid #86efac' }}>
-                            ✓ Coordinates Set ({profileForm.latitude.toFixed(4)}, {profileForm.longitude.toFixed(4)})
-                          </span>
-                        )}
-                      </div>
 
-                      <p style={{ fontSize: '0.82rem', color: '#64748b', marginBottom: '0.85rem' }}>
-                        Detect GPS location or search address to pin exact coordinates on Google Maps:
-                      </p>
-
-                      <div style={{ display: 'flex', gap: '0.6rem', flexWrap: 'wrap', marginBottom: '0.85rem' }}>
-                        <button
-                          type="button"
-                          disabled={isProfileLocating}
-                          onClick={() => {
-                            if (!navigator.geolocation) {
-                              triggerToast('Geolocation is not supported by your browser.', 'info');
-                              return;
-                            }
-                            setIsProfileLocating(true);
-                            navigator.geolocation.getCurrentPosition(
-                              (position) => {
-                                setProfileForm(prev => ({
-                                  ...prev,
-                                  latitude: position.coords.latitude,
-                                  longitude: position.coords.longitude
-                                }));
-                                setIsProfileLocating(false);
-                                triggerToast(`GPS Coordinates detected: (${position.coords.latitude.toFixed(4)}, ${position.coords.longitude.toFixed(4)})`, 'success');
-                              },
-                              (err) => {
-                                setIsProfileLocating(false);
-                                triggerToast(`Geolocation permission denied: ${err.message}`, 'info');
-                              }
-                            );
-                          }}
-                          style={{
-                            background: 'linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%)',
-                            color: '#ffffff',
-                            border: 'none',
-                            padding: '0.55rem 1rem',
-                            borderRadius: '10px',
-                            fontWeight: 700,
-                            fontSize: '0.82rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.4rem'
-                          }}
-                        >
-                          <MapPin size={15} />
-                          <span>{isProfileLocating ? 'Detecting GPS...' : '🎯 Detect My GPS Location'}</span>
-                        </button>
-
-                        <button
-                          type="button"
-                          disabled={isProfileLocating}
-                          onClick={async () => {
-                            const query = profileForm.address || profileForm.city || 'Kochi';
-                            if (!query) {
-                              triggerToast('Please enter business address or city name', 'info');
-                              return;
-                            }
-                            try {
-                              setIsProfileLocating(true);
-                              const res = await geocodeAddress(`${query}, ${profileForm.city || ''}, India`);
-                              setProfileForm(prev => ({
-                                ...prev,
-                                latitude: res.latitude,
-                                longitude: res.longitude,
-                                address: prev.address || res.formattedAddress
-                              }));
-                              triggerToast(`Map coordinates found: (${res.latitude.toFixed(4)}, ${res.longitude.toFixed(4)})`, 'success');
-                            } catch (err: any) {
-                              triggerToast(err.message || 'Could not find map location.', 'info');
-                            } finally {
-                              setIsProfileLocating(false);
-                            }
-                          }}
-                          style={{
-                            background: '#f1f5f9',
-                            color: '#1e293b',
-                            border: '1px solid #cbd5e1',
-                            padding: '0.55rem 1rem',
-                            borderRadius: '10px',
-                            fontWeight: 700,
-                            fontSize: '0.82rem',
-                            cursor: 'pointer',
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: '0.4rem'
-                          }}
-                        >
-                          <Search size={15} />
-                          <span>🔍 Search Map Address</span>
-                        </button>
-                      </div>
-
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '0.6rem' }}>
-                        <div>
-                          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.2rem' }}>Latitude *</label>
-                          <input
-                            type="number"
-                            step="any"
-                            className="form-input-text"
-                            required
-                            placeholder="e.g. 9.9312"
-                            value={profileForm.latitude !== undefined && profileForm.latitude !== null ? profileForm.latitude : ''}
-                            onChange={(e) => setProfileForm({ ...profileForm, latitude: e.target.value ? parseFloat(e.target.value) : undefined })}
-                          />
-                        </div>
-                        <div>
-                          <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#475569', display: 'block', marginBottom: '0.2rem' }}>Longitude *</label>
-                          <input
-                            type="number"
-                            step="any"
-                            className="form-input-text"
-                            required
-                            placeholder="e.g. 76.2673"
-                            value={profileForm.longitude !== undefined && profileForm.longitude !== null ? profileForm.longitude : ''}
-                            onChange={(e) => setProfileForm({ ...profileForm, longitude: e.target.value ? parseFloat(e.target.value) : undefined })}
-                          />
-                        </div>
-                      </div>
-                    </div>
 
                     <div className="form-actions-row full-width">
                       <button
