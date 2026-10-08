@@ -6,7 +6,7 @@ import { AddEditProductModal } from './components/AddEditProductModal';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { Footer } from './components/Footer';
 import { useFilterSearchParams } from './hooks/useFilterSearchParams';
-import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, reverseGeocodeCoords, getNearestKnownCity, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, getBrands, deleteProductApi, getSellerProducts, updateSellerProduct } from './services/apiService';
+import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, reverseGeocodeCoords, getNearestKnownCity, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, getBrands, deleteProductApi, getSellerProducts, updateSellerProduct, getSellerCustomerActivityLogs } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import { LocationAutocompleteInput } from './components/LocationAutocompleteInput';
 import React, { ChangeEvent, FormEvent } from 'react';
@@ -561,6 +561,24 @@ export default function App() {
   const [viewingSellerProduct, setViewingSellerProduct] = React.useState<Product | null>(null);
   const [sellerProducts, setSellerProducts] = React.useState<Product[]>([]);
   const [isLoadingSellerProducts, setIsLoadingSellerProducts] = React.useState<boolean>(false);
+  const [sellerActivityCount, setSellerActivityCount] = React.useState<number>(0);
+
+  React.useEffect(() => {
+    async function loadSellerActivityCount() {
+      if (!activeShop) return;
+      const token = localStorage.getItem('mlx_token');
+      if (!token) return;
+      try {
+        const data = await getSellerCustomerActivityLogs(token, activeShop.id);
+        if (data && Array.isArray(data.logs)) {
+          setSellerActivityCount(data.logs.length);
+        }
+      } catch (err) {
+        console.warn('Failed to load seller activity count:', err);
+      }
+    }
+    loadSellerActivityCount();
+  }, [activeShop?.id, location.pathname]);
 
   const fetchSellerProducts = React.useCallback(async () => {
     if (!activeShop) return;
@@ -605,10 +623,26 @@ export default function App() {
   }, [activeShop, location.pathname, fetchSellerProducts]);
 
   const displayedSellerProducts = React.useMemo(() => {
-    if (!activeShop) return [];
+    if (!activeShop && !activeUser) return [];
     const overrides = JSON.parse(localStorage.getItem('mlx_product_stock_overrides') || '{}');
-    
-    const shopProdsFromRedux = products.filter(p => p && (p.shopId === activeShop.id || String(p.shopId) === String(activeShop.id) || (p.shop && (p.shop.id === activeShop.id || String(p.shop.id) === String(activeShop.id)))));
+    const shopId = activeShop?.id ? String(activeShop.id).toLowerCase() : '';
+    const ownerId = activeShop?.ownerId ? String(activeShop.ownerId).toLowerCase() : (activeUser?.id ? String(activeUser.id).toLowerCase() : '');
+    const shopEmail = activeShop?.email ? activeShop.email.toLowerCase() : (activeUser?.email ? activeUser.email.toLowerCase() : '');
+
+    const isMatch = (p: any) => {
+      if (!p) return false;
+      const pShopId = p.shopId ? String(p.shopId).toLowerCase() : '';
+      const pShopObjId = p.shop?.id ? String(p.shop.id).toLowerCase() : '';
+      const pOwnerId = p.shop?.ownerId ? String(p.shop.ownerId).toLowerCase() : (p.shop?.owner?.id ? String(p.shop.owner.id).toLowerCase() : '');
+      const pShopEmail = p.shop?.email ? String(p.shop.email).toLowerCase() : (p.shop?.owner?.email ? String(p.shop.owner.email).toLowerCase() : '');
+
+      if (shopId && (pShopId === shopId || pShopObjId === shopId)) return true;
+      if (ownerId && (pShopId === ownerId || pOwnerId === ownerId)) return true;
+      if (shopEmail && pShopEmail && pShopEmail === shopEmail) return true;
+      return false;
+    };
+
+    const shopProdsFromRedux = products.filter(isMatch);
     
     const map = new Map<string, Product>();
     [...sellerProducts, ...shopProdsFromRedux].forEach(p => {
@@ -628,7 +662,7 @@ export default function App() {
       }
       return p;
     });
-  }, [sellerProducts, products, activeShop]);
+  }, [sellerProducts, products, activeShop, activeUser]);
   const [shopFollowers, setShopFollowers] = React.useState<Array<{ id: string; name: string; email?: string; phone?: string; followedAt: string }>>([]);
   const [shopFollowersCount, setShopFollowersCount] = React.useState<number>(0);
   const [shopSubscriptionUsage, setShopSubscriptionUsage] = React.useState<{
@@ -898,6 +932,13 @@ export default function App() {
       const shop = getSellerShop(product.shopId);
       nextItems = [{ ...product, shop, wishlistedAt: new Date().toISOString() }, ...wishlistItems];
       triggerToast(`Added "${product.name}" to wishlist ❤️`, "success");
+
+      logActivity({
+        action: 'WISHLIST',
+        details: `Added product "${product.name}" (ID: ${product.id}, Price: ₹${(product.offerPrice || product.price).toLocaleString('en-IN')}) listed by "${shop?.name || 'Shop'}" to Wishlist. Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
+        userId: activeUser?.id,
+        sellerId: shop?.ownerId || shop?.id,
+      });
     }
 
     setWishlistProductIds(nextIds);
@@ -1540,9 +1581,7 @@ export default function App() {
 
     logActivity({
       action: 'CALL_CLICK',
-      details: isSameUser
-        ? `Call button clicked for product: "${product.name}" (Self test by owner)`
-        : `Call button clicked for product: "${product.name}" (Shop: "${seller.name}", Phone: ${seller.phone || 'N/A'}). Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
+      details: `Call button clicked for product: "${product.name}" (Shop: "${seller.name}", Phone: ${seller.phone || 'N/A'}). Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
       userId: activeUser?.id,
       sellerId: seller.ownerId || seller.id,
     });
@@ -1567,9 +1606,7 @@ export default function App() {
 
     logActivity({
       action: 'WHATSAPP_CLICK',
-      details: isSameUser
-        ? `WhatsApp clicked for product: "${product.name}" (Self test by owner)`
-        : `WhatsApp clicked for product: "${product.name}" (Shop: "${seller.name}"). Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
+      details: `WhatsApp clicked for product: "${product.name}" (Shop: "${seller.name}"). Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
       userId: activeUser?.id,
       sellerId: seller.ownerId || seller.id,
     });
@@ -1593,8 +1630,9 @@ export default function App() {
   const handleGetDirections = (seller: Shop) => {
     logActivity({
       action: 'LOCATION_CLICK',
-      details: `Location & Directions clicked for shop: "${seller.name}" (Address: ${seller.address || 'N/A'}, City: ${seller.city || 'N/A'})`,
+      details: `Location & Directions clicked for shop: "${seller.name}" (Address: ${seller.address || 'N/A'}, City: ${seller.city || 'N/A'}). Customer: ${activeUser?.name || 'Customer'} (${activeUser?.phone || activeUser?.email || 'Guest'})`,
       userId: activeUser?.id,
+      sellerId: seller.ownerId || seller.id,
     });
     const locationQuery = seller.address ? `${seller.name}, ${seller.address}, ${seller.city}` : `${seller.name}, ${seller.city}`;
     const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(locationQuery)}`;
@@ -3056,7 +3094,7 @@ export default function App() {
                 </div>
                 <div className="profile-stat-box">
                   <div className="profile-stat-num">
-                    {leads.filter(l => activeShop && (l.shopId === activeShop.id || String(l.shopId) === String(activeShop.id))).length}
+                    {Math.max(sellerActivityCount, leads.filter(l => activeShop && (l.shopId === activeShop.id || String(l.shopId) === String(activeShop.id))).length)}
                   </div>
                   <div className="profile-stat-lbl">Total Leads</div>
                 </div>

@@ -31,15 +31,17 @@ import { SellerCustomerLog, SellerCustomerLogsResponse, Product } from '../types
 interface SellerCustomerLogsPageProps {
   onToast?: (msg: string, type?: 'success' | 'info' | 'warning') => void;
   onOpenUpgradeModal?: () => void;
+  onTotalLogsCountChange?: (count: number) => void;
 }
 
 export const SellerCustomerLogsPage: React.FC<SellerCustomerLogsPageProps> = ({
   onToast,
-  onOpenUpgradeModal
+  onOpenUpgradeModal,
+  onTotalLogsCountChange
 }) => {
   const navigate = useNavigate();
   const dispatch = useAppDispatch();
-  const { activeShop, activeUser } = useAppSelector((state) => state.auth);
+  const { activeShop } = useAppSelector((state) => state.auth);
   const { items: products } = useAppSelector((state) => state.products);
 
   const [loading, setLoading] = useState<boolean>(true);
@@ -206,48 +208,24 @@ export const SellerCustomerLogsPage: React.FC<SellerCustomerLogsPageProps> = ({
   };
 
   const validLogs = useMemo(() => {
-    if (!logsData?.logs) return [];
+    if (!logsData?.logs || !Array.isArray(logsData.logs)) return [];
+    return logsData.logs;
+  }, [logsData]);
 
-    return logsData.logs.filter((log) => {
-      if (log.customer) {
-        const logUserId = String(log.customer.id || '').trim().toLowerCase();
-        const sellerUserId = activeUser?.id ? String(activeUser.id).trim().toLowerCase() : '';
-        const sellerOwnerId = activeShop?.ownerId ? String(activeShop.ownerId).trim().toLowerCase() : '';
-
-        if (logUserId && ((sellerUserId && logUserId === sellerUserId) || (sellerOwnerId && logUserId === sellerOwnerId))) {
-          return false;
-        }
-
-        const logPhoneClean = (log.customer.phone || '').replace(/\D/g, '');
-        const shopPhoneClean = (activeShop?.phone || '').replace(/\D/g, '');
-        const shopWhatsappClean = (activeShop?.whatsapp || '').replace(/\D/g, '');
-        const userPhoneClean = (activeUser?.phone || '').replace(/\D/g, '');
-
-        if (logPhoneClean && logPhoneClean.length >= 7) {
-          if (shopPhoneClean && logPhoneClean.endsWith(shopPhoneClean.slice(-10))) return false;
-          if (shopWhatsappClean && logPhoneClean.endsWith(shopWhatsappClean.slice(-10))) return false;
-          if (userPhoneClean && logPhoneClean.endsWith(userPhoneClean.slice(-10))) return false;
-        }
-
-        const logEmail = (log.customer.email || '').trim().toLowerCase();
-        const shopEmail = (activeShop?.email || '').trim().toLowerCase();
-        const userEmail = (activeUser?.email || '').trim().toLowerCase();
-
-        if (logEmail && !logEmail.includes('***') && ((shopEmail && logEmail === shopEmail) || (userEmail && logEmail === userEmail))) {
-          return false;
-        }
-      }
-      return true;
-    });
-  }, [logsData, activeUser, activeShop]);
+  useEffect(() => {
+    if (onTotalLogsCountChange) {
+      onTotalLogsCountChange(validLogs.length);
+    }
+  }, [validLogs.length, onTotalLogsCountChange]);
 
   const displayLogs = useMemo(() => {
     let filtered = validLogs.filter((log) => {
-      if (activeFilter === 'WHATSAPP' && log.action !== 'WHATSAPP_CLICK') return false;
-      if (activeFilter === 'CALL' && log.action !== 'CALL_CLICK') return false;
-      if (activeFilter === 'LOCATION' && log.action !== 'LOCATION_CLICK' && log.action !== 'DIRECTIONS_CLICK') return false;
-      if (activeFilter === 'WISHLIST' && log.action !== 'WISHLIST') return false;
-      if (activeFilter === 'CLICKS' && log.action !== 'PRODUCT_CLICK') return false;
+      const act = (log.action || '').toUpperCase();
+      if (activeFilter === 'WHATSAPP' && !act.includes('WHATSAPP')) return false;
+      if (activeFilter === 'CALL' && !act.includes('CALL')) return false;
+      if (activeFilter === 'LOCATION' && !act.includes('LOCATION') && !act.includes('DIRECTIONS')) return false;
+      if (activeFilter === 'WISHLIST' && !act.includes('WISHLIST')) return false;
+      if (activeFilter === 'CLICKS' && act !== 'PRODUCT_CLICK' && !act.includes('PRODUCT')) return false;
 
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
@@ -275,11 +253,11 @@ export const SellerCustomerLogsPage: React.FC<SellerCustomerLogsPageProps> = ({
   const stats = useMemo(() => {
     return {
       total: validLogs.length,
-      whatsappCount: validLogs.filter(l => l.action === 'WHATSAPP_CLICK').length,
-      callCount: validLogs.filter(l => l.action === 'CALL_CLICK').length,
-      locationCount: validLogs.filter(l => l.action === 'LOCATION_CLICK' || l.action === 'DIRECTIONS_CLICK').length,
-      wishlistCount: validLogs.filter(l => l.action === 'WISHLIST').length,
-      productClicksCount: validLogs.filter(l => l.action === 'PRODUCT_CLICK').length,
+      whatsappCount: validLogs.filter(l => (l.action || '').toUpperCase().includes('WHATSAPP')).length,
+      callCount: validLogs.filter(l => (l.action || '').toUpperCase().includes('CALL')).length,
+      locationCount: validLogs.filter(l => (l.action || '').toUpperCase().includes('LOCATION') || (l.action || '').toUpperCase().includes('DIRECTIONS')).length,
+      wishlistCount: validLogs.filter(l => (l.action || '').toUpperCase().includes('WISHLIST')).length,
+      productClicksCount: validLogs.filter(l => (l.action || '').toUpperCase() === 'PRODUCT_CLICK' || (l.action || '').toUpperCase().includes('PRODUCT')).length,
     };
   }, [validLogs]);
 
