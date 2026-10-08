@@ -10,6 +10,7 @@ import { ManageCategoriesBrandsModal } from './components/ManageCategoriesBrands
 import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, geocodeAddress, reverseGeocodeCoords, getNearestKnownCity, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, getBrands, deleteProductApi, getSellerProducts, updateSellerProduct, getSellerCustomerActivityLogs, getActiveBanners, formatImageUrl } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import { LocationAutocompleteInput } from './components/LocationAutocompleteInput';
+import { getSubscriptionExpiryInfo } from './utils/subscriptionUtils';
 
 import React, { ChangeEvent, FormEvent } from 'react';
 import {
@@ -388,6 +389,10 @@ export default function App() {
 
   // --- REDUX SELECTORS ---
   const { activeShop, activeUser, showAuthModal } = useAppSelector(state => state.auth);
+
+  const activeShopExpiryInfo = React.useMemo(() => {
+    return getSubscriptionExpiryInfo(activeShop);
+  }, [activeShop]);
   const { items: products, shops, leads, selectedProduct, showAddEditModal, subscriptionPlans } = useAppSelector(state => state.products);
   const { toasts, dashboardTab } = useAppSelector(state => state.ui);
   const filters = useAppSelector(state => state.filters);
@@ -1945,7 +1950,7 @@ export default function App() {
               )}
             </div>
           ) : (
-            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '0.75rem', flexWrap: 'wrap' }}>
               <div style={{
                 background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.09) 0%, rgba(255, 255, 255, 0.03) 100%)',
                 border: '1px solid rgba(255, 158, 64, 0.4)',
@@ -1982,6 +1987,43 @@ export default function App() {
                   </span>
                 </div>
               </div>
+
+              {/* Navbar Alert / Warning Pill for shops with <= 5 days left */}
+              {activeShopExpiryInfo.isExpiringSoon && (
+                <div
+                  style={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '0.45rem',
+                    background: activeShopExpiryInfo.isExpired
+                      ? 'linear-gradient(135deg, rgba(225, 29, 72, 0.95) 0%, rgba(159, 18, 57, 0.95) 100%)'
+                      : 'linear-gradient(135deg, rgba(225, 29, 72, 0.9) 0%, rgba(217, 119, 6, 0.9) 100%)',
+                    color: '#ffffff',
+                    padding: '0.38rem 0.85rem',
+                    borderRadius: '9999px',
+                    fontSize: '0.78rem',
+                    fontWeight: 700,
+                    border: '1.5px solid rgba(255, 255, 255, 0.4)',
+                    boxShadow: '0 4px 14px rgba(225, 29, 72, 0.45)',
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer',
+                    userSelect: 'none'
+                  }}
+                  onClick={() => {
+                    if (location.pathname !== '/seller-dashboard') {
+                      navigate('/seller-dashboard');
+                    }
+                  }}
+                  title={`Plan Expiry Date: ${activeShopExpiryInfo.formattedDate}. Click to open shop dashboard.`}
+                >
+                  <AlertTriangle size={15} color="#ffffff" style={{ flexShrink: 0 }} />
+                  <span>
+                    {activeShopExpiryInfo.isExpired
+                      ? `⚠️ Subscription Expired (${activeShopExpiryInfo.formattedDate})`
+                      : `⚠️ Plan Expiring: ${activeShopExpiryInfo.daysText} (${activeShopExpiryInfo.formattedDate})`}
+                  </span>
+                </div>
+              )}
             </div>
           )}
 
@@ -3268,6 +3310,46 @@ export default function App() {
                         <p style={{ margin: 0, fontSize: "0.72rem", color: "#cbd5ea", lineHeight: "1.4" }}>Your store profile is currently being reviewed by MLX admins. Verification updates automatically here.</p>
                       </div>
                     )}
+
+                    {/* Subscription Expiry Information Section (For All Dealers, matching Admin panel UI) */}
+                    <div style={{
+                      marginTop: '0.75rem',
+                      paddingTop: '0.65rem',
+                      borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                      gap: '0.5rem'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '0.35rem' }}>
+                        <Clock size={13} style={{ color: activeShopExpiryInfo.isExpiringSoon ? '#f43f5e' : '#94a3b8', flexShrink: 0 }} />
+                        <span style={{ fontSize: '0.78rem', color: activeShopExpiryInfo.isExpiringSoon ? '#fca5a5' : '#cbd5e1', fontWeight: 600 }}>
+                          {activeShopExpiryInfo.formattedDate}
+                        </span>
+                      </div>
+
+                      <span style={{
+                        fontSize: '0.72rem',
+                        fontWeight: 700,
+                        padding: '0.2rem 0.6rem',
+                        borderRadius: '12px',
+                        background: activeShopExpiryInfo.isExpiringSoon
+                          ? 'rgba(244, 63, 94, 0.25)'
+                          : 'rgba(51, 65, 85, 0.7)',
+                        color: activeShopExpiryInfo.isExpiringSoon ? '#f43f5e' : '#94a3b8',
+                        border: activeShopExpiryInfo.isExpiringSoon
+                          ? '1px solid rgba(244, 63, 94, 0.5)'
+                          : '1px solid rgba(255, 255, 255, 0.12)',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '0.25rem'
+                      }}>
+                        {activeShopExpiryInfo.isExpiringSoon && (
+                          <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#f43f5e', display: 'inline-block' }} />
+                        )}
+                        {activeShopExpiryInfo.daysText}
+                      </span>
+                    </div>
 
                     {!isPending && slotsLeft === 0 && (
                       <div style={{ marginTop: '0.65rem', padding: '0.4rem 0.6rem', borderRadius: '8px', background: 'rgba(244, 63, 94, 0.15)', border: '1px solid rgba(244, 63, 94, 0.3)', color: '#fecdd3', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>
