@@ -4301,7 +4301,7 @@ export default function App() {
             {/* Modal Header */}
             <div style={{
               display: 'flex',
-              justify: 'space-between',
+              justifyContent: 'space-between',
               alignItems: 'center',
               padding: '1.25rem 1.5rem',
               borderBottom: '1px solid rgba(255, 255, 255, 0.1)',
@@ -4382,7 +4382,7 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => {
-                    dispatch(setUserLocation({ latitude: undefined, longitude: undefined, locationName: 'Select Location', radiusKm: 100 }));
+                    dispatch(setUserLocation({ latitude: null, longitude: null, locationName: 'Select Location', radiusKm: 100 }));
                     dispatch(setFilterCity('All Cities'));
                     setCustomAddressInput('');
                     triggerToast('📍 Location reset', 'info');

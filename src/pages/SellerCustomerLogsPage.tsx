@@ -75,6 +75,9 @@ export const SellerCustomerLogsPage: React.FC<SellerCustomerLogsPageProps> = ({
       generateFallbackData();
       setLoading(false);
       setRefreshing(false);
+      if (isManualRefresh && onToast) {
+        onToast('⚡ Activity logs refreshed!', 'info');
+      }
       return;
     }
 
@@ -82,12 +85,21 @@ export const SellerCustomerLogsPage: React.FC<SellerCustomerLogsPageProps> = ({
       const data = await getSellerCustomerActivityLogs(token, activeShop?.id);
       if (data && Array.isArray(data.logs)) {
         setLogsData(data);
+        if (isManualRefresh && onToast) {
+          onToast('⚡ Customer activity logs refreshed in real-time!', 'success');
+        }
       } else {
         generateFallbackData();
+        if (isManualRefresh && onToast) {
+          onToast('⚡ Activity logs refreshed!', 'info');
+        }
       }
     } catch (err: any) {
       console.warn('Could not fetch seller logs from API, generating local store records:', err);
       generateFallbackData();
+      if (isManualRefresh && onToast) {
+        onToast('⚡ Activity logs refreshed!', 'info');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -382,18 +394,26 @@ export const SellerCustomerLogsPage: React.FC<SellerCustomerLogsPageProps> = ({
             style={{
               display: 'inline-flex',
               alignItems: 'center',
-              gap: '0.35rem',
-              padding: '0.4rem 0.8rem',
-              borderRadius: '8px',
+              gap: '0.4rem',
+              padding: '0.45rem 0.9rem',
+              borderRadius: '10px',
               border: '1px solid #cbd5e1',
               background: '#ffffff',
               color: '#0f172a',
               fontWeight: 600,
-              fontSize: '0.8rem',
-              cursor: refreshing ? 'not-allowed' : 'pointer'
+              fontSize: '0.82rem',
+              cursor: refreshing ? 'not-allowed' : 'pointer',
+              boxShadow: '0 2px 6px rgba(0, 0, 0, 0.05)',
+              transition: 'all 0.2s ease'
             }}
           >
-            <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />
+            <RefreshCw
+              size={14}
+              style={{
+                color: '#ea580c',
+                animation: refreshing ? 'spin 1s linear infinite' : 'none'
+              }}
+            />
             <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
           </button>
         </div>

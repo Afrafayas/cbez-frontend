@@ -962,14 +962,16 @@ export async function logActivity(data: {
 
 /* Seller Customer Activity Logs API */
 export async function getSellerCustomerActivityLogs(token: string, shopId?: string): Promise<any> {
+  const ts = Date.now();
   const url = shopId
-    ? `${API_BASE_URL}/activity-logs/seller/customers?shopId=${encodeURIComponent(shopId)}`
-    : `${API_BASE_URL}/activity-logs/seller/customers`;
+    ? `${API_BASE_URL}/activity-logs/seller/customers?shopId=${encodeURIComponent(shopId)}&_t=${ts}`
+    : `${API_BASE_URL}/activity-logs/seller/customers?_t=${ts}`;
   const res = await fetch(url, {
     headers: {
       'Authorization': `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
+    cache: 'no-store',
   });
   const result = await res.json();
   if (!res.ok) {

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, FormEvent } from 'react';
-import { X, Loader2, Store, ArrowRight, User, MapPin, CheckCircle2, MessageCircle, ArrowLeft, RefreshCw, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Loader2, Store, ArrowRight, User, MapPin, CheckCircle2, MessageCircle, ArrowLeft, RefreshCw } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { 
   setShowAuthModal, 
@@ -9,7 +9,6 @@ import {
 } from '../store/authSlice';
 import { addShop } from '../store/productsSlice';
 import { Shop, User as CustomerUser, SubscriptionPlan } from '../types';
-import { CITIES } from '../data/mockData';
 import { 
   registerUser, 
   loginUser, 
@@ -327,53 +326,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
     } else if (e.key === 'ArrowRight' && index < 5) {
       otpInputRefs.current[index + 1]?.focus();
     }
-  };
-
-  // Image file handler for seller registration
-  const handleLogoFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    if (!file.type.startsWith('image/')) {
-      onToast('Please select a valid image file (JPG, PNG, WEBP)', 'info');
-      return;
-    }
-
-    const reader = new FileReader();
-    reader.onload = (event) => {
-      const result = event.target?.result as string;
-      if (!result) return;
-
-      const tempImg = new Image();
-      tempImg.onload = () => {
-        const canvas = document.createElement('canvas');
-        const MAX_DIM = 800;
-        let w = tempImg.width;
-        let h = tempImg.height;
-
-        if (w > h) {
-          if (w > MAX_DIM) {
-            h = Math.round((h * MAX_DIM) / w);
-            w = MAX_DIM;
-          }
-        } else {
-          if (h > MAX_DIM) {
-            w = Math.round((w * MAX_DIM) / h);
-            h = MAX_DIM;
-          }
-        }
-
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        ctx?.drawImage(tempImg, 0, 0, w, h);
-        const compressedDataUrl = canvas.toDataURL('image/jpeg', 0.82);
-        setRegForm(prev => ({ ...prev, profileImage: compressedDataUrl }));
-        onToast('Shop Logo / Owner Photo uploaded successfully!', 'success');
-      };
-      tempImg.src = result;
-    };
-    reader.readAsDataURL(file);
   };
 
   // Location handlers

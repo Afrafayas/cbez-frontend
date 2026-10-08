@@ -108,7 +108,7 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
   };
 
   const handleResetLocation = () => {
-    dispatch(setUserLocation({ latitude: undefined, longitude: undefined, locationName: 'Select Location', radiusKm: 100 }));
+    dispatch(setUserLocation({ latitude: null, longitude: null, locationName: 'Select Location', radiusKm: 100 }));
     dispatch(setFilterCity('All Cities'));
     setLocationInput('');
     onToast('📍 Location reset', 'info');
@@ -125,13 +125,6 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
     } finally {
       setIsGeocoding(false);
     }
-  };
-
-  const handleManualLocationSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!locationInput.trim()) return;
-    await handleCityOrAddressSelect(locationInput.trim());
-    setLocationInput('');
   };
 
   const getFormattedUserName = (user: { name?: string; email?: string } | null): string => {
@@ -609,7 +602,6 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
                   ))}
                 </div>
               </div>
-            </div>
             </div>
           </div>
         </div>
