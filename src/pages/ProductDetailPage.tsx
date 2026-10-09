@@ -6,8 +6,6 @@ import {
   Smartphone, 
   MapPin, 
   ShieldCheck, 
-  UserPlus, 
-  UserCheck, 
   Navigation,
   ChevronRight,
   Store,
@@ -19,7 +17,7 @@ import { useAppDispatch, useAppSelector } from '../store';
 import { setSelectedProduct } from '../store/productsSlice';
 import { setAuthRole, setAuthTab, setShowAuthModal } from '../store/authSlice';
 import { addToast } from '../store/uiSlice';
-import { followShop, unfollowShop, checkFollowStatus, logActivity, formatImageUrl } from '../services/apiService';
+import { logActivity, formatImageUrl } from '../services/apiService';
 import { ProductCard } from '../components/ProductCard';
 
 interface ProductDetailPageProps {
@@ -37,7 +35,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   onCallSeller,
   onWhatsAppSeller,
   onGetDirections,
-  onToast,
+  onToast: _onToast,
   isWishlisted,
   onToggleWishlist,
 }) => {
@@ -63,8 +61,8 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   const product = products.find((p) => String(p.id) === String(id)) || selectedProduct;
 
   const [activeImgIdx, setActiveImgIdx] = useState<number>(0);
-  const [isFollowing, setIsFollowing] = useState<boolean>(false);
-  const [isFollowLoading, setIsFollowLoading] = useState<boolean>(false);
+  // const [isFollowing, setIsFollowing] = useState<boolean>(false);
+  // const [isFollowLoading, setIsFollowLoading] = useState<boolean>(false);
 
   // Log Product Click activity
   useEffect(() => {
@@ -100,7 +98,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
     }
   }, [product?.id, dispatch]);
 
-  // Load Follow status for shop
+  /* Commented out unused loadFollowStatus effect
   useEffect(() => {
     async function loadFollowStatus() {
       if (!product) return;
@@ -118,6 +116,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
     }
     loadFollowStatus();
   }, [product, getSellerShop]);
+  */
 
   if (!product) {
     return (
@@ -163,6 +162,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
     (activeShop && seller && activeShop.name === seller.name)
   );
 
+  /* Commented out unused follow handler
   const handleFollowClick = async () => {
     if (isOwnShop) {
       if (onToast) onToast('You cannot follow your own merchant store', 'info');
@@ -192,6 +192,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
       setIsFollowLoading(false);
     }
   };
+  */
 
   return (
     <div style={{ background: '#f8fafc', minHeight: '100vh', padding: '1.5rem 0 3rem 0' }}>
