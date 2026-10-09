@@ -28,21 +28,34 @@ export async function getProducts(params?: {
   if (params?.lng !== undefined && params?.lng !== null) query.append('lng', params.lng.toString());
   if (params?.radiusKm) query.append('radiusKm', params.radiusKm.toString());
 
-  const res = await fetch(`${API_BASE_URL}/products?${query.toString()}`);
+  query.append('_t', Date.now().toString());
+
+  const res = await fetch(`${API_BASE_URL}/products?${query.toString()}`, {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
+  });
   if (!res.ok) throw new Error('Failed to fetch products');
   const result = await res.json();
   return result.data?.products ?? (Array.isArray(result) ? result : []);
 }
 
 export async function getProductsByCategory(category: string): Promise<Product[]> {
-  const res = await fetch(`${API_BASE_URL}/products/category/${encodeURIComponent(category)}`);
+  const ts = Date.now();
+  const res = await fetch(`${API_BASE_URL}/products/category/${encodeURIComponent(category)}?_t=${ts}`, {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
+  });
   if (!res.ok) throw new Error('Failed to fetch products by category');
   const result = await res.json();
   return result.data?.products ?? (Array.isArray(result) ? result : []);
 }
 
 export async function getProductsByBrand(brand: string): Promise<Product[]> {
-  const res = await fetch(`${API_BASE_URL}/products/brand/${encodeURIComponent(brand)}`);
+  const ts = Date.now();
+  const res = await fetch(`${API_BASE_URL}/products/brand/${encodeURIComponent(brand)}?_t=${ts}`, {
+    cache: 'no-store',
+    headers: { 'Cache-Control': 'no-cache, no-store, must-revalidate' },
+  });
   if (!res.ok) throw new Error('Failed to fetch products by brand');
   const result = await res.json();
   return result.data?.products ?? (Array.isArray(result) ? result : []);

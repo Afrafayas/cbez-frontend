@@ -7,7 +7,7 @@ import { ProductDetailModal } from './components/ProductDetailModal';
 import { Footer } from './components/Footer';
 import { useFilterSearchParams } from './hooks/useFilterSearchParams';
 import { ManageCategoriesBrandsModal } from './components/ManageCategoriesBrandsModal';
-import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getFollowedShops, unfollowShop, getShopFollowers, reverseGeocodeCoords, getNearestKnownCity, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, getBrands, deleteProductApi, getSellerProducts, updateSellerProduct, getSellerCustomerActivityLogs, getActiveBanners, formatImageUrl } from './services/apiService';
+import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, getShopSubscription, sendLead, getShopFollowers, reverseGeocodeCoords, getNearestKnownCity, toggleWishlist, getUserWishlist, getWishlistIds, updateUser, createOrUpdateMyShop, getCategories, getBrands, deleteProductApi, getSellerProducts, updateSellerProduct, getSellerCustomerActivityLogs, getActiveBanners, formatImageUrl } from './services/apiService';
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import { LocationAutocompleteInput } from './components/LocationAutocompleteInput';
 import { getSubscriptionExpiryInfo, getDeletedProductIds, addDeletedProductId } from './utils/subscriptionUtils';
@@ -957,7 +957,7 @@ export default function App() {
 
   // customer dashboard sub-navigation tab state
   const [customerTab, setCustomerTab] = React.useState<'inquiries' | 'following' | 'profile' | 'wishlist'>('inquiries');
-  const [followedShops, setFollowedShops] = React.useState<Shop[]>([]);
+  // const [followedShops, setFollowedShops] = React.useState<Shop[]>([]);
 
   // Wishlist states
   const [wishlistProductIds, setWishlistProductIds] = React.useState<string[]>([]);
@@ -1038,8 +1038,8 @@ export default function App() {
       if (currentUser) {
         if (token) {
           try {
-            const shopsData = await getFollowedShops(token).catch(() => []);
-            setFollowedShops(shopsData);
+            // const shopsData = await getFollowedShops(token).catch(() => []);
+            // setFollowedShops(shopsData);
           } catch (err) {
             console.warn('Failed to load followed shops:', err);
           }
@@ -1123,6 +1123,7 @@ export default function App() {
     }
   };
 
+  /* Commented out unused unfollow handler
   const handleUnfollowShopInDash = async (shopId: string) => {
     const token = localStorage.getItem('mlx_token');
     if (!token) return;
@@ -1134,6 +1135,7 @@ export default function App() {
       triggerToast(err.message || 'Failed to unfollow shop', 'warning');
     }
   };
+  */
 
   const [profileForm, setProfileForm] = React.useState({
     name: '',
@@ -1661,7 +1663,17 @@ export default function App() {
     if (token) {
       setTogglingStockId(product.id);
       try {
-        await updateSellerProduct(product.id, { stock: nextStock }, token);
+        const res = await updateSellerProduct(product.id, { stock: nextStock }, token);
+        const savedProd = res?.data?.product || res?.product || res?.data || res;
+        if (savedProd && typeof savedProd === 'object' && savedProd.id) {
+          const finalProd: Product = {
+            ...updated,
+            ...savedProd,
+            stock: nextStock,
+            isSoldOut: nextSoldOutState
+          };
+          dispatch(editProduct(finalProd));
+        }
         await fetchSellerProducts();
       } catch (err: any) {
         console.warn('Backend stock toggle warning:', err);
@@ -2558,7 +2570,7 @@ export default function App() {
 
                         return paginatedCatalogProducts.map((product, index) => {
                           const seller = getSellerShop(product.shopId, product.shop);
-                          const isOutOfStock = product.stock <= 0;
+                          const isOutOfStock = (product.stock !== undefined && product.stock <= 0) || Boolean(product.isSoldOut);
 
                           const renderCard = (
                             <article
@@ -2887,6 +2899,7 @@ export default function App() {
                     <span>My Inquiries Log</span>
                   </button>
 
+                  {/* Stores I Follow Tab - Commented out
                   <button
                     className={`dash-menu-btn ${customerTab === 'following' ? 'active' : ''}`}
                     onClick={() => setCustomerTab('following')}
@@ -2894,6 +2907,7 @@ export default function App() {
                     <UserCheck size={16} />
                     <span>Stores I Follow ({followedShops.length})</span>
                   </button>
+                  */}
 
                   <button
                     className={`dash-menu-btn ${customerTab === 'wishlist' ? 'active' : ''}`}
@@ -3074,92 +3088,6 @@ export default function App() {
                           </>
                         );
                       })()}
-                    </div>
-                  </div>
-                ) : customerTab === 'following' ? (
-                  /* Stores I Follow Tab */
-                  <div className="dashboard-panel">
-                    <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div>
-                        <h3 className="panel-title">Stores I Follow</h3>
-                        <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary-light)' }}>
-                          Verified merchant partners you are following
-                        </div>
-                      </div>
-                    </div>
-
-                    <div style={{ marginTop: '1rem' }}>
-                      {followedShops.length > 0 ? (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: '1rem' }}>
-                          {followedShops.map((shop) => (
-                            <div
-                              key={shop.id}
-                              style={{
-                                background: '#ffffff',
-                                border: '1px solid var(--light-border)',
-                                borderRadius: '12px',
-                                padding: '1.25rem',
-                                display: 'flex',
-                                flexDirection: 'column',
-                                justifyContent: 'space-between',
-                                gap: '0.75rem',
-                              }}
-                            >
-                              <div>
-                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                                  <h4 style={{ fontSize: '1.05rem', fontWeight: 700, margin: 0, color: '#0f172a' }}>{shop.name}</h4>
-                                  <span style={{ fontSize: '0.75rem', background: '#e0f2fe', color: '#0369a1', padding: '0.15rem 0.5rem', borderRadius: '12px', fontWeight: 600 }}>
-                                    {shop.city}
-                                  </span>
-                                </div>
-                                <p style={{ fontSize: '0.8rem', color: '#64748b', margin: '0.25rem 0 0 0' }}>
-                                  📍 {shop.address}
-                                </p>
-                                <p style={{ fontSize: '0.78rem', color: '#475569', margin: '0.25rem 0 0 0' }}>
-                                  👤 Owner: {shop.ownerName} | 🏷️ {shop.category || 'Mobiles & Electronics'}
-                                </p>
-                              </div>
-
-                              <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
-                                {shop.phone && (
-                                  <a
-                                    href={`tel:${shop.phone}`}
-                                    className="action-btn sell-btn"
-                                    style={{ flex: 1, padding: '0.4rem', fontSize: '0.78rem', justifyContent: 'center', textDecoration: 'none' }}
-                                  >
-                                    <Phone size={13} />
-                                    <span>Call Shop</span>
-                                  </a>
-                                )}
-                                <button
-                                  type="button"
-                                  onClick={() => handleUnfollowShopInDash(shop.id)}
-                                  style={{
-                                    padding: '0.4rem 0.75rem',
-                                    fontSize: '0.78rem',
-                                    borderRadius: '8px',
-                                    border: '1px solid #fca5a5',
-                                    background: '#fef2f2',
-                                    color: '#dc2626',
-                                    fontWeight: 600,
-                                    cursor: 'pointer',
-                                  }}
-                                >
-                                  Unfollow
-                                </button>
-                              </div>
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div style={{ textAlign: 'center', padding: '4rem 1rem', color: 'var(--text-secondary-light)' }}>
-                          <UserCheck size={40} style={{ opacity: 0.3, marginBottom: '1rem' }} />
-                          <p>You are not following any local shops yet. Click "+ Follow Shop" on any product detail page!</p>
-                          <button className="btn-primary" onClick={() => navigate('/')} style={{ marginTop: '1rem', padding: '0.5rem 1rem' }}>
-                            Explore Shop Catalog
-                          </button>
-                        </div>
-                      )}
                     </div>
                   </div>
                 ) : customerTab === 'wishlist' ? (
