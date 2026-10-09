@@ -3605,14 +3605,6 @@ export default function App() {
                   <span>Edit Shop Profile ({calculateShopProfileCompletion(activeShop, activeUser?.email).completionPercentage}%)</span>
                 </button>
 
-                <button
-                  className="dash-menu-btn"
-                  onClick={() => setShowManageBannersModal(true)}
-                  style={{ color: '#ea580c', border: '1px solid #ffedd5', background: '#fff7ed' }}
-                >
-                  <Tag size={16} />
-                  <span>Manage Banners & Ads</span>
-                </button>
               </div>
 
             </aside>
