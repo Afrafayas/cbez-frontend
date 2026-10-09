@@ -671,10 +671,14 @@ export default function App() {
   const fetchSellerProducts = React.useCallback(async () => {
     if (!activeShop) return;
     const token = localStorage.getItem('mlx_token');
-    if (!token) return;
     setIsLoadingSellerProducts(true);
     try {
-      const mine = await getSellerProducts(token);
+      let mine: Product[] = [];
+      if (token) {
+        mine = await getSellerProducts(token);
+      } else if (activeShop.id) {
+        mine = await getProducts({ shopId: activeShop.id });
+      }
       const localProds: Product[] = JSON.parse(localStorage.getItem('mlx_products') || '[]');
       const shopId = activeShop?.id ? String(activeShop.id).toLowerCase() : '';
       const ownerId = activeShop?.ownerId ? String(activeShop.ownerId).toLowerCase() : (activeUser?.id ? String(activeUser.id).toLowerCase() : '');

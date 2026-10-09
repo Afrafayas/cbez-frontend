@@ -189,13 +189,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         role: authRole,
       });
 
+      const tokenVal = res.data?.token || res.token || res.user?.token;
+      const userObj = res.data?.user || res.user || res.data;
+
       // Step 3: If already an existing user, navigate to home/dashboard (Seller -> /seller-dashboard, Customer -> /)
-      if (!res.isNewUser && res.data?.token) {
-        const tokenVal = res.data.token;
-        const userObj = res.data.user;
+      if (!res.isNewUser && (tokenVal || userObj)) {
         const actualRole = userObj?.role || (userObj?.shop ? 'seller' : authRole);
 
-        localStorage.setItem('mlx_token', tokenVal);
+        if (tokenVal) {
+          localStorage.setItem('mlx_token', tokenVal);
+        }
 
         if (actualRole === 'seller' || userObj?.shop) {
           const shop: Shop = userObj?.shop || {
