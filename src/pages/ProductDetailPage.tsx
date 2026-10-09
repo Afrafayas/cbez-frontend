@@ -640,40 +640,41 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                       <Store size={15} />
                       <span>Your Store</span>
                     </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleFollowClick}
-                      disabled={isFollowLoading}
-                      style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '0.4rem',
-                        padding: '0.45rem 1rem',
-                        borderRadius: '20px',
-                        fontSize: '0.78rem',
-                        fontWeight: 700,
-                        cursor: 'pointer',
-                        transition: 'all 0.2s ease',
-                        border: isFollowing ? '1px solid #16a34a' : '1px solid #2563eb',
-                        background: isFollowing ? '#f0fdf4' : '#2563eb',
-                        color: isFollowing ? '#15803d' : '#ffffff',
-                        flexShrink: 0,
-                      }}
-                    >
-                      {isFollowing ? (
-                        <>
-                          <UserCheck size={15} />
-                          <span>Following Store</span>
-                        </>
-                      ) : (
-                        <>
-                          <UserPlus size={15} />
-                          <span>+ Follow Shop</span>
-                        </>
-                      )}
-                    </button>
-                  )}
+                  ) : null}
+                  {/* Follow Store Button - Commented out
+                  <button
+                    type="button"
+                    onClick={handleFollowClick}
+                    disabled={isFollowLoading}
+                    style={{
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '0.4rem',
+                      padding: '0.45rem 1rem',
+                      borderRadius: '20px',
+                      fontSize: '0.78rem',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      transition: 'all 0.2s ease',
+                      border: isFollowing ? '1px solid #16a34a' : '1px solid #2563eb',
+                      background: isFollowing ? '#f0fdf4' : '#2563eb',
+                      color: isFollowing ? '#15803d' : '#ffffff',
+                      flexShrink: 0,
+                    }}
+                  >
+                    {isFollowing ? (
+                      <>
+                        <UserCheck size={15} />
+                        <span>Following Store</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus size={15} />
+                        <span>+ Follow Shop</span>
+                      </>
+                    )}
+                  </button>
+                  */}
                 </div>
 
                 {isSoldOut && (

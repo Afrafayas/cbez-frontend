@@ -1661,7 +1661,17 @@ export default function App() {
     if (token) {
       setTogglingStockId(product.id);
       try {
-        await updateSellerProduct(product.id, { stock: nextStock }, token);
+        const res = await updateSellerProduct(product.id, { stock: nextStock }, token);
+        const savedProd = res?.data?.product || res?.product || res?.data || res;
+        if (savedProd && typeof savedProd === 'object' && savedProd.id) {
+          const finalProd: Product = {
+            ...updated,
+            ...savedProd,
+            stock: nextStock,
+            isSoldOut: nextSoldOutState
+          };
+          dispatch(editProduct(finalProd));
+        }
         await fetchSellerProducts();
       } catch (err: any) {
         console.warn('Backend stock toggle warning:', err);
@@ -2558,7 +2568,7 @@ export default function App() {
 
                         return paginatedCatalogProducts.map((product, index) => {
                           const seller = getSellerShop(product.shopId, product.shop);
-                          const isOutOfStock = product.stock <= 0;
+                          const isOutOfStock = (product.stock !== undefined && product.stock <= 0) || Boolean(product.isSoldOut);
 
                           const renderCard = (
                             <article
@@ -2887,6 +2897,7 @@ export default function App() {
                     <span>My Inquiries Log</span>
                   </button>
 
+                  {/* Stores I Follow Tab - Commented out
                   <button
                     className={`dash-menu-btn ${customerTab === 'following' ? 'active' : ''}`}
                     onClick={() => setCustomerTab('following')}
@@ -2894,6 +2905,7 @@ export default function App() {
                     <UserCheck size={16} />
                     <span>Stores I Follow ({followedShops.length})</span>
                   </button>
+                  */}
 
                   <button
                     className={`dash-menu-btn ${customerTab === 'wishlist' ? 'active' : ''}`}
@@ -3076,8 +3088,8 @@ export default function App() {
                       })()}
                     </div>
                   </div>
-                ) : customerTab === 'following' ? (
-                  /* Stores I Follow Tab */
+                ) : false ? (
+                  /* Stores I Follow Tab - Commented out
                   <div className="dashboard-panel">
                     <div className="panel-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                       <div>
@@ -3162,6 +3174,7 @@ export default function App() {
                       )}
                     </div>
                   </div>
+                  */
                 ) : customerTab === 'wishlist' ? (
                   /* Customer Wishlist Tab */
                   <div className="dashboard-panel">
