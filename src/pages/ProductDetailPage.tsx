@@ -19,7 +19,7 @@ import { useAppDispatch, useAppSelector } from '../store';
 import { setSelectedProduct } from '../store/productsSlice';
 import { setAuthRole, setAuthTab, setShowAuthModal } from '../store/authSlice';
 import { addToast } from '../store/uiSlice';
-import { followShop, unfollowShop, checkFollowStatus, logActivity } from '../services/apiService';
+import { followShop, unfollowShop, checkFollowStatus, logActivity, formatImageUrl } from '../services/apiService';
 import { ProductCard } from '../components/ProductCard';
 
 interface ProductDetailPageProps {
@@ -295,7 +295,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
 
                 {product.images && product.images.length > 0 ? (
                   <img
-                    src={product.images[activeImgIdx] || product.images[0]}
+                    src={formatImageUrl(product.images[activeImgIdx] || product.images[0])}
                     alt={product.name}
                     style={{ maxWidth: '90%', maxHeight: '90%', objectFit: 'contain' }}
                   />
@@ -343,7 +343,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
                           }}
                         >
                           <img
-                            src={imgUrl}
+                            src={formatImageUrl(imgUrl)}
                             alt={`Angle ${idx + 1}`}
                             style={{ width: '56px', height: '56px', objectFit: 'contain', borderRadius: '6px' }}
                           />

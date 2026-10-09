@@ -130,12 +130,23 @@ const productsSlice = createSlice({
     },
     setProducts(state, action: PayloadAction<Product[]>) {
       const deletedIds = getDeletedProductIds();
+      const mockIds = new Set(INITIAL_PRODUCTS.map(p => String(p.id)));
+      const liveList = action.payload || [];
+      const hasLiveProducts = liveList.length > 0;
+
       const map = new Map<string, Product>();
       (state.items || []).forEach(p => {
-        if (p && p.id && !deletedIds.has(String(p.id))) map.set(String(p.id), p);
+        if (p && p.id && !deletedIds.has(String(p.id))) {
+          const isMock = mockIds.has(String(p.id));
+          if (!hasLiveProducts || !isMock) {
+            map.set(String(p.id), p);
+          }
+        }
       });
-      (action.payload || []).forEach(p => {
-        if (p && p.id && !deletedIds.has(String(p.id))) map.set(String(p.id), p);
+      liveList.forEach(p => {
+        if (p && p.id && !deletedIds.has(String(p.id))) {
+          map.set(String(p.id), p);
+        }
       });
       state.items = Array.from(map.values());
       if (typeof window !== 'undefined') {

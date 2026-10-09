@@ -6,7 +6,7 @@ import { useAppDispatch, useAppSelector } from '../store';
 import { setSelectedProduct } from '../store/productsSlice';
 import { setAuthRole, setAuthTab, setShowAuthModal } from '../store/authSlice';
 import { addToast } from '../store/uiSlice';
-import { logActivity } from '../services/apiService';
+import { logActivity, formatImageUrl } from '../services/apiService';
 
 interface ProductCardProps {
   product: Product;
@@ -67,7 +67,7 @@ export const ProductCard: React.FC<ProductCardProps> = ({
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
-  const imageSrc = !imgError && product.images && product.images.length > 0 ? product.images[0] : null;
+  const imageSrc = !imgError && product.images && product.images.length > 0 ? formatImageUrl(product.images[0]) : null;
 
   return (
     <article

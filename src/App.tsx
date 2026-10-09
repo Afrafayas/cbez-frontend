@@ -2538,7 +2538,14 @@ export default function App() {
                                   <Heart size={18} fill={wishlistProductIds.includes(product.id) ? '#ef4444' : 'transparent'} />
                                 </button>
                                 {product.images && product.images.length > 0 ? (
-                                  <img src={product.images[0]} alt={product.name} className="product-card-img" />
+                                  <img
+                                    src={formatImageUrl(product.images[0])}
+                                    alt={product.name}
+                                    className="product-card-img"
+                                    onError={(e) => {
+                                      (e.target as HTMLElement).style.display = 'none';
+                                    }}
+                                  />
                                 ) : (
                                   renderCategoryIcon(product.category)
                                 )}
@@ -3767,7 +3774,15 @@ export default function App() {
                                 title="Click to view full details"
                               >
                                 {product.images && product.images.length > 0 ? (
-                                  <img src={product.images[0]} alt={product.name} className="product-card-img" style={{ borderRadius: 'var(--radius-sm)' }} />
+                                  <img
+                                    src={formatImageUrl(product.images[0])}
+                                    alt={product.name}
+                                    className="product-card-img"
+                                    style={{ borderRadius: 'var(--radius-sm)' }}
+                                    onError={(e) => {
+                                      (e.target as HTMLElement).style.display = 'none';
+                                    }}
+                                  />
                                 ) : (
                                   renderCategoryIcon(product.category, "listing-preview-svg")
                                 )}
