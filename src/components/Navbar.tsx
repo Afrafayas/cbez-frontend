@@ -63,21 +63,22 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
   };
 
   const applyNewLocation = async (lat: number, lng: number, locName: string) => {
-    dispatch(setUserLocation({ latitude: lat, longitude: lng, locationName: locName, radiusKm: radiusKm || 100 }));
+    const currentRadius = radiusKm || 10;
+    dispatch(setUserLocation({ latitude: lat, longitude: lng, locationName: locName, radiusKm: currentRadius }));
     dispatch(setFilterCity(locName));
 
     if (activeUser && activeUser.id) {
       try {
-        const updated = await updateUser(activeUser.id, { latitude: lat, longitude: lng, city: locName } as any);
+        const updated = await updateUser(activeUser.id, { latitude: lat, longitude: lng, city: locName, location: locName } as any);
         if (updated) {
           dispatch(setActiveUser({ ...activeUser, latitude: lat, longitude: lng, location: locName } as any));
         }
       } catch (err) {
-        console.warn('Failed to update user profile location:', err);
+        console.warn('Failed to update user profile location in DB:', err);
       }
     }
 
-    onToast(`📍 Location set to ${locName} (Within 100 KM)`, 'success');
+    onToast(`📍 Location set to ${locName} (Within ${currentRadius} KM)`, 'success');
     setShowLocationModal(false);
     navigate('/');
   };
