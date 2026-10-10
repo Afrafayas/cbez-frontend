@@ -18,6 +18,7 @@ import {
   reverseGeocodeCoords 
 } from '../services/apiService';
 import { PhoneInputWithCountry } from './PhoneInputWithCountry';
+import { saveAuthSession } from '../utils/authStorage';
 import { LocationAutocompleteInput } from './LocationAutocompleteInput';
 import { useNavigate } from 'react-router-dom';
 import { setDashboardTab } from '../store/uiSlice';
@@ -193,11 +194,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
       if (!res.isNewUser && res.data?.token) {
         const tokenVal = res.data.token;
         const userObj = res.data.user;
-        const actualRole = userObj?.role || (userObj?.shop ? 'seller' : authRole);
+        const userRole = (userObj?.role || '').toLowerCase().trim();
+        const isAdmin = userRole === 'admin' || userRole === 'super_admin' || userRole === 'superadmin';
 
-        localStorage.setItem('mlx_token', tokenVal);
-
-        if (actualRole === 'seller' || userObj?.shop) {
+        if (isAdmin) {
+          saveAuthSession({
+            token: tokenVal,
+            role: 'admin',
+            id: userObj?.id || `admin-${Date.now()}`,
+            name: userObj?.name || 'Admin',
+            number: userObj?.phone || otpPhone.trim(),
+            phone: userObj?.phone || otpPhone.trim(),
+            shop: userObj?.shop || null,
+            user: userObj,
+          });
+          dispatch(setActiveUser(userObj));
+          dispatch(setAuthRole('admin'));
+          if (userObj?.shop) dispatch(setActiveShop(userObj.shop));
+          onToast(`Admin Signed In: ${userObj?.name || 'Administrator'}`, 'success');
+          handleCloseModal();
+          navigate('/');
+        } else if (userRole === 'seller' || userObj?.shop) {
           const shop: Shop = userObj?.shop || {
             id: userObj?.id || `shop-${Date.now()}`,
             name: userObj?.name || 'Seller Shop',
@@ -212,6 +229,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
             joinedDate: 'Today',
             status: userObj?.shop?.verified ? 'APPROVED' : 'PENDING'
           };
+          saveAuthSession({
+            token: tokenVal,
+            role: 'seller',
+            id: userObj?.id || shop.ownerId || shop.id,
+            name: shop.name || userObj?.name,
+            number: userObj?.phone || shop.phone || otpPhone.trim(),
+            phone: userObj?.phone || shop.phone || otpPhone.trim(),
+            shop,
+            user: null,
+          });
           dispatch(setActiveUser(null));
           dispatch(setAuthRole('seller'));
           dispatch(setActiveShop(shop));
@@ -228,6 +255,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
             latitude: userObj?.latitude ?? null,
             longitude: userObj?.longitude ?? null,
           };
+          saveAuthSession({
+            token: tokenVal,
+            role: 'customer',
+            id: user.id,
+            name: user.name,
+            number: user.phone,
+            phone: user.phone,
+            shop: null,
+            user,
+          });
           dispatch(setActiveShop(null));
           dispatch(setAuthRole('customer'));
           dispatch(setActiveUser(user));
@@ -424,10 +461,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         const tokenVal = resData?.token || resData?.data?.token;
         const userObj = resData?.user || resData?.data?.user;
 
-        if (tokenVal) {
-          localStorage.setItem('mlx_token', tokenVal);
-        }
-
         const user: CustomerUser = {
           id: userObj?.id || `user-${Date.now()}`,
           name: userObj?.name || regForm.name || 'Customer User',
@@ -436,6 +469,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           latitude: userObj?.latitude ?? regForm.latitude ?? null,
           longitude: userObj?.longitude ?? regForm.longitude ?? null,
         };
+
+        if (tokenVal) {
+          saveAuthSession({
+            token: tokenVal,
+            role: 'customer',
+            id: user.id,
+            name: user.name,
+            number: user.phone,
+            phone: user.phone,
+            shop: null,
+            user,
+          });
+        }
         dispatch(setActiveUser(user));
         onToast(`Customer account created! Welcome ${user.name}`, 'success');
         handleCloseModal();
@@ -479,10 +525,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         const tokenVal = resData?.token || resData?.data?.token;
         const userObj = resData?.user || resData?.data?.user;
 
-        if (tokenVal) {
-          localStorage.setItem('mlx_token', tokenVal);
-        }
-
         const newShop: Shop = userObj?.shop || {
           id: userObj?.id || `shop-${Date.now()}`,
           name: regForm.shopName,
@@ -510,6 +552,19 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           rating: 5.0,
           joinedDate: 'Today'
         };
+
+        if (tokenVal) {
+          saveAuthSession({
+            token: tokenVal,
+            role: 'seller',
+            id: userObj?.id || newShop.ownerId || newShop.id,
+            name: newShop.name,
+            number: newShop.phone,
+            phone: newShop.phone,
+            shop: newShop,
+            user: null,
+          });
+        }
         dispatch(addShop(newShop));
         dispatch(setActiveShop(newShop));
         dispatch(setDashboardTab('listings'));
@@ -543,13 +598,27 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
       const resData = await loginUser(payload);
       const userObj = resData.data?.user || resData.user;
       const tokenVal = resData.data?.token || resData.token;
-      const actualRole = userObj?.role || (userObj?.shop ? 'seller' : 'customer');
+      const userRole = (userObj?.role || '').toLowerCase().trim();
+      const isAdmin = userRole === 'admin' || userRole === 'super_admin' || userRole === 'superadmin';
 
-      if (tokenVal) {
-        localStorage.setItem('mlx_token', tokenVal);
-      }
-
-      if (actualRole === 'seller' || userObj?.shop) {
+      if (isAdmin) {
+        saveAuthSession({
+          token: tokenVal,
+          role: 'admin',
+          id: userObj?.id || `admin-${Date.now()}`,
+          name: userObj?.name || 'Admin',
+          number: userObj?.phone || '+91 98765 00000',
+          phone: userObj?.phone || '+91 98765 00000',
+          shop: userObj?.shop || null,
+          user: userObj,
+        });
+        dispatch(setActiveUser(userObj));
+        dispatch(setAuthRole('admin'));
+        if (userObj?.shop) dispatch(setActiveShop(userObj.shop));
+        onToast(`Admin Signed In: ${userObj?.name || 'Administrator'}`, 'success');
+        handleCloseModal();
+        navigate('/');
+      } else if (userRole === 'seller' || userObj?.shop) {
         const shop: Shop = userObj?.shop || {
           id: userObj?.id || `shop-${Date.now()}`,
           name: userObj?.name || 'Seller Shop',
@@ -564,6 +633,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           joinedDate: 'Today',
           status: userObj?.shop?.verified ? 'APPROVED' : 'PENDING'
         };
+        saveAuthSession({
+          token: tokenVal,
+          role: 'seller',
+          id: userObj?.id || shop.ownerId || shop.id,
+          name: shop.name || userObj?.name,
+          number: userObj?.phone || shop.phone,
+          phone: userObj?.phone || shop.phone,
+          shop,
+          user: null,
+        });
         dispatch(setActiveUser(null));
         dispatch(setAuthRole('seller'));
         dispatch(setActiveShop(shop));
@@ -580,6 +659,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           latitude: userObj?.latitude ?? null,
           longitude: userObj?.longitude ?? null,
         };
+        saveAuthSession({
+          token: tokenVal,
+          role: 'customer',
+          id: user.id,
+          name: user.name,
+          number: user.phone,
+          phone: user.phone,
+          shop: null,
+          user,
+        });
         dispatch(setActiveShop(null));
         dispatch(setAuthRole('customer'));
         dispatch(setActiveUser(user));

@@ -16,6 +16,7 @@ import { Product } from '../types';
 import { geocodeAddress, reverseGeocodeCoords, getNearestKnownCity, updateUser } from '../services/apiService';
 import { LocationAutocompleteInput } from './LocationAutocompleteInput';
 import { getSubscriptionExpiryInfo } from '../utils/subscriptionUtils';
+import { clearAuthSession } from '../utils/authStorage';
 
 interface NavbarProps {
   filteredProducts: Product[];
@@ -384,9 +385,7 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
               <button
                 className="action-btn"
                 onClick={() => {
-                  localStorage.removeItem('mlx_token');
-                  localStorage.removeItem('mlx_active_shop');
-                  localStorage.removeItem('mlx_auth_role');
+                  clearAuthSession();
                   dispatch(setActiveShop(null));
                   dispatch(setAuthRole('customer'));
                   dispatch(setAuthTab('login'));
@@ -428,9 +427,7 @@ export const Navbar: React.FC<NavbarProps> = ({ filteredProducts, onToast, wishl
                   <button
                     className="action-btn"
                     onClick={() => {
-                      localStorage.removeItem('mlx_token');
-                      localStorage.removeItem('mlx_active_user');
-                      localStorage.removeItem('mlx_auth_role');
+                      clearAuthSession();
                       dispatch(setActiveUser(null));
                       dispatch(setAuthRole('customer'));
                       dispatch(setAuthTab('login'));

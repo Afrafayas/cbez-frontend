@@ -27,6 +27,7 @@ import {
   toggleSubscriptionPlanStatus,
   setSubscriptionPlans 
 } from '../store/productsSlice';
+import { getAuthToken } from '../utils/authStorage';
 
 interface ManageCategoriesBrandsModalProps {
   isOpen: boolean;
@@ -72,7 +73,7 @@ export const ManageCategoriesBrandsModal: React.FC<ManageCategoriesBrandsModalPr
   const [bannerIsActive, setBannerIsActive] = useState(true);
   const [isUploadingBannerImg, setIsUploadingBannerImg] = useState(false);
 
-  const token = localStorage.getItem('mlx_token') || '';
+  const token = getAuthToken() || '';
 
   const fetchData = async () => {
     try {

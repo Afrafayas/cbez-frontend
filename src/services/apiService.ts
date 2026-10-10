@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '../config/api';
 import { Product, Shop, Lead, Category, Brand, SubscriptionPlan, Banner } from '../types';
+import { getAuthToken } from '../utils/authStorage';
 
 
 export async function getProducts(params?: {
@@ -473,6 +474,7 @@ export async function createSellerProduct(
     stock?: number;
     specs?: Record<string, string>;
     images?: string[];
+    shopId?: string;
   },
   token: string
 ) {
@@ -503,6 +505,7 @@ export async function updateSellerProduct(
     stock?: number;
     specs?: Record<string, string>;
     images?: string[];
+    shopId?: string;
   },
   token: string
 ) {
@@ -596,7 +599,7 @@ export async function createNetworkInquiry(inquiryData: {
   targetBudget?: number;
   notes?: string;
 }) {
-  const token = localStorage.getItem('mlx_token');
+  const token = getAuthToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -986,7 +989,7 @@ export async function logActivity(data: {
   sellerId?: string;
 }): Promise<void> {
   try {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('mlx_token') : null;
+    const token = getAuthToken();
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -1039,7 +1042,7 @@ export async function updateUser(
   }
 ) {
   try {
-    const token = localStorage.getItem('mlx_token');
+    const token = getAuthToken();
     const res = await fetch(`${API_BASE_URL}/users/${userId}`, {
       method: 'PUT',
       headers: {
@@ -1065,7 +1068,7 @@ export async function updateUser(
 
 /* Seller Shop Profile & Location Update */
 export async function createOrUpdateMyShop(data: any) {
-  const token = localStorage.getItem('mlx_token');
+  const token = getAuthToken();
   const res = await fetch(`${API_BASE_URL}/shops/mine`, {
     method: 'POST',
     headers: {
@@ -1083,7 +1086,7 @@ export async function createOrUpdateMyShop(data: any) {
 }
 
 export async function updateShop(shopId: string, data: any) {
-  const token = localStorage.getItem('mlx_token');
+  const token = getAuthToken();
   const res = await fetch(`${API_BASE_URL}/shops/${shopId}`, {
     method: 'PUT',
     headers: {

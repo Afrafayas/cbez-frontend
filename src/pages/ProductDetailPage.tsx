@@ -102,7 +102,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
   useEffect(() => {
     async function loadFollowStatus() {
       if (!product) return;
-      const token = localStorage.getItem('mlx_token');
+      const token = getAuthToken();
       if (!token) return;
       try {
         const seller = getSellerShop(product.shopId);
@@ -169,7 +169,7 @@ export const ProductDetailPage: React.FC<ProductDetailPageProps> = ({
       return;
     }
 
-    const token = localStorage.getItem('mlx_token');
+    const token = getAuthToken();
     if (!token) {
       if (onToast) onToast('Please sign in as consumer to follow shops', 'info');
       return;
