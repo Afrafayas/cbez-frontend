@@ -11,6 +11,7 @@ import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, 
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import { LocationAutocompleteInput } from './components/LocationAutocompleteInput';
 import { getSubscriptionExpiryInfo, getDeletedProductIds, addDeletedProductId } from './utils/subscriptionUtils';
+import { getAuthToken, clearAuthSession } from './utils/authStorage';
 
 import React, { ChangeEvent, FormEvent } from 'react';
 import {
@@ -410,13 +411,68 @@ export default function App() {
     ).filter(Boolean);
   }, [storeCategories]);
 
-  // --- LIVE BACKEND DATA LOADER ---
+  // --- 1. INITIAL METADATA LOADER (Shops, Plans, Categories, Brands - Loaded once) ---
   React.useEffect(() => {
-    async function loadLiveBackendData() {
+    let isMounted = true;
+    async function loadMetadata() {
+      try {
+        const [liveShops, livePlans, liveCats, liveBrands] = await Promise.all([
+          getShops().catch(() => []),
+          getSubscriptionPlans().catch(() => []),
+          getCategories().catch(() => []),
+          getBrands().catch(() => [])
+        ]);
+        if (!isMounted) return;
+
+        if (livePlans && livePlans.length > 0) {
+          dispatch(setSubscriptionPlans(livePlans));
+        }
+        if (liveCats && liveCats.length > 0) {
+          dispatch(setCategories(liveCats));
+        }
+        if (liveBrands && Array.isArray(liveBrands) && liveBrands.length > 0) {
+          setDbBrands(liveBrands.map((b: any) => b.name || b));
+        }
+        if (liveShops && liveShops.length > 0) {
+          dispatch(setShops(liveShops));
+          if (activeShop) {
+            const currentLiveShop = liveShops.find(
+              s => s.id === activeShop.id ||
+              (s.email && activeShop.email && s.email.toLowerCase() === activeShop.email.toLowerCase()) ||
+              (s.name && activeShop.name && s.name.toLowerCase() === activeShop.name.toLowerCase())
+            );
+            if (currentLiveShop && (currentLiveShop.verified !== activeShop.verified || currentLiveShop.name !== activeShop.name)) {
+              dispatch(setActiveShop(currentLiveShop));
+            }
+          }
+        }
+      } catch (err) {
+        console.warn('Backend metadata load fallback:', err);
+      }
+    }
+    loadMetadata();
+    return () => {
+      isMounted = false;
+    };
+  }, [dispatch, activeShop?.id]);
+
+  // --- 2. DEBOUNCED SEARCH & FAST PRODUCT LOADER ---
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = React.useState(filters.searchQuery);
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(filters.searchQuery);
+    }, 280);
+    return () => clearTimeout(timer);
+  }, [filters.searchQuery]);
+
+  React.useEffect(() => {
+    let isMounted = true;
+    async function loadFilteredProducts() {
       setIsLoadingProducts(true);
       try {
         const liveProducts = await getProducts({
-          search: filters.searchQuery,
+          search: debouncedSearchQuery,
           category: filters.selectedCategory,
           brand: filters.filterBrand,
           minPrice: filters.filterMinPrice,
@@ -427,45 +483,29 @@ export default function App() {
           lng: filters.userLongitude ?? undefined,
           radiusKm: filters.radiusKm || 10,
         });
-        const [liveShops, livePlans, liveCats, liveBrands] = await Promise.all([
-          getShops().catch(() => []),
-          getSubscriptionPlans().catch(() => []),
-          getCategories().catch(() => []),
-          getBrands().catch(() => [])
-        ]);
-        if (livePlans && livePlans.length > 0) {
-          dispatch(setSubscriptionPlans(livePlans));
-        }
-        if (liveCats && liveCats.length > 0) {
-          dispatch(setCategories(liveCats));
-        }
-        if (liveBrands && Array.isArray(liveBrands) && liveBrands.length > 0) {
-          setDbBrands(liveBrands.map((b: any) => b.name || b));
-        }
+
+        if (!isMounted) return;
+
         if (liveProducts) {
           const deletedIds = getDeletedProductIds();
           const filteredLive = liveProducts.filter(p => p && p.id && !deletedIds.has(String(p.id)));
           dispatch(setProducts(filteredLive));
         }
-        if (liveShops && liveShops.length > 0) {
-          dispatch(setShops(liveShops));
-          if (activeShop) {
-            const currentLiveShop = liveShops.find(s => s.id === activeShop.id || (s.email && activeShop.email && s.email.toLowerCase() === activeShop.email.toLowerCase()) || (s.name && activeShop.name && s.name.toLowerCase() === activeShop.name.toLowerCase()));
-            if (currentLiveShop && (currentLiveShop.verified !== activeShop.verified || currentLiveShop.name !== activeShop.name)) {
-              dispatch(setActiveShop(currentLiveShop));
-            }
-          }
-        }
       } catch (err) {
-        console.warn('Backend load fallback:', err);
+        console.warn('Backend products load error:', err);
       } finally {
-        setIsLoadingProducts(false);
+        if (isMounted) {
+          setIsLoadingProducts(false);
+        }
       }
     }
-    loadLiveBackendData();
+    loadFilteredProducts();
+    return () => {
+      isMounted = false;
+    };
   }, [
     dispatch,
-    filters.searchQuery,
+    debouncedSearchQuery,
     filters.selectedCategory,
     filters.filterBrand,
     filters.filterMinPrice,
@@ -475,10 +515,6 @@ export default function App() {
     filters.userLatitude,
     filters.userLongitude,
     filters.radiusKm,
-    activeUser?.id,
-    activeShop?.id,
-    showAuthModal,
-    location.pathname,
   ]);
 
   // --- LOCATION STATE & HANDLERS ---
@@ -654,7 +690,7 @@ export default function App() {
   React.useEffect(() => {
     async function loadSellerActivityCount() {
       if (!activeShop) return;
-      const token = localStorage.getItem('mlx_token');
+      const token = getAuthToken();
       if (!token) return;
       try {
         const data = await getSellerCustomerActivityLogs(token, activeShop.id);
@@ -670,53 +706,38 @@ export default function App() {
 
   const fetchSellerProducts = React.useCallback(async () => {
     if (!activeShop) return;
-    const token = localStorage.getItem('mlx_token');
+    const token = getAuthToken();
     if (!token) return;
     setIsLoadingSellerProducts(true);
     try {
       const mine = await getSellerProducts(token);
-      const localProds: Product[] = JSON.parse(localStorage.getItem('mlx_products') || '[]');
-      const shopId = activeShop?.id ? String(activeShop.id).toLowerCase() : '';
-      const ownerId = activeShop?.ownerId ? String(activeShop.ownerId).toLowerCase() : (activeUser?.id ? String(activeUser.id).toLowerCase() : '');
-      const shopEmail = activeShop?.email ? activeShop.email.toLowerCase() : (activeUser?.email ? activeUser.email.toLowerCase() : '');
-
-      const localShopProds = localProds.filter(p => {
-        if (!p) return false;
-        const pShopId = p.shopId ? String(p.shopId).toLowerCase() : '';
-        const pShopObjId = p.shop?.id ? String(p.shop.id).toLowerCase() : '';
-        const pOwnerId = p.shop?.ownerId ? String(p.shop.ownerId).toLowerCase() : ((p.shop as any)?.owner?.id ? String((p.shop as any).owner.id).toLowerCase() : '');
-        const pShopEmail = p.shop?.email ? String(p.shop.email).toLowerCase() : ((p.shop as any)?.owner?.email ? String((p.shop as any).owner.email).toLowerCase() : '');
-
-        if (shopId && (pShopId === shopId || pShopObjId === shopId)) return true;
-        if (ownerId && (pShopId === ownerId || pOwnerId === ownerId)) return true;
-        if (shopEmail && pShopEmail && pShopEmail === shopEmail) return true;
-        return false;
-      });
-
-      const map = new Map<string, Product>();
-      localShopProds.forEach(p => { if (p && p.id) map.set(String(p.id), p); });
       if (Array.isArray(mine)) {
-        mine.forEach(p => { if (p && p.id) map.set(String(p.id), p); });
-      }
+        // Clean out stale mock/phantom products with 'prod-' from localStorage
+        try {
+          const localProds: Product[] = JSON.parse(localStorage.getItem('mlx_products') || '[]');
+          const cleaned = localProds.filter(p => p && p.id && !p.id.startsWith('prod-'));
+          localStorage.setItem('mlx_products', JSON.stringify(cleaned));
+        } catch (_) {}
 
-      const overrides = JSON.parse(localStorage.getItem('mlx_product_stock_overrides') || '{}');
-      const merged = Array.from(map.values()).map(p => {
-        if (overrides[p.id] !== undefined) {
-          return {
-            ...p,
-            stock: overrides[p.id].stock,
-            isSoldOut: overrides[p.id].isSoldOut,
-          };
-        }
-        return p;
-      });
-      setSellerProducts(merged);
-    } catch (err) {
+        const overrides = JSON.parse(localStorage.getItem('mlx_product_stock_overrides') || '{}');
+        const updated = mine.map(p => {
+          if (overrides[p.id] !== undefined) {
+            return {
+              ...p,
+              stock: overrides[p.id].stock,
+              isSoldOut: overrides[p.id].isSoldOut,
+            };
+          }
+          return p;
+        });
+        setSellerProducts(updated);
+      }
+    } catch (err: any) {
       console.warn('Failed to fetch seller products:', err);
     } finally {
       setIsLoadingSellerProducts(false);
     }
-  }, [activeShop, activeUser]);
+  }, [activeShop]);
 
   React.useEffect(() => {
     if (activeShop) {
@@ -735,35 +756,36 @@ export default function App() {
   const displayedSellerProducts = React.useMemo(() => {
     if (!activeShop && !activeUser) return [];
     const overrides = JSON.parse(localStorage.getItem('mlx_product_stock_overrides') || '{}');
-    const shopId = activeShop?.id ? String(activeShop.id).toLowerCase() : '';
-    const ownerId = activeShop?.ownerId ? String(activeShop.ownerId).toLowerCase() : (activeUser?.id ? String(activeUser.id).toLowerCase() : '');
-    const shopEmail = activeShop?.email ? activeShop.email.toLowerCase() : (activeUser?.email ? activeUser.email.toLowerCase() : '');
-
-    const isMatch = (p: any) => {
-      if (!p) return false;
-      const pShopId = p.shopId ? String(p.shopId).toLowerCase() : '';
-      const pShopObjId = p.shop?.id ? String(p.shop.id).toLowerCase() : '';
-      const pOwnerId = p.shop?.ownerId ? String(p.shop.ownerId).toLowerCase() : (p.shop?.owner?.id ? String(p.shop.owner.id).toLowerCase() : '');
-      const pShopEmail = p.shop?.email ? String(p.shop.email).toLowerCase() : (p.shop?.owner?.email ? String(p.shop.owner.email).toLowerCase() : '');
-
-      if (shopId && (pShopId === shopId || pShopObjId === shopId)) return true;
-      if (ownerId && (pShopId === ownerId || pOwnerId === ownerId)) return true;
-      if (shopEmail && pShopEmail && pShopEmail === shopEmail) return true;
-      return false;
-    };
-
-    const shopProdsFromRedux = products.filter(isMatch);
-    
+    const token = getAuthToken();
     const deletedIds = getDeletedProductIds();
-    const map = new Map<string, Product>();
-    [...sellerProducts, ...shopProdsFromRedux].forEach(p => {
-      if (p && p.id && !deletedIds.has(String(p.id))) {
-        map.set(String(p.id), p);
-      }
-    });
-    const rawList = Array.from(map.values());
 
-    return rawList
+    let list: Product[] = [];
+    if (token) {
+      // Authenticated seller: database products are the authoritative list
+      list = sellerProducts;
+    } else {
+      const shopId = activeShop?.id ? String(activeShop.id).toLowerCase() : '';
+      const ownerId = activeShop?.ownerId ? String(activeShop.ownerId).toLowerCase() : (activeUser?.id ? String(activeUser.id).toLowerCase() : '');
+      const shopEmail = activeShop?.email ? activeShop.email.toLowerCase() : (activeUser?.email ? activeUser.email.toLowerCase() : '');
+
+      const isMatch = (p: any) => {
+        if (!p) return false;
+        const pShopId = p.shopId ? String(p.shopId).toLowerCase() : '';
+        const pShopObjId = p.shop?.id ? String(p.shop.id).toLowerCase() : '';
+        const pOwnerId = p.shop?.ownerId ? String(p.shop.ownerId).toLowerCase() : (p.shop?.owner?.id ? String(p.shop.owner.id).toLowerCase() : '');
+        const pShopEmail = p.shop?.email ? String(p.shop.email).toLowerCase() : (p.shop?.owner?.email ? String(p.shop.owner.email).toLowerCase() : '');
+
+        if (shopId && (pShopId === shopId || pShopObjId === shopId)) return true;
+        if (ownerId && (pShopId === ownerId || pOwnerId === ownerId)) return true;
+        if (shopEmail && pShopEmail && pShopEmail === shopEmail) return true;
+        return false;
+      };
+
+      list = products.filter(isMatch);
+    }
+
+    return list
+
       .filter(p => p && p.id && !deletedIds.has(String(p.id)))
       .map(p => {
         if (overrides[p.id] !== undefined) {
@@ -817,7 +839,7 @@ export default function App() {
 
   const fetchFollowers = React.useCallback(async (isManual = false) => {
     if (!activeShop) return;
-    const token = localStorage.getItem('mlx_token');
+    const token = getAuthToken();
     if (!token) return;
 
     if (isManual) setIsRefreshingFollowers(true);
@@ -1034,7 +1056,7 @@ export default function App() {
 
     async function loadCustomerData() {
       const currentUser = activeUser || (activeShop ? { id: activeShop.id, name: activeShop.name, email: activeShop.email || '' } : null);
-      const token = localStorage.getItem('mlx_token');
+      const token = getAuthToken();
       if (currentUser) {
         if (token) {
           try {
@@ -1085,7 +1107,7 @@ export default function App() {
       return;
     }
 
-    const token = localStorage.getItem('mlx_token');
+    const token = getAuthToken();
     const isCurrentlyWishlisted = wishlistProductIds.includes(product.id);
 
     let nextIds: string[];
@@ -1125,7 +1147,7 @@ export default function App() {
 
   /* Commented out unused unfollow handler
   const handleUnfollowShopInDash = async (shopId: string) => {
-    const token = localStorage.getItem('mlx_token');
+    const token = getAuthToken();
     if (!token) return;
     try {
       await unfollowShop(shopId, token);
@@ -1445,9 +1467,7 @@ export default function App() {
 
   const handleConfirmLogout = () => {
     if (logoutConfirmType === 'seller') {
-      localStorage.removeItem('mlx_token');
-      localStorage.removeItem('mlx_active_shop');
-      localStorage.removeItem('mlx_auth_role');
+      clearAuthSession();
       dispatch(setActiveShop(null));
       dispatch(setAuthRole('customer'));
       dispatch(setAuthTab('login'));
@@ -1456,9 +1476,7 @@ export default function App() {
       setLogoutConfirmType(null);
       navigate('/');
     } else if (logoutConfirmType === 'customer') {
-      localStorage.removeItem('mlx_token');
-      localStorage.removeItem('mlx_active_user');
-      localStorage.removeItem('mlx_auth_role');
+      clearAuthSession();
       setWishlistItems([]);
       setWishlistProductIds([]);
       dispatch(setActiveUser(null));
@@ -1604,11 +1622,12 @@ export default function App() {
   };
 
   const handleOpenAddProduct = () => {
-    if (!activeShop) {
+    const token = getAuthToken();
+    if (!activeShop || !token) {
       dispatch(setAuthRole('seller'));
       dispatch(setAuthTab('login'));
       dispatch(setShowAuthModal(true));
-      triggerToast("Please login as a seller to list products.");
+      triggerToast("Please login as a verified seller to list products.", "info");
       return;
     }
 
@@ -1659,7 +1678,7 @@ export default function App() {
     );
 
     // 3. Persist to backend database via API
-    const token = localStorage.getItem('mlx_token');
+    const token = getAuthToken();
     if (token) {
       setTogglingStockId(product.id);
       try {
@@ -1694,7 +1713,7 @@ export default function App() {
     const target = productToDelete;
     setIsDeletingProduct(true);
 
-    const token = localStorage.getItem('mlx_token');
+    const token = getAuthToken();
     addDeletedProductId(target.id);
     setSellerProducts(prev => prev.filter(p => String(p.id) !== String(target.id)));
     dispatch(deleteProduct(target.id));
@@ -3509,7 +3528,7 @@ export default function App() {
                   <span>Customer Activity & Leads</span>
                 </button>
 
-                <button
+                {/* <button
                   className={`dash-menu-btn ${dashboardTab === 'followers' ? 'active' : ''}`}
                   onClick={() => {
                     navigate('/seller-dashboard');
@@ -3519,7 +3538,7 @@ export default function App() {
                 >
                   <UserCheck size={16} />
                   <span>My Store Followers ({shopFollowersCount})</span>
-                </button>
+                </button> */}
 
                 <button
                   className={`dash-menu-btn ${dashboardTab === 'profile' ? 'active' : ''}`}

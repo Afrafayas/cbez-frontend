@@ -2,10 +2,12 @@ import React, { useState, useEffect, FormEvent } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import { useAppDispatch, useAppSelector } from '../store';
 import { setShowAddEditModal, addProduct, editProduct } from '../store/productsSlice';
+import { setShowAuthModal, setAuthRole, setAuthTab } from '../store/authSlice';
 import { Product } from '../types';
 import { CATEGORIES } from '../data/mockData';
 import { createSellerProduct, updateSellerProduct, getBrands, getCategories } from '../services/apiService';
 import { CompactBrandSelect } from './CompactBrandSelect';
+import { getAuthToken, getAuthRole } from '../utils/authStorage';
 
 interface AddEditProductModalProps {
   onToast: (msg: string, type?: 'success' | 'info') => void;
@@ -14,8 +16,8 @@ interface AddEditProductModalProps {
 
 export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToast, onProductSaved }) => {
   const dispatch = useAppDispatch();
-  const { showAddEditModal, productToEdit, items: products, subscriptionPlans, categories: storeCategories } = useAppSelector(state => state.products);
-  const activeShop = useAppSelector(state => state.auth.activeShop);
+  const { showAddEditModal, productToEdit, items: products, subscriptionPlans, categories: storeCategories, shops } = useAppSelector(state => state.products);
+  const { activeShop, authRole } = useAppSelector(state => state.auth);
 
   const [formImages, setFormImages] = useState<string[]>(['', '', '', '']);
   const [dbBrands, setDbBrands] = useState<string[]>([]);
@@ -284,20 +286,23 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
     e.preventDefault();
     if (isSubmitting) return;
 
-    // Shop Approval Check
-    if (activeShop && !activeShop.verified) {
+    const currentRole = getAuthRole() || authRole;
+    const isAdmin = currentRole === 'admin';
+
+    // Shop Approval Check (sellers only)
+    if (!isAdmin && activeShop && !activeShop.verified) {
       onToast('Your shop registration is currently PENDING Admin approval. Only approved shops can add products.', 'info');
       return;
     }
 
-    // Subscription Plan Check
-    if (!productToEdit && !currentPlan) {
+    // Subscription Plan Check (sellers only)
+    if (!isAdmin && !productToEdit && !currentPlan) {
       onToast('Please select a subscription plan before adding products.', 'info');
       return;
     }
 
-    // Product Limit Check
-    if (!productToEdit && currentPlan) {
+    // Product Limit Check (sellers only)
+    if (!isAdmin && !productToEdit && currentPlan) {
       const productLimit = currentPlan.productLimit;
       if (shopProductsCount >= productLimit) {
         onToast(
@@ -315,7 +320,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
       return;
     }
 
-    const shopId = activeShop ? activeShop.id : 'shop-101';
+    const shopId = activeShop ? activeShop.id : (shops[0]?.id || 'shop-101');
 
     // Construct category specific specs object
     let categorySpecs: Record<string, string> = {};
@@ -435,102 +440,92 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
       specs: categorySpecs
     };
 
-    const token = localStorage.getItem('mlx_token');
-
-    if (productToEdit) {
-      if (token) {
-        setIsSubmitting(true);
-        updateSellerProduct(productToEdit.id, {
-          name: productPayload.name,
-          brand: productPayload.brand,
-          category: productPayload.category,
-          description: productPayload.description,
-          price: productPayload.price,
-          stock: productPayload.stock,
-          specs: productPayload.specs,
-          images: productPayload.images
-        }, token)
-          .then((updatedRes) => {
-            const savedProd = updatedRes.data?.product || updatedRes.product || updatedRes.data || updatedRes;
-            const realId = (savedProd && typeof savedProd === 'object' && savedProd.id && String(savedProd.id).trim() !== '') ? savedProd.id : productPayload.id;
-            const finalProduct: Product = {
-              ...productPayload,
-              ...(typeof savedProd === 'object' ? savedProd : {}),
-              id: realId,
-              shopId: activeShop?.id || productPayload.shopId,
-              shop: activeShop || productPayload.shop,
-              stock: productPayload.stock,
-              images: (savedProd && Array.isArray(savedProd.images) && savedProd.images.length > 0) ? savedProd.images : productPayload.images
-            };
-            dispatch(editProduct(finalProduct));
-            onToast(`Product "${finalProduct.name}" updated successfully!`, 'success');
-            onProductSaved?.(finalProduct, true);
-            dispatch(setShowAddEditModal(false));
-          })
-          .catch((err: any) => {
-            console.warn('Backend update seller product error:', err);
-            dispatch(editProduct(productPayload));
-            onToast(`Product "${productPayload.name}" updated in local session.`, 'success');
-            onProductSaved?.(productPayload, true);
-            dispatch(setShowAddEditModal(false));
-          })
-          .finally(() => {
-            setIsSubmitting(false);
-          });
-      } else {
-        dispatch(editProduct(productPayload));
-        onToast(`Product "${productPayload.name}" updated successfully!`, 'success');
-        onProductSaved?.(productPayload, true);
-        dispatch(setShowAddEditModal(false));
-      }
-    } else {
-      if (token) {
-        setIsSubmitting(true);
-        createSellerProduct({
-          name: productPayload.name,
-          brand: productPayload.brand,
-          category: productPayload.category,
-          description: productPayload.description,
-          price: productPayload.price,
-          stock: productPayload.stock,
-          specs: productPayload.specs,
-          images: productPayload.images
-        }, token)
-          .then((savedRes) => {
-            const savedProd = savedRes.data?.product || savedRes.product || savedRes.data || savedRes;
-            const realId = (savedProd && typeof savedProd === 'object' && savedProd.id && String(savedProd.id).trim() !== '') ? savedProd.id : productPayload.id;
-            const finalProduct: Product = {
-              ...productPayload,
-              ...(typeof savedProd === 'object' ? savedProd : {}),
-              id: realId,
-              shopId: activeShop?.id || productPayload.shopId,
-              shop: activeShop || productPayload.shop,
-              stock: productPayload.stock,
-              images: (savedProd && Array.isArray(savedProd.images) && savedProd.images.length > 0) ? savedProd.images : productPayload.images
-            };
-            dispatch(addProduct(finalProduct));
-            onToast(`New product "${finalProduct.name}" listed live!`, 'success');
-            onProductSaved?.(finalProduct, false);
-            dispatch(setShowAddEditModal(false));
-          })
-          .catch((err: any) => {
-            console.warn('Backend create seller product error:', err);
-            dispatch(addProduct(productPayload));
-            onToast(err.message ? `${err.message} (Listed in session)` : `New product "${productPayload.name}" listed live!`, 'info');
-            onProductSaved?.(productPayload, false);
-            dispatch(setShowAddEditModal(false));
-          })
-          .finally(() => {
-            setIsSubmitting(false);
-          });
-      } else {
-        dispatch(addProduct(productPayload));
-        onToast(`New product "${productPayload.name}" listed live!`, 'success');
-        onProductSaved?.(productPayload, false);
-        dispatch(setShowAddEditModal(false));
-      }
+    const token = getAuthToken();
+    if (!token) {
+      onToast('Authentication required. Please sign in to your seller account to list or edit products.', 'info');
+      dispatch(setShowAddEditModal(false));
+      dispatch(setAuthRole('seller'));
+      dispatch(setAuthTab('login'));
+      dispatch(setShowAuthModal(true));
+      return;
     }
 
+    if (productToEdit) {
+      setIsSubmitting(true);
+      updateSellerProduct(productToEdit.id, {
+        name: productPayload.name,
+        brand: productPayload.brand,
+        category: productPayload.category,
+        description: productPayload.description,
+        price: productPayload.price,
+        stock: productPayload.stock,
+        specs: productPayload.specs,
+        images: productPayload.images
+      }, token)
+        .then((updatedRes) => {
+          const savedProd = updatedRes.data?.product || updatedRes.product || updatedRes.data || updatedRes;
+          const realId = (savedProd && typeof savedProd === 'object' && savedProd.id && String(savedProd.id).trim() !== '') ? savedProd.id : productPayload.id;
+          const finalProduct: Product = {
+            ...productPayload,
+            ...(typeof savedProd === 'object' ? savedProd : {}),
+            id: realId,
+            shopId: activeShop?.id || productPayload.shopId,
+            shop: activeShop || productPayload.shop,
+            stock: productPayload.stock,
+            images: (savedProd && Array.isArray(savedProd.images) && savedProd.images.length > 0) ? savedProd.images : productPayload.images
+          };
+          dispatch(editProduct(finalProduct));
+          onToast(`Product "${finalProduct.name}" updated successfully!`, 'success');
+          onProductSaved?.(finalProduct, true);
+          dispatch(setShowAddEditModal(false));
+        })
+        .catch((err: any) => {
+          console.error('Backend update seller product error:', err);
+          const errMsg = err?.message || 'Failed to update product in database';
+          onToast(`Update failed: ${errMsg}`, 'info');
+        })
+        .finally(() => {
+          setIsSubmitting(false);
+        });
+    } else {
+      setIsSubmitting(true);
+      createSellerProduct({
+        name: productPayload.name,
+        brand: productPayload.brand,
+        category: productPayload.category,
+        description: productPayload.description,
+        price: productPayload.price,
+        stock: productPayload.stock,
+        specs: productPayload.specs,
+        images: productPayload.images,
+        shopId: productPayload.shopId || activeShop?.id || (shops[0]?.id || 'shop-101'),
+      }, token)
+        .then((savedRes) => {
+          const savedProd = savedRes.data?.product || savedRes.product || savedRes.data || savedRes;
+          const realId = (savedProd && typeof savedProd === 'object' && savedProd.id && String(savedProd.id).trim() !== '') ? savedProd.id : productPayload.id;
+          const finalProduct: Product = {
+            ...productPayload,
+            ...(typeof savedProd === 'object' ? savedProd : {}),
+            id: realId,
+            shopId: activeShop?.id || productPayload.shopId,
+            shop: activeShop || productPayload.shop,
+            stock: productPayload.stock,
+            images: (savedProd && Array.isArray(savedProd.images) && savedProd.images.length > 0) ? savedProd.images : productPayload.images
+          };
+          dispatch(addProduct(finalProduct));
+          onToast(`New product "${finalProduct.name}" listed live!`, 'success');
+          onProductSaved?.(finalProduct, false);
+          dispatch(setShowAddEditModal(false));
+        })
+        .catch((err: any) => {
+          console.error('Backend create seller product error:', err);
+          const errMsg = err?.message || 'Failed to create product listing in database';
+          onToast(`Save failed: ${errMsg}`, 'info');
+        })
+        .finally(() => {
+          setIsSubmitting(false);
+        });
+    }
   };
 
   if (!showAddEditModal) return null;

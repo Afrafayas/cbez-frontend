@@ -27,6 +27,7 @@ import { useAppSelector, useAppDispatch } from '../store';
 import { setSelectedProduct } from '../store/productsSlice';
 import { getSellerCustomerActivityLogs } from '../services/apiService';
 import { SellerCustomerLog, SellerCustomerLogsResponse, Product } from '../types';
+import { getAuthToken } from '../utils/authStorage';
 
 interface SellerCustomerLogsPageProps {
   onToast?: (msg: string, type?: 'success' | 'info' | 'warning') => void;
@@ -71,7 +72,7 @@ export const SellerCustomerLogsPage: React.FC<SellerCustomerLogsPageProps> = ({
     if (isManualRefresh) setRefreshing(true);
     else setLoading(true);
 
-    const token = typeof window !== 'undefined' ? localStorage.getItem('mlx_token') : null;
+    const token = getAuthToken();
 
     if (!token) {
       generateFallbackData();
