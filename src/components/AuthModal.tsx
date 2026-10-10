@@ -21,6 +21,7 @@ import { PhoneInputWithCountry } from './PhoneInputWithCountry';
 import { LocationAutocompleteInput } from './LocationAutocompleteInput';
 import { useNavigate } from 'react-router-dom';
 import { setDashboardTab } from '../store/uiSlice';
+import { setItem } from '../utils/storage';
 
 interface AuthModalProps {
   onToast: (msg: string, type?: 'success' | 'info') => void;
@@ -197,11 +198,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         const actualRole = userObj?.role || (userObj?.shop ? 'seller' : authRole);
 
         if (tokenVal) {
-          localStorage.setItem('mlx_token', tokenVal);
+          setItem('mlx_token', tokenVal);
         }
 
         if (actualRole === 'seller' || userObj?.shop) {
-          const shop: Shop = userObj?.shop || {
+          const rawShop = userObj?.shop;
+          const shop: Shop = rawShop ? {
+            ...rawShop,
+            id: rawShop.id || userObj?.id || `shop-${Date.now()}`,
+            name: rawShop.name || userObj?.name || 'Seller Shop',
+            ownerName: rawShop.ownerName || userObj?.name || 'Shop Owner',
+            phone: rawShop.phone || userObj?.phone || otpPhone.trim(),
+            whatsapp: rawShop.whatsapp || userObj?.phone || otpPhone.trim(),
+            address: rawShop.address || 'Kerala Store',
+            city: rawShop.city || 'Kochi',
+            category: rawShop.category || 'Mobiles & Tablets',
+            verified: Boolean(rawShop.verified || rawShop.isApproved || userObj?.isApproved),
+            rating: rawShop.rating || 5.0,
+            joinedDate: rawShop.joinedDate || 'Today',
+            status: (rawShop.verified || rawShop.isApproved || userObj?.isApproved) ? 'APPROVED' : 'PENDING'
+          } : {
             id: userObj?.id || `shop-${Date.now()}`,
             name: userObj?.name || 'Seller Shop',
             ownerName: userObj?.name || 'Shop Owner',
@@ -210,10 +226,10 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
             address: 'Kerala Store',
             city: 'Kochi',
             category: 'Mobiles & Tablets',
-            verified: Boolean(userObj?.shop?.verified),
+            verified: Boolean(userObj?.verified || userObj?.isApproved),
             rating: 5.0,
             joinedDate: 'Today',
-            status: userObj?.shop?.verified ? 'APPROVED' : 'PENDING'
+            status: (userObj?.verified || userObj?.isApproved) ? 'APPROVED' : 'PENDING'
           };
           dispatch(setActiveUser(null));
           dispatch(setAuthRole('seller'));
@@ -236,13 +252,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
           dispatch(setActiveUser(user));
           onToast(`Welcome back, ${user.name}!`, 'success');
           handleCloseModal();
-          navigate('/');
+          navigate('/customer-dashboard');
         }
         return;
       }
 
-      // Step 4: If NOT an existing user, transition to the original registration form
-      if (res.isNewUser) {
+      // Step 4: If NOT an existing user, transition to the role-based registration form
+      if (res.isNewUser || res.requiresRegistration) {
+        const detectedRole = res.role || res.data?.role || authRole;
+        if (detectedRole === 'seller' || detectedRole === 'customer') {
+          dispatch(setAuthRole(detectedRole));
+        }
         onToast('Phone number verified! Please complete your registration details.', 'success');
         setRegForm(prev => ({
           ...prev,
@@ -428,7 +448,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         const userObj = resData?.user || resData?.data?.user;
 
         if (tokenVal) {
-          localStorage.setItem('mlx_token', tokenVal);
+          setItem('mlx_token', tokenVal);
         }
 
         const user: CustomerUser = {
@@ -442,7 +462,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         dispatch(setActiveUser(user));
         onToast(`Customer account created! Welcome ${user.name}`, 'success');
         handleCloseModal();
-        navigate('/');
+        navigate('/customer-dashboard');
       } else {
         // Seller Registration
         const sellerName = regForm.ownerName || regForm.name;
@@ -483,7 +503,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
         const userObj = resData?.user || resData?.data?.user;
 
         if (tokenVal) {
-          localStorage.setItem('mlx_token', tokenVal);
+          setItem('mlx_token', tokenVal);
         }
 
         const newShop: Shop = userObj?.shop || {
@@ -549,7 +569,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ onToast }) => {
       const actualRole = userObj?.role || (userObj?.shop ? 'seller' : 'customer');
 
       if (tokenVal) {
-        localStorage.setItem('mlx_token', tokenVal);
+        setItem('mlx_token', tokenVal);
       }
 
       if (actualRole === 'seller' || userObj?.shop) {

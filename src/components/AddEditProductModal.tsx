@@ -6,6 +6,7 @@ import { Product } from '../types';
 import { CATEGORIES } from '../data/mockData';
 import { createSellerProduct, updateSellerProduct, getBrands, getCategories } from '../services/apiService';
 import { CompactBrandSelect } from './CompactBrandSelect';
+import { getItem } from '../utils/storage';
 
 interface AddEditProductModalProps {
   onToast: (msg: string, type?: 'success' | 'info') => void;
@@ -435,7 +436,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
       specs: categorySpecs
     };
 
-    const token = localStorage.getItem('mlx_token');
+    const token = getItem('mlx_token');
 
     if (productToEdit) {
       if (token) {
@@ -456,7 +457,12 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
             const finalProduct: Product = {
               ...productPayload,
               ...(typeof savedProd === 'object' ? savedProd : {}),
-              id: realId,
+              id: String(realId),
+              name: productPayload.name,
+              brand: productPayload.brand,
+              category: productPayload.category,
+              description: productPayload.description,
+              price: productPayload.price,
               shopId: activeShop?.id || productPayload.shopId,
               shop: activeShop || productPayload.shop,
               stock: productPayload.stock,
@@ -536,7 +542,7 @@ export const AddEditProductModal: React.FC<AddEditProductModalProps> = ({ onToas
   if (!showAddEditModal) return null;
 
   return (
-    <div className="modal-overlay" onClick={() => dispatch(setShowAddEditModal(false))}>
+    <div className="modal-overlay">
       <div
         className="modal-content"
         onClick={(e) => e.stopPropagation()}

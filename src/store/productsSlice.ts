@@ -2,6 +2,7 @@ import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { Product, Shop, Lead, SubscriptionPlan, Category } from '../types';
 import { INITIAL_SHOPS, INITIAL_PRODUCTS, INITIAL_LEADS, INITIAL_SUBSCRIPTION_PLANS } from '../data/mockData';
 import { getDeletedProductIds, addDeletedProductId, removeDeletedProductId } from '../utils/subscriptionUtils';
+import { getItem, setItem } from '../utils/storage';
 
 interface ProductsState {
   items: Product[];
@@ -16,7 +17,7 @@ interface ProductsState {
 
 const getInitialShops = (): Shop[] => {
   if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('mlx_shops');
+    const saved = getItem('mlx_shops');
     return saved ? JSON.parse(saved) : INITIAL_SHOPS;
   }
   return INITIAL_SHOPS;
@@ -24,7 +25,7 @@ const getInitialShops = (): Shop[] => {
 
 const getInitialProducts = (): Product[] => {
   if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('mlx_products');
+    const saved = getItem('mlx_products');
     return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
   }
   return INITIAL_PRODUCTS;
@@ -32,7 +33,7 @@ const getInitialProducts = (): Product[] => {
 
 const getInitialLeads = (): Lead[] => {
   if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('mlx_leads');
+    const saved = getItem('mlx_leads');
     return saved ? JSON.parse(saved) : INITIAL_LEADS;
   }
   return INITIAL_LEADS;
@@ -40,7 +41,7 @@ const getInitialLeads = (): Lead[] => {
 
 const getInitialPlans = (): SubscriptionPlan[] => {
   if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('mlx_subscription_plans');
+    const saved = getItem('mlx_subscription_plans');
     return saved ? JSON.parse(saved) : INITIAL_SUBSCRIPTION_PLANS;
   }
   return INITIAL_SUBSCRIPTION_PLANS;
@@ -48,7 +49,7 @@ const getInitialPlans = (): SubscriptionPlan[] => {
 
 const getInitialCategories = (): Category[] => {
   if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('mlx_categories');
+    const saved = getItem('mlx_categories');
     return saved ? JSON.parse(saved) : [];
   }
   return [];
@@ -72,13 +73,13 @@ const productsSlice = createSlice({
     addShop(state, action: PayloadAction<Shop>) {
       state.shops.push(action.payload);
       if (typeof window !== 'undefined') {
-        localStorage.setItem('mlx_shops', JSON.stringify(state.shops));
+        setItem('mlx_shops', JSON.stringify(state.shops));
       }
     },
     updateShop(state, action: PayloadAction<Shop>) {
       state.shops = state.shops.map(s => s.id === action.payload.id ? action.payload : s);
       if (typeof window !== 'undefined') {
-        localStorage.setItem('mlx_shops', JSON.stringify(state.shops));
+        setItem('mlx_shops', JSON.stringify(state.shops));
       }
     },
     addProduct(state, action: PayloadAction<Product>) {
@@ -92,13 +93,13 @@ const productsSlice = createSlice({
         state.items = state.items.map(p => p.id === action.payload.id ? action.payload : p);
       }
       if (typeof window !== 'undefined') {
-        localStorage.setItem('mlx_products', JSON.stringify(state.items));
+        setItem('mlx_products', JSON.stringify(state.items));
       }
     },
     editProduct(state, action: PayloadAction<Product>) {
       state.items = state.items.map(p => p.id === action.payload.id ? action.payload : p);
       if (typeof window !== 'undefined') {
-        localStorage.setItem('mlx_products', JSON.stringify(state.items));
+        setItem('mlx_products', JSON.stringify(state.items));
       }
       if (state.selectedProduct && state.selectedProduct.id === action.payload.id) {
         state.selectedProduct = action.payload;
@@ -110,7 +111,7 @@ const productsSlice = createSlice({
       }
       state.items = state.items.filter(p => String(p.id) !== String(action.payload));
       if (typeof window !== 'undefined') {
-        localStorage.setItem('mlx_products', JSON.stringify(state.items));
+        setItem('mlx_products', JSON.stringify(state.items));
       }
     },
     setSelectedProduct(state, action: PayloadAction<Product | null>) {
@@ -125,7 +126,7 @@ const productsSlice = createSlice({
     addLead(state, action: PayloadAction<Lead>) {
       state.leads.unshift(action.payload);
       if (typeof window !== 'undefined') {
-        localStorage.setItem('mlx_leads', JSON.stringify(state.leads));
+        setItem('mlx_leads', JSON.stringify(state.leads));
       }
     },
     setProducts(state, action: PayloadAction<Product[]>) {
@@ -150,7 +151,7 @@ const productsSlice = createSlice({
       });
       state.items = Array.from(map.values());
       if (typeof window !== 'undefined') {
-        localStorage.setItem('mlx_products', JSON.stringify(state.items));
+        setItem('mlx_products', JSON.stringify(state.items));
       }
     },
     setShops(state, action: PayloadAction<Shop[]>) {
@@ -165,25 +166,25 @@ const productsSlice = createSlice({
     setSubscriptionPlans(state, action: PayloadAction<SubscriptionPlan[]>) {
       state.subscriptionPlans = action.payload;
       if (typeof window !== 'undefined') {
-        localStorage.setItem('mlx_subscription_plans', JSON.stringify(state.subscriptionPlans));
+        setItem('mlx_subscription_plans', JSON.stringify(state.subscriptionPlans));
       }
     },
     addSubscriptionPlan(state, action: PayloadAction<SubscriptionPlan>) {
       state.subscriptionPlans.push(action.payload);
       if (typeof window !== 'undefined') {
-        localStorage.setItem('mlx_subscription_plans', JSON.stringify(state.subscriptionPlans));
+        setItem('mlx_subscription_plans', JSON.stringify(state.subscriptionPlans));
       }
     },
     updateSubscriptionPlan(state, action: PayloadAction<SubscriptionPlan>) {
       state.subscriptionPlans = state.subscriptionPlans.map(p => p.id === action.payload.id ? action.payload : p);
       if (typeof window !== 'undefined') {
-        localStorage.setItem('mlx_subscription_plans', JSON.stringify(state.subscriptionPlans));
+        setItem('mlx_subscription_plans', JSON.stringify(state.subscriptionPlans));
       }
     },
     deleteSubscriptionPlan(state, action: PayloadAction<string>) {
       state.subscriptionPlans = state.subscriptionPlans.filter(p => p.id !== action.payload);
       if (typeof window !== 'undefined') {
-        localStorage.setItem('mlx_subscription_plans', JSON.stringify(state.subscriptionPlans));
+        setItem('mlx_subscription_plans', JSON.stringify(state.subscriptionPlans));
       }
     },
     toggleSubscriptionPlanStatus(state, action: PayloadAction<string>) {
@@ -194,13 +195,13 @@ const productsSlice = createSlice({
         return p;
       });
       if (typeof window !== 'undefined') {
-        localStorage.setItem('mlx_subscription_plans', JSON.stringify(state.subscriptionPlans));
+        setItem('mlx_subscription_plans', JSON.stringify(state.subscriptionPlans));
       }
     },
     setCategories(state, action: PayloadAction<Category[]>) {
       state.categories = action.payload;
       if (typeof window !== 'undefined') {
-        localStorage.setItem('mlx_categories', JSON.stringify(state.categories));
+        setItem('mlx_categories', JSON.stringify(state.categories));
       }
     }
   },

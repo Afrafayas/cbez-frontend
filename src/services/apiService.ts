@@ -1,5 +1,6 @@
 import { API_BASE_URL } from '../config/api';
 import { Product, Shop, Lead, Category, Brand, SubscriptionPlan, Banner } from '../types';
+import { getItem } from '../utils/storage';
 
 
 export async function getProducts(params?: {
@@ -220,7 +221,7 @@ export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
     const result = await res.json();
     return result.data?.plans ?? (Array.isArray(result) ? result : []);
   } catch {
-    const saved = localStorage.getItem('mlx_subscription_plans');
+    const saved = getItem('mlx_subscription_plans');
     return saved ? JSON.parse(saved) : [];
   }
 }
@@ -236,7 +237,7 @@ export async function getActiveSubscriptionPlans(): Promise<SubscriptionPlan[]> 
       const plans = await getSubscriptionPlans();
       return plans.filter(p => p.status === 'ACTIVE');
     } catch {
-      const saved = localStorage.getItem('mlx_subscription_plans');
+      const saved = getItem('mlx_subscription_plans');
       if (saved) {
         const plans: SubscriptionPlan[] = JSON.parse(saved);
         return plans.filter(p => p.status === 'ACTIVE');
@@ -596,7 +597,7 @@ export async function createNetworkInquiry(inquiryData: {
   targetBudget?: number;
   notes?: string;
 }) {
-  const token = localStorage.getItem('mlx_token');
+  const token = getItem('mlx_token');
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (token) {
     headers['Authorization'] = `Bearer ${token}`;
@@ -986,7 +987,7 @@ export async function logActivity(data: {
   sellerId?: string;
 }): Promise<void> {
   try {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('mlx_token') : null;
+    const token = typeof window !== 'undefined' ? getItem('mlx_token') : null;
     const headers: Record<string, string> = {
       'Content-Type': 'application/json',
     };
@@ -1039,7 +1040,7 @@ export async function updateUser(
   }
 ) {
   try {
-    const token = localStorage.getItem('mlx_token');
+    const token = getItem('mlx_token');
     const res = await fetch(`${API_BASE_URL}/users/${userId}`, {
       method: 'PUT',
       headers: {
@@ -1065,7 +1066,7 @@ export async function updateUser(
 
 /* Seller Shop Profile & Location Update */
 export async function createOrUpdateMyShop(data: any) {
-  const token = localStorage.getItem('mlx_token');
+  const token = getItem('mlx_token');
   const res = await fetch(`${API_BASE_URL}/shops/mine`, {
     method: 'POST',
     headers: {
@@ -1083,7 +1084,7 @@ export async function createOrUpdateMyShop(data: any) {
 }
 
 export async function updateShop(shopId: string, data: any) {
-  const token = localStorage.getItem('mlx_token');
+  const token = getItem('mlx_token');
   const res = await fetch(`${API_BASE_URL}/shops/${shopId}`, {
     method: 'PUT',
     headers: {

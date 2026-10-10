@@ -11,6 +11,7 @@ import { logActivity, getProducts, getShops, getShopById, getSubscriptionPlans, 
 import { PhoneInputWithCountry } from './components/PhoneInputWithCountry';
 import { LocationAutocompleteInput } from './components/LocationAutocompleteInput';
 import { getSubscriptionExpiryInfo, getDeletedProductIds, addDeletedProductId } from './utils/subscriptionUtils';
+import { getItem } from './utils/storage';
 
 import React, { ChangeEvent, FormEvent } from 'react';
 import {
@@ -60,7 +61,6 @@ import {
 } from './store/authSlice';
 import {
   updateShop,
-  addProduct,
   editProduct,
   deleteProduct,
   setSelectedProduct,
@@ -410,50 +410,67 @@ export default function App() {
     ).filter(Boolean);
   }, [storeCategories]);
 
-  // --- LIVE BACKEND DATA LOADER ---
+  // --- LIVE BACKEND DATA LOADER (ROLE-BASED API CALLS) ---
   React.useEffect(() => {
     async function loadLiveBackendData() {
       setIsLoadingProducts(true);
       try {
-        const liveProducts = await getProducts({
-          search: filters.searchQuery,
-          category: filters.selectedCategory,
-          brand: filters.filterBrand,
-          minPrice: filters.filterMinPrice,
-          maxPrice: filters.filterMaxPrice,
-          city: filters.filterCity,
-          sortBy: filters.sortBy,
-          lat: filters.userLatitude ?? undefined,
-          lng: filters.userLongitude ?? undefined,
-          radiusKm: filters.radiusKm || 10,
-        });
-        const [liveShops, livePlans, liveCats, liveBrands] = await Promise.all([
-          getShops().catch(() => []),
-          getSubscriptionPlans().catch(() => []),
-          getCategories().catch(() => []),
-          getBrands().catch(() => [])
-        ]);
-        if (livePlans && livePlans.length > 0) {
-          dispatch(setSubscriptionPlans(livePlans));
-        }
-        if (liveCats && liveCats.length > 0) {
-          dispatch(setCategories(liveCats));
-        }
-        if (liveBrands && Array.isArray(liveBrands) && liveBrands.length > 0) {
-          setDbBrands(liveBrands.map((b: any) => b.name || b));
-        }
-        if (liveProducts) {
-          const deletedIds = getDeletedProductIds();
-          const filteredLive = liveProducts.filter(p => p && p.id && !deletedIds.has(String(p.id)));
-          dispatch(setProducts(filteredLive));
-        }
-        if (liveShops && liveShops.length > 0) {
-          dispatch(setShops(liveShops));
-          if (activeShop) {
-            const currentLiveShop = liveShops.find(s => s.id === activeShop.id || (s.email && activeShop.email && s.email.toLowerCase() === activeShop.email.toLowerCase()) || (s.name && activeShop.name && s.name.toLowerCase() === activeShop.name.toLowerCase()));
-            if (currentLiveShop && (currentLiveShop.verified !== activeShop.verified || currentLiveShop.name !== activeShop.name)) {
-              dispatch(setActiveShop(currentLiveShop));
-            }
+        if (activeShop) {
+          // --- DEALER ROLE ONLY ---
+          // Fetch ONLY dealer's products, shop details/subscription, and customer activity logs
+          const token = getItem('mlx_token');
+          await fetchSellerProducts();
+
+          if (activeShop.id) {
+            getShopSubscription(activeShop.id).then(subData => {
+              if (subData?.usage) setShopSubscriptionUsage(subData.usage);
+            }).catch(() => {});
+          }
+
+          if (token && activeShop.id) {
+            getSellerCustomerActivityLogs(token, activeShop.id).then(data => {
+              if (data && Array.isArray(data.logs)) {
+                setSellerActivityCount(data.logs.length);
+              }
+            }).catch(() => {});
+          }
+        } else {
+          // --- CUSTOMER / GUEST ROLE ONLY ---
+          // Fetch marketplace catalog products, shops, plans, categories, brands
+          const liveProducts = await getProducts({
+            search: filters.searchQuery,
+            category: filters.selectedCategory,
+            brand: filters.filterBrand,
+            minPrice: filters.filterMinPrice,
+            maxPrice: filters.filterMaxPrice,
+            city: filters.filterCity,
+            sortBy: filters.sortBy,
+            lat: filters.userLatitude ?? undefined,
+            lng: filters.userLongitude ?? undefined,
+            radiusKm: filters.radiusKm || 10,
+          });
+          const [liveShops, livePlans, liveCats, liveBrands] = await Promise.all([
+            getShops().catch(() => []),
+            getSubscriptionPlans().catch(() => []),
+            getCategories().catch(() => []),
+            getBrands().catch(() => [])
+          ]);
+          if (livePlans && livePlans.length > 0) {
+            dispatch(setSubscriptionPlans(livePlans));
+          }
+          if (liveCats && liveCats.length > 0) {
+            dispatch(setCategories(liveCats));
+          }
+          if (liveBrands && Array.isArray(liveBrands) && liveBrands.length > 0) {
+            setDbBrands(liveBrands.map((b: any) => b.name || b));
+          }
+          if (liveProducts) {
+            const deletedIds = getDeletedProductIds();
+            const filteredLive = liveProducts.filter(p => p && p.id && !deletedIds.has(String(p.id)));
+            dispatch(setProducts(filteredLive));
+          }
+          if (liveShops && liveShops.length > 0) {
+            dispatch(setShops(liveShops));
           }
         }
       } catch (err) {
@@ -465,6 +482,7 @@ export default function App() {
     loadLiveBackendData();
   }, [
     dispatch,
+    activeShop?.id,
     filters.searchQuery,
     filters.selectedCategory,
     filters.filterBrand,
@@ -476,7 +494,6 @@ export default function App() {
     filters.userLongitude,
     filters.radiusKm,
     activeUser?.id,
-    activeShop?.id,
     showAuthModal,
     location.pathname,
   ]);
@@ -654,7 +671,7 @@ export default function App() {
   React.useEffect(() => {
     async function loadSellerActivityCount() {
       if (!activeShop) return;
-      const token = localStorage.getItem('mlx_token');
+      const token = getItem('mlx_token');
       if (!token) return;
       try {
         const data = await getSellerCustomerActivityLogs(token, activeShop.id);
@@ -670,16 +687,14 @@ export default function App() {
 
   const fetchSellerProducts = React.useCallback(async () => {
     if (!activeShop) return;
-    const token = localStorage.getItem('mlx_token');
+    const token = getItem('mlx_token');
     setIsLoadingSellerProducts(true);
     try {
       let mine: Product[] = [];
       if (token) {
         mine = await getSellerProducts(token);
-      } else if (activeShop.id) {
-        mine = await getProducts({ shopId: activeShop.id });
       }
-      const localProds: Product[] = JSON.parse(localStorage.getItem('mlx_products') || '[]');
+      const localProds: Product[] = JSON.parse(getItem('mlx_products') || '[]');
       const shopId = activeShop?.id ? String(activeShop.id).toLowerCase() : '';
       const ownerId = activeShop?.ownerId ? String(activeShop.ownerId).toLowerCase() : (activeUser?.id ? String(activeUser.id).toLowerCase() : '');
       const shopEmail = activeShop?.email ? activeShop.email.toLowerCase() : (activeUser?.email ? activeUser.email.toLowerCase() : '');
@@ -703,7 +718,7 @@ export default function App() {
         mine.forEach(p => { if (p && p.id) map.set(String(p.id), p); });
       }
 
-      const overrides = JSON.parse(localStorage.getItem('mlx_product_stock_overrides') || '{}');
+      const overrides = JSON.parse(getItem('mlx_product_stock_overrides') || '{}');
       const merged = Array.from(map.values()).map(p => {
         if (overrides[p.id] !== undefined) {
           return {
@@ -4645,9 +4660,9 @@ export default function App() {
         onToast={triggerToast}
         onProductSaved={(savedProd) => {
           if (savedProd) {
-            dispatch(addProduct(savedProd));
+            dispatch(editProduct(savedProd));
             setSellerProducts(prev => {
-              const filtered = prev.filter(p => p.id !== savedProd.id);
+              const filtered = prev.filter(p => String(p.id) !== String(savedProd.id));
               return [savedProd, ...filtered];
             });
           }

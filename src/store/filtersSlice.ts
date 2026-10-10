@@ -1,4 +1,5 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { getItem, setItem } from '../utils/storage';
 
 interface FiltersState {
   searchQuery: string;
@@ -22,7 +23,7 @@ interface FiltersState {
 
 const getInitialUserLocation = () => {
   if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('mlx_user_location');
+    const saved = getItem('mlx_user_location');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -116,7 +117,7 @@ const filtersSlice = createSlice({
         state.radiusKm = action.payload.radiusKm;
       }
       if (typeof window !== 'undefined') {
-        localStorage.setItem('mlx_user_location', JSON.stringify({
+        setItem('mlx_user_location', JSON.stringify({
           latitude: action.payload.latitude,
           longitude: action.payload.longitude,
           locationName: action.payload.locationName,
@@ -127,7 +128,7 @@ const filtersSlice = createSlice({
     setRadiusKm(state, action: PayloadAction<number>) {
       state.radiusKm = action.payload;
       if (typeof window !== 'undefined') {
-        localStorage.setItem('mlx_user_location', JSON.stringify({
+        setItem('mlx_user_location', JSON.stringify({
           latitude: state.userLatitude,
           longitude: state.userLongitude,
           locationName: state.userLocationName,

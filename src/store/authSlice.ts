@@ -1,5 +1,6 @@
 import { createSlice, PayloadAction } from '@reduxjs/toolkit';
 import { Shop, User } from '../types';
+import { getItem, setItem, removeItem } from '../utils/storage';
 
 interface AuthState {
   activeShop: Shop | null;
@@ -11,7 +12,7 @@ interface AuthState {
 
 const getInitialActiveShop = (): Shop | null => {
   if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('mlx_active_shop');
+    const saved = getItem('mlx_active_shop');
     return saved ? JSON.parse(saved) : null;
   }
   return null;
@@ -19,7 +20,7 @@ const getInitialActiveShop = (): Shop | null => {
 
 const getInitialActiveUser = (): User | null => {
   if (typeof window !== 'undefined') {
-    const saved = localStorage.getItem('mlx_active_user');
+    const saved = getItem('mlx_active_user');
     return saved ? JSON.parse(saved) : null;
   }
   return null;
@@ -32,7 +33,7 @@ const getInitialAuthRole = (): 'customer' | 'seller' => {
     if (!shop && !user) {
       return 'customer';
     }
-    const saved = localStorage.getItem('mlx_auth_role');
+    const saved = getItem('mlx_auth_role');
     return (saved === 'seller' || saved === 'customer') ? saved : 'customer';
   }
   return 'customer';
@@ -54,12 +55,12 @@ const authSlice = createSlice({
       state.activeShop = action.payload;
       if (typeof window !== 'undefined') {
         if (action.payload) {
-          localStorage.setItem('mlx_active_shop', JSON.stringify(action.payload));
+          setItem('mlx_active_shop', JSON.stringify(action.payload));
         } else {
-          localStorage.removeItem('mlx_active_shop');
+          removeItem('mlx_active_shop');
           if (!state.activeUser) {
-            localStorage.removeItem('mlx_auth_role');
-            localStorage.removeItem('mlx_token');
+            removeItem('mlx_auth_role');
+            removeItem('mlx_token');
             state.authRole = 'customer';
           }
         }
@@ -69,12 +70,12 @@ const authSlice = createSlice({
       state.activeUser = action.payload;
       if (typeof window !== 'undefined') {
         if (action.payload) {
-          localStorage.setItem('mlx_active_user', JSON.stringify(action.payload));
+          setItem('mlx_active_user', JSON.stringify(action.payload));
         } else {
-          localStorage.removeItem('mlx_active_user');
+          removeItem('mlx_active_user');
           if (!state.activeShop) {
-            localStorage.removeItem('mlx_auth_role');
-            localStorage.removeItem('mlx_token');
+            removeItem('mlx_auth_role');
+            removeItem('mlx_token');
             state.authRole = 'customer';
           }
         }
@@ -83,7 +84,7 @@ const authSlice = createSlice({
     setAuthRole(state, action: PayloadAction<'customer' | 'seller'>) {
       state.authRole = action.payload;
       if (typeof window !== 'undefined') {
-        localStorage.setItem('mlx_auth_role', action.payload);
+        setItem('mlx_auth_role', action.payload);
       }
     },
     setShowAuthModal(state, action: PayloadAction<boolean>) {
