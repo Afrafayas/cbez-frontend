@@ -799,7 +799,7 @@ export default function App() {
       });
   }, [sellerProducts, products, activeShop, activeUser]);
   const [shopFollowers, setShopFollowers] = React.useState<Array<{ id: string; name: string; email?: string; phone?: string; followedAt: string }>>([]);
-  const [shopFollowersCount, setShopFollowersCount] = React.useState<number>(0);
+  const [, setShopFollowersCount] = React.useState<number>(0);
   const [shopSubscriptionUsage, setShopSubscriptionUsage] = React.useState<{
     planName: string;
     productLimit: number;
